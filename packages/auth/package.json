@@ -1,0 +1,24 @@
+{
+  "name": "@industrialis-launcher/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@industrialis-launcher/db": "workspace:*",
+    "@industrialis-launcher/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@industrialis-launcher/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}
