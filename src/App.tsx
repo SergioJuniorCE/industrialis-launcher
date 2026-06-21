@@ -30,6 +30,7 @@ interface InstanceInfo {
 }
 
 interface InstanceSettings {
+  name: string;
   java_path: string | null;
   min_ram_mb: number;
   max_ram_mb: number;
@@ -46,6 +47,16 @@ interface JavaInfo {
 interface DlProgress {
   stage: string;
   pct: number;
+}
+
+interface AccountInfo {
+  id: string;
+  username: string;
+  uuid: string;
+}
+
+interface LauncherSettingsData {
+  microsoft_client_id: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -183,28 +194,15 @@ export default function App() {
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {instances.map((inst) => (
-                  <Card key={inst.version}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">GTNH {inst.version}</CardTitle>
-                        {launching === inst.version && (
-                          <span className="text-xs text-primary animate-pulse">Launching...</span>
-                        )}
-                      </div>
-                      <CardDescription>{formatBytes(inst.size_bytes)}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex gap-2">
-                      <Button onClick={() => handleLaunch(inst.version)} disabled={launching !== null}>
-                        Play
-                      </Button>
-                      <Button variant="secondary" onClick={() => setEditVersion(inst.version)}>
-                        Settings
-                      </Button>
-                      <Button variant="destructive" onClick={() => handleDelete(inst.version)}>
-                        Delete
-                      </Button>
-                    </CardContent>
-                  </Card>
+                  <RenameableCard
+                    key={inst.version}
+                    inst={inst}
+                    onLaunch={() => handleLaunch(inst.version)}
+                    onEdit={() => setEditVersion(inst.version)}
+                    onDelete={() => handleDelete(inst.version)}
+                    onRename={(name) => handleSaveSettings(inst.version, { ...inst.settings, name })}
+                    disabled={launching !== null}
+                  />
                 ))}
               </div>
 
@@ -268,6 +266,67 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Renameable Instance Card ──
+
+function RenameableCard({ inst, onLaunch, onEdit, onDelete, onRename, disabled }: {
+  inst: InstanceInfo;
+  onLaunch: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRename: (name: string) => void;
+  disabled: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(inst.settings.name || `GTNH ${inst.version}`);
+
+  useEffect(() => {
+    setName(inst.settings.name || `GTNH ${inst.version}`);
+  }, [inst.settings.name, inst.version]);
+
+  const save = () => {
+    setEditing(false);
+    const trimmed = name.trim();
+    if (trimmed && trimmed !== (inst.settings.name || `GTNH ${inst.version}`)) {
+      onRename(trimmed);
+    } else {
+      setName(inst.settings.name || `GTNH ${inst.version}`);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          {editing ? (
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={save}
+              onKeyDown={(e) => e.key === "Enter" && save()}
+              className="h-7 text-sm"
+              autoFocus
+            />
+          ) : (
+            <CardTitle
+              className="text-lg cursor-pointer hover:text-primary transition-colors"
+              onClick={() => setEditing(true)}
+              title="Click to rename"
+            >
+              {name}
+            </CardTitle>
+          )}
+        </div>
+        <CardDescription>{formatBytes(inst.size_bytes)}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex gap-2">
+        <Button onClick={onLaunch} disabled={disabled}>Play</Button>
+        <Button variant="secondary" onClick={onEdit}>Settings</Button>
+        <Button variant="destructive" onClick={onDelete}>Delete</Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -365,7 +424,7 @@ function InstanceSettingsPanel({ version, javaOptions, onSave }: {
   onSave: (version: string, settings: InstanceSettings) => void;
 }) {
   const [settings, setSettings] = useState<InstanceSettings>({
-    java_path: null, min_ram_mb: 4096, max_ram_mb: 6144,
+    name: "", java_path: null, min_ram_mb: 4096, max_ram_mb: 6144,
     jvm_args: "", auth_mode: "offline", username: "Player",
   });
 
@@ -377,6 +436,12 @@ function InstanceSettingsPanel({ version, javaOptions, onSave }: {
 
   return (
     <div className="space-y-4 max-w-lg">
+      <div>
+        <label className="text-sm font-medium">Instance Name</label>
+        <Input value={settings.name}
+          onChange={(e) => update({ name: e.target.value })}
+          placeholder={`GTNH ${version}`} />
+      </div>
       <div>
         <label className="text-sm font-medium">Java Path</label>
         <Select value={settings.java_path || ""} onChange={(e) => update({ java_path: e.target.value || null })}>
@@ -403,6 +468,13 @@ function InstanceSettingsPanel({ version, javaOptions, onSave }: {
         <Textarea value={settings.jvm_args}
           onChange={(e) => update({ jvm_args: e.target.value })}
           placeholder="-XX:+UseG1GC -XX:+UseCompactObjectHeaders" />
+      </div>
+      <div>
+        <label className="text-sm font-medium">Auth Mode</label>
+        <Select value={settings.auth_mode} onChange={(e) => update({ auth_mode: e.target.value })}>
+          <option value="offline">Offline</option>
+          <option value="microsoft">Microsoft</option>
+        </Select>
       </div>
       <Button onClick={() => onSave(version, settings)}>Save</Button>
     </div>
@@ -444,30 +516,106 @@ function SettingsTab({ javaOptions }: { javaOptions: JavaInfo[] }) {
 // ── Accounts Tab ──
 
 function AccountsTab() {
-  const [mode, setMode] = useState("offline");
-  const [username, setUsername] = useState("Player");
+  const [tab, setTab] = useState<"accounts" | "setup">("accounts");
+  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [settings, setSettings] = useState<LauncherSettingsData>({ microsoft_client_id: "" });
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => {
+    invoke<AccountInfo[]>("get_accounts").then(setAccounts).catch(() => {});
+    invoke<LauncherSettingsData>("get_launcher_settings").then(setSettings).catch(() => {});
+  };
+  useEffect(load, []);
+
+  const handleLogin = async () => {
+    setLoggingIn(true);
+    setError(null);
+    try {
+      await invoke<AccountInfo>("start_microsoft_login");
+      load();
+    } catch (e) {
+      setError(`${e}`);
+    }
+    setLoggingIn(false);
+  };
+
+  const handleRemove = async (id: string) => {
+    await invoke("remove_account", { id });
+    load();
+  };
+
+  const handleSaveClientId = async () => {
+    await invoke("save_launcher_settings", { settings });
+  };
+
+  if (tab === "setup") {
+    return (
+      <div className="space-y-4 max-w-lg">
+        <Button variant="ghost" size="sm" onClick={() => setTab("accounts")} className="mb-2">← Back</Button>
+        <Card>
+          <CardHeader><CardTitle>Microsoft App Setup</CardTitle></CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <p className="text-muted-foreground">
+              To use Microsoft login, you need to create an Azure app registration:
+            </p>
+            <ol className="space-y-2 text-muted-foreground list-decimal list-inside">
+              <li>Go to <a className="text-primary underline" href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank">Azure portal → App registrations</a></li>
+              <li>Register a new app (any name, supported account type: "Personal Microsoft accounts only")</li>
+              <li>Add redirect URI: <code className="bg-muted px-1 rounded">http://localhost</code> (type: Web)</li>
+              <li>Enable "Allow public client flows" → "Yes"</li>
+              <li>Under "Certificates & secrets", note the Application (client) ID</li>
+              <li>Paste the client ID below</li>
+            </ol>
+            <div>
+              <label className="text-sm font-medium">Client ID</label>
+              <Input value={settings.microsoft_client_id}
+                onChange={(e) => setSettings({ microsoft_client_id: e.target.value })} />
+            </div>
+            <Button onClick={handleSaveClientId}>Save Client ID</Button>
+          </CardContent>
+        </Card>
+        {error && <p className="text-destructive text-sm">{error}</p>}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 max-w-lg">
-      <Card>
-        <CardHeader><CardTitle>Authentication</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Auth Mode</label>
-            <Select value={mode} onChange={(e) => setMode(e.target.value)} className="mt-1">
-              <option value="offline">Offline</option>
-              <option value="microsoft" disabled>Microsoft (coming soon)</option>
-            </Select>
-          </div>
-          <div>
-            <label className="text-sm font-medium">Default Username</label>
-            <Input value={username} onChange={(e) => setUsername(e.target.value)} className="mt-1" />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Each instance can override these in its own settings.
-          </p>
-        </CardContent>
-      </Card>
+    <div className="space-y-4 max-w-lg">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Microsoft Accounts</h2>
+        <Button variant="ghost" size="sm" onClick={() => setTab("setup")}>Setup</Button>
+      </div>
+
+      {!settings.microsoft_client_id && (
+        <p className="text-sm text-muted-foreground">
+          Configure your Microsoft client ID in Setup before logging in.
+        </p>
+      )}
+
+      {accounts.length === 0 && (
+        <p className="text-muted-foreground">No accounts linked.</p>
+      )}
+
+      {accounts.map((acc) => (
+        <Card key={acc.id}>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">{acc.username}</CardTitle>
+              <Button size="sm" variant="destructive" onClick={() => handleRemove(acc.id)}>Remove</Button>
+            </div>
+            <CardDescription className="font-mono text-xs">{acc.uuid}</CardDescription>
+          </CardHeader>
+        </Card>
+      ))}
+
+      {settings.microsoft_client_id && (
+        <Button onClick={handleLogin} disabled={loggingIn} className="w-full">
+          {loggingIn ? "Logging in..." : "Add Microsoft Account"}
+        </Button>
+      )}
+
+      {error && <p className="text-destructive text-sm">{error}</p>}
     </div>
   );
 }

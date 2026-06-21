@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use futures::StreamExt;
@@ -45,6 +47,7 @@ pub struct InstanceInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceSettings {
+    pub name: String,
     pub java_path: Option<String>,
     pub min_ram_mb: u32,
     pub max_ram_mb: u32,
@@ -56,6 +59,7 @@ pub struct InstanceSettings {
 impl Default for InstanceSettings {
     fn default() -> Self {
         Self {
+            name: String::new(),
             java_path: None,
             min_ram_mb: 4096,
             max_ram_mb: 6144,
@@ -80,6 +84,29 @@ pub struct LaunchConfig {
     pub game_dir: String,
     pub assets_dir: String,
     pub jvm_args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinecraftAccount {
+    pub id: String,
+    pub username: String,
+    pub uuid: String,
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LauncherSettings {
+    pub microsoft_client_id: String,
+}
+
+impl Default for LauncherSettings {
+    fn default() -> Self {
+        Self {
+            microsoft_client_id: String::new(),
+        }
+    }
 }
 
 // ── MMC Pack structures ──
@@ -226,6 +253,44 @@ fn save_settings_file(version: &str, settings: &InstanceSettings) -> Result<(), 
     Ok(())
 }
 
+fn accounts_path() -> PathBuf {
+    data_dir().join("accounts.json")
+}
+
+fn load_accounts() -> Vec<MinecraftAccount> {
+    fs::read_to_string(accounts_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_accounts(accounts: &[MinecraftAccount]) -> Result<(), String> {
+    let path = accounts_path();
+    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    let s = serde_json::to_string_pretty(accounts).map_err(|e| e.to_string())?;
+    fs::write(&path, s).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn launcher_settings_path() -> PathBuf {
+    data_dir().join("launcher-settings.json")
+}
+
+fn load_launcher_settings() -> LauncherSettings {
+    fs::read_to_string(launcher_settings_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_launcher_settings(settings: &LauncherSettings) -> Result<(), String> {
+    let path = launcher_settings_path();
+    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    let s = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    fs::write(&path, s).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 async fn save_settings(version: String, settings: InstanceSettings) -> Result<(), String> {
     save_settings_file(&version, &settings)
@@ -337,6 +402,7 @@ async fn download_install(
 
     // Create default settings
     let settings = InstanceSettings {
+        name: format!("GTNH {version}"),
         username: version.split('-').next().unwrap_or("Player").to_string(),
         ..Default::default()
     };
@@ -585,7 +651,6 @@ async fn launch_instance(version: String) -> Result<(), String> {
     let mut args: Vec<String> = Vec::new();
     args.push(format!("-Xms{}M", settings.min_ram_mb));
     args.push(format!("-Xmx{}M", settings.max_ram_mb));
-    // ponytail: no GC tuning; add -XX:G1GC etc when 8GB+ needed
     if !settings.jvm_args.is_empty() {
         args.extend(settings.jvm_args.split_whitespace().map(String::from));
     }
@@ -594,11 +659,19 @@ async fn launch_instance(version: String) -> Result<(), String> {
     args.push(classpath);
     args.push(config.main_class);
 
-    // ponytail: offline auth only; Microsoft auth slot open
-    let username = if settings.auth_mode == "offline" {
-        settings.username.clone()
+    // Auth: Microsoft or offline
+    let (username, access_token, uuid, user_type) = if settings.auth_mode == "microsoft" {
+        let accounts = load_accounts();
+        let acc = accounts.first().ok_or("No Microsoft account configured. Add one in Accounts.")?;
+        let token = if is_expired(acc.expires_at) {
+            // ponytail: refresh inline; token refresh is one HTTP call
+            refresh_minecraft_token(acc).await?
+        } else {
+            acc.access_token.clone()
+        };
+        (acc.username.clone(), token, acc.uuid.clone(), "ms".to_string())
     } else {
-        settings.username.clone()
+        (settings.username.clone(), "0".into(), "00000000-0000-0000-0000-000000000000".into(), "mojang".into())
     };
 
     // Minecraft program args
@@ -611,11 +684,11 @@ async fn launch_instance(version: String) -> Result<(), String> {
     args.push("--assetsDir".to_string());
     args.push(config.assets_dir);
     args.push("--accessToken".to_string());
-    args.push("0".to_string()); // ponytail: offline token, real token when Microsoft auth added
+    args.push(access_token);
     args.push("--uuid".to_string());
-    args.push("00000000-0000-0000-0000-000000000000".into());
+    args.push(uuid);
     args.push("--userType".to_string());
-    args.push("mojang".to_string());
+    args.push(user_type);
 
     // Spawn
     let child = std::process::Command::new(&java)
@@ -625,10 +698,244 @@ async fn launch_instance(version: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("launch failed: {e}"))?;
 
-    // TODO: capture output and emit events
     let _ = child.wait_with_output();
-
     Ok(())
+}
+
+#[derive(Serialize)]
+pub struct AccountInfo {
+    pub id: String,
+    pub username: String,
+    pub uuid: String,
+}
+
+#[tauri::command]
+async fn get_accounts() -> Result<Vec<AccountInfo>, String> {
+    let accounts = load_accounts();
+    Ok(accounts.into_iter().map(|a| AccountInfo {
+        id: a.id,
+        username: a.username,
+        uuid: a.uuid,
+    }).collect())
+}
+
+#[tauri::command]
+async fn remove_account(id: String) -> Result<(), String> {
+    let mut accounts = load_accounts();
+    accounts.retain(|a| a.id != id);
+    save_accounts(&accounts)
+}
+
+#[tauri::command]
+async fn get_launcher_settings() -> Result<LauncherSettings, String> {
+    Ok(load_launcher_settings())
+}
+
+#[tauri::command]
+async fn save_launcher_settings(settings: LauncherSettings) -> Result<(), String> {
+    write_launcher_settings(&settings)
+}
+
+#[tauri::command]
+async fn start_microsoft_login(state: State<'_, Mutex<AppState>>) -> Result<AccountInfo, String> {
+    let client = state.lock().map_err(|e| e.to_string())?.http.clone();
+    drop(state);
+
+    let ls = load_launcher_settings();
+    let cid = ls.microsoft_client_id;
+    if cid.is_empty() {
+        return Err("No Microsoft client ID configured. Create an Azure app and add the client ID in Accounts -> Settings.".into());
+    }
+
+    // Start local server for OAuth callback
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    let redirect_uri = format!("http://localhost:{port}");
+    let state_str = uuid::Uuid::new_v4().to_string();
+
+    // Open browser
+    let auth_url = format!(
+        "https://login.live.com/oauth20_authorize.srf?client_id={cid}&response_type=code&\
+         redirect_uri={redirect_uri}&scope=XboxLive.signin+offline_access&\
+         state={state_str}"
+    );
+    // ponytail: use opener plugin instead of open crate
+    std::process::Command::new("cmd").args(["/C", "start", &auth_url]).spawn().ok();
+
+    // Wait for redirect
+    let code = tokio::task::spawn_blocking(move || {
+        listener.set_nonblocking(false).ok();
+        for stream in listener.incoming() {
+            if let Ok(mut s) = stream {
+                return parse_auth_code(&mut s);
+            }
+        }
+        Err("no connection received".to_string())
+    }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+
+    // Exchange auth code → Microsoft tokens
+    let params: &[(&str, &str)] = &[
+        ("client_id", cid.as_str()),
+        ("code", code.as_str()),
+        ("redirect_uri", redirect_uri.as_str()),
+        ("grant_type", "authorization_code"),
+    ];
+    let token_resp: serde_json::Value = client
+        .post("https://login.live.com/oauth20_token.srf")
+        .form(params)
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("token exchange: {e}"))?;
+
+    let ms_access = token_resp["access_token"].as_str().ok_or("no access_token")?.to_string();
+    let ms_refresh = token_resp["refresh_token"].as_str().ok_or("no refresh_token")?.to_string();
+    let expires_in = token_resp["expires_in"].as_u64().unwrap_or(3600);
+    let expires_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + expires_in;
+
+    // Xbox Live auth
+    let xbl: serde_json::Value = client
+        .post("https://user.auth.xboxlive.com/user/authenticate")
+        .json(&serde_json::json!({
+            "Properties": { "AuthMethod": "RPS", "SiteName": "user.auth.xboxlive.com", "RpsTicket": format!("d={ms_access}") },
+            "RelyingParty": "http://auth.xboxlive.com", "TokenType": "JWT"
+        }))
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("xbl auth: {e}"))?;
+    let xbl_token = xbl["Token"].as_str().ok_or("no xbl token")?.to_string();
+
+    // XSTS auth
+    let xsts: serde_json::Value = client
+        .post("https://xsts.auth.xboxlive.com/xsts/authorize")
+        .json(&serde_json::json!({
+            "Properties": { "SandboxId": "RETAIL", "UserTokens": [xbl_token] },
+            "RelyingParty": "rp://api.minecraftservices.com/", "TokenType": "JWT"
+        }))
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("xsts auth: {e}"))?;
+
+    let xsts_token = xsts["Token"].as_str().ok_or("no xsts token")?.to_string();
+    let uhs = xsts["DisplayClaims"]["xui"][0]["uhs"].as_str().ok_or("no uhs")?.to_string();
+
+    // Minecraft auth
+    let mc: serde_json::Value = client
+        .post("https://api.minecraftservices.com/authentication/login_with_xbox")
+        .json(&serde_json::json!({
+            "identityToken": format!("XBL3.0 x={uhs};{xsts_token}")
+        }))
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("mc auth: {e}"))?;
+
+    let mc_token = mc["access_token"].as_str().ok_or("no mc token")?.to_string();
+
+    // Get profile
+    let profile: serde_json::Value = client
+        .get("https://api.minecraftservices.com/minecraft/profile")
+        .header("Authorization", format!("Bearer {mc_token}"))
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("profile: {e}"))?;
+
+    let mc_uuid = profile["id"].as_str().ok_or("no uuid")?.to_string();
+    let mc_name = profile["name"].as_str().ok_or("no name")?.to_string();
+    let account_id = uuid::Uuid::new_v4().to_string();
+
+    let account = MinecraftAccount {
+        id: account_id.clone(),
+        username: mc_name.clone(),
+        uuid: mc_uuid,
+        access_token: mc_token,
+        refresh_token: ms_refresh,
+        expires_at,
+    };
+
+    let mut accounts = load_accounts();
+    let uuid_clone = account.uuid.clone();
+    accounts.retain(|a| a.uuid != uuid_clone);
+    accounts.push(account);
+    save_accounts(&accounts)?;
+
+    Ok(AccountInfo { id: account_id, username: mc_name, uuid: uuid_clone })
+}
+
+fn parse_auth_code(stream: &mut TcpStream) -> Result<String, String> {
+    let mut buf = [0u8; 4096];
+    let n = stream.read(&mut buf).map_err(|e| e.to_string())?;
+    let request = String::from_utf8_lossy(&buf[..n]);
+    let code = request.split("?code=")
+        .nth(1)
+        .and_then(|s| s.split('&').next())
+        .ok_or("no auth code")?;
+    let resp = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body><h1>You can close this window.</h1></body></html>";
+    stream.write_all(resp.as_bytes()).ok();
+    Ok(code.to_string())
+}
+
+fn is_expired(expires_at: u64) -> bool {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    now + 60 > expires_at // 1 min buffer
+}
+
+async fn refresh_minecraft_token(acc: &MinecraftAccount) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let ls = load_launcher_settings();
+    let params: &[(&str, &str)] = &[
+        ("client_id", ls.microsoft_client_id.as_str()),
+        ("refresh_token", acc.refresh_token.as_str()),
+        ("grant_type", "refresh_token"),
+        ("redirect_uri", "http://localhost:0"),
+    ];
+    let resp: serde_json::Value = client
+        .post("https://login.live.com/oauth20_token.srf")
+        .form(params)
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("refresh: {e}"))?;
+
+    let ms_access = resp["access_token"].as_str().ok_or("no access_token")?.to_string();
+    let expires_in = resp["expires_in"].as_u64().unwrap_or(3600);
+    let expires_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + expires_in;
+
+    // Re-do Xbox → Minecraft chain with new Microsoft token
+    let xbl: serde_json::Value = client
+        .post("https://user.auth.xboxlive.com/user/authenticate")
+        .json(&serde_json::json!({
+            "Properties": { "AuthMethod": "RPS", "SiteName": "user.auth.xboxlive.com", "RpsTicket": format!("d={ms_access}") },
+            "RelyingParty": "http://auth.xboxlive.com", "TokenType": "JWT"
+        }))
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("xbl refresh: {e}"))?;
+    let xbl_token = xbl["Token"].as_str().ok_or("no xbl token")?.to_string();
+
+    let xsts: serde_json::Value = client
+        .post("https://xsts.auth.xboxlive.com/xsts/authorize")
+        .json(&serde_json::json!({
+            "Properties": { "SandboxId": "RETAIL", "UserTokens": [xbl_token] },
+            "RelyingParty": "rp://api.minecraftservices.com/", "TokenType": "JWT"
+        }))
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("xsts refresh: {e}"))?;
+    let xsts_token = xsts["Token"].as_str().ok_or("no xsts token")?.to_string();
+    let uhs = xsts["DisplayClaims"]["xui"][0]["uhs"].as_str().ok_or("no uhs")?.to_string();
+
+    let mc: serde_json::Value = client
+        .post("https://api.minecraftservices.com/authentication/login_with_xbox")
+        .json(&serde_json::json!({
+            "identityToken": format!("XBL3.0 x={uhs};{xsts_token}")
+        }))
+        .send().await.map_err(|e| e.to_string())?
+        .json().await.map_err(|e| format!("mc refresh: {e}"))?;
+    let mc_token = mc["access_token"].as_str().ok_or("no mc token")?.to_string();
+
+    // Update stored account
+    let mut accounts = load_accounts();
+    if let Some(stored) = accounts.iter_mut().find(|a| a.id == acc.id) {
+        stored.access_token = mc_token.clone();
+        stored.expires_at = expires_at;
+        stored.refresh_token = resp["refresh_token"].as_str().unwrap_or(&acc.refresh_token).to_string();
+    }
+    save_accounts(&accounts).ok();
+
+    Ok(mc_token)
 }
 
 // ── App Entry ──
@@ -650,6 +957,11 @@ pub fn run() {
             download_install,
             detect_java,
             launch_instance,
+            get_accounts,
+            remove_account,
+            start_microsoft_login,
+            get_launcher_settings,
+            save_launcher_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
