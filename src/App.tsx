@@ -9,6 +9,9 @@ import { Progress } from "./components/ui/progress";
 import { Textarea } from "./components/ui/textarea";
 import { Select } from "./components/ui/select";
 import { ScrollArea } from "./components/ui/scroll-area";
+import { ThemeEditor } from "./components/ThemeEditor";
+import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { useLauncherSettings } from "./context/LauncherSettingsContext";
 import "./App.css";
 
 // ── Types ──
@@ -62,10 +65,6 @@ interface AccountInfo {
   id: string;
   username: string;
   uuid: string;
-}
-
-interface LauncherSettingsData {
-  microsoft_client_id: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -126,12 +125,12 @@ function LaunchConsole({
   };
 
   return (
-    <div className="fixed bottom-0 left-56 right-0 border-t border-border bg-card z-30 flex flex-col shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
+    <div className="fixed bottom-0 left-56 right-0 border-t border-border bg-card z-30 flex flex-col shadow-[0_-1px_0_0_var(--color-border)]">
       <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border shrink-0">
         <div>
           <div className="text-sm font-medium">
             Console — {instanceName}
-            {launching && <span className="text-primary ml-2">(running)</span>}
+            {launching && <span className="text-muted-foreground ml-2">(running)</span>}
           </div>
           <div className="text-xs text-muted-foreground">{version} · Java stdout / stderr</div>
         </div>
@@ -292,17 +291,17 @@ export default function App() {
     <div className="min-h-screen flex">
       {/* Sidebar */}
       <aside className="w-56 border-r border-border p-4 flex flex-col gap-2 shrink-0">
-        <h1 className="text-lg font-bold text-primary mb-2">Industrialis</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-foreground mb-2">Industrialis</h1>
 
         <Button onClick={() => setShowNewInstance(true)} disabled={dlProgress !== null} className="w-full mb-4">
           + Add Instance
         </Button>
 
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-1 flex-1">
           <button
             onClick={() => setTab("instances")}
             className={`text-left px-3 py-2 rounded text-sm transition-colors ${
-              tab === "instances" ? "bg-primary/20 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
+              tab === "instances" ? "bg-muted text-foreground font-medium" : "hover:bg-muted/50 text-muted-foreground"
             }`}
           >
             Instances ({instances.length})
@@ -310,7 +309,7 @@ export default function App() {
           <button
             onClick={() => setTab("settings")}
             className={`text-left px-3 py-2 rounded text-sm transition-colors ${
-              tab === "settings" ? "bg-primary/20 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
+              tab === "settings" ? "bg-muted text-foreground font-medium" : "hover:bg-muted/50 text-muted-foreground"
             }`}
           >
             Settings
@@ -318,12 +317,16 @@ export default function App() {
           <button
             onClick={() => setTab("accounts")}
             className={`text-left px-3 py-2 rounded text-sm transition-colors ${
-              tab === "accounts" ? "bg-primary/20 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
+              tab === "accounts" ? "bg-muted text-foreground font-medium" : "hover:bg-muted/50 text-muted-foreground"
             }`}
           >
             Accounts
           </button>
         </nav>
+
+        <div className="mt-auto pt-4 border-t border-border flex justify-center">
+          <ThemeSwitcher />
+        </div>
       </aside>
 
       {/* Content */}
@@ -469,7 +472,7 @@ function RenameableCard({ inst, onLaunch, onConsole, onEdit, onDelete, onRename,
             />
           ) : (
             <CardTitle
-              className="text-lg cursor-pointer hover:text-primary transition-colors"
+              className="text-lg cursor-pointer hover:text-foreground transition-colors"
               onClick={() => setEditing(true)}
               title="Click to rename"
             >
@@ -551,7 +554,7 @@ function NewInstanceDialog({ onClose, onInstall, installedVersions }: {
               <div
                 key={key}
                 className={`flex items-center justify-between p-3 rounded cursor-pointer border transition-colors ${
-                  sel === key ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
+                  sel === key ? "border-foreground/30 bg-muted" : "border-border hover:bg-muted"
                 }`}
                 onClick={() => setSel(key)}
               >
@@ -652,6 +655,8 @@ function InstanceSettingsPanel({ version, javaOptions, onSave }: {
 function SettingsTab({ javaOptions }: { javaOptions: JavaInfo[] }) {
   return (
     <div className="space-y-6 max-w-lg">
+      <ThemeEditor />
+
       <Card>
         <CardHeader><CardTitle>Java Detection</CardTitle></CardHeader>
         <CardContent>
@@ -660,7 +665,7 @@ function SettingsTab({ javaOptions }: { javaOptions: JavaInfo[] }) {
           <div className="space-y-1">
             {javaOptions.map((j) => (
               <div key={j.path} className="text-sm font-mono bg-muted p-2 rounded">
-                <span className="text-primary">Java {j.version}</span>
+                <span className="text-foreground font-medium">Java {j.version}</span>
                 <span className="text-muted-foreground ml-2 text-xs">{j.path}</span>
               </div>
             ))}
@@ -682,15 +687,14 @@ function SettingsTab({ javaOptions }: { javaOptions: JavaInfo[] }) {
 // ── Accounts Tab ──
 
 function AccountsTab() {
+  const { settings, updateSettings, saveSettingsNow } = useLauncherSettings();
   const [tab, setTab] = useState<"accounts" | "setup">("accounts");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
-  const [settings, setSettings] = useState<LauncherSettingsData>({ microsoft_client_id: "" });
   const [loggingIn, setLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
     invoke<AccountInfo[]>("get_accounts").then(setAccounts).catch(() => {});
-    invoke<LauncherSettingsData>("get_launcher_settings").then(setSettings).catch(() => {});
   };
   useEffect(load, []);
 
@@ -712,7 +716,7 @@ function AccountsTab() {
   };
 
   const handleSaveClientId = async () => {
-    await invoke("save_launcher_settings", { settings });
+    await saveSettingsNow();
   };
 
   if (tab === "setup") {
@@ -726,7 +730,7 @@ function AccountsTab() {
               To use Microsoft login, you need to create an Azure app registration:
             </p>
             <ol className="space-y-2 text-muted-foreground list-decimal list-inside">
-              <li>Go to <a className="text-primary underline" href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank">Azure portal → App registrations</a></li>
+              <li>Go to <a className="text-foreground underline hover:text-muted-foreground" href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noreferrer">Azure portal → App registrations</a></li>
               <li>Register a new app (any name, supported account type: "Personal Microsoft accounts only")</li>
               <li>Add redirect URI: <code className="bg-muted px-1 rounded">http://localhost</code> (type: Web)</li>
               <li>Enable "Allow public client flows" → "Yes"</li>
@@ -735,8 +739,10 @@ function AccountsTab() {
             </ol>
             <div>
               <label className="text-sm font-medium">Client ID</label>
-              <Input value={settings.microsoft_client_id}
-                onChange={(e) => setSettings({ microsoft_client_id: e.target.value })} />
+              <Input
+                value={settings.microsoft_client_id}
+                onChange={(e) => updateSettings({ microsoft_client_id: e.target.value })}
+              />
             </div>
             <Button onClick={handleSaveClientId}>Save Client ID</Button>
           </CardContent>

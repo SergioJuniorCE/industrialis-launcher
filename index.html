@@ -4,7 +4,33 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + React + Typescript</title>
+    <title>Industrialis</title>
+    <script>
+      // KEEP IN SYNC with THEME_OVERRIDE_CSS_VARS in src/lib/theme.ts
+      (function () {
+        var MAP = {
+          background: "--theme-background",
+          foreground: "--theme-foreground",
+          primary: "--theme-primary",
+          card: "--theme-card",
+          border: "--theme-border",
+          muted: "--theme-muted",
+          muted_foreground: "--theme-muted-foreground",
+          radius: "--theme-radius"
+        };
+        try {
+          var c = JSON.parse(localStorage.getItem("industrialis-theme-cache") || "{}");
+          var mode = c.mode === "light" ? "light" : "dark";
+          document.documentElement.setAttribute("data-theme", mode);
+          if (c.overrides && typeof c.overrides === "object") {
+            Object.keys(MAP).forEach(function (key) {
+              var val = c.overrides[key];
+              if (val) document.documentElement.style.setProperty(MAP[key], val);
+            });
+          }
+        } catch (_) {}
+      })();
+    </script>
   </head>
 
   <body>

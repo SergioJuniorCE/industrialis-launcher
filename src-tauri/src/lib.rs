@@ -101,16 +101,81 @@ pub struct MinecraftAccount {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeMode {
+    Dark,
+    Light,
+}
+
+impl Default for ThemeMode {
+    fn default() -> Self {
+        Self::Dark
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ThemeOverrides {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foreground: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muted: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muted_foreground: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radius: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LauncherSettings {
     pub microsoft_client_id: String,
+    #[serde(default)]
+    pub theme_mode: ThemeMode,
+    #[serde(default)]
+    pub theme_overrides: ThemeOverrides,
 }
 
 impl Default for LauncherSettings {
     fn default() -> Self {
         Self {
             microsoft_client_id: String::new(),
+            theme_mode: ThemeMode::Dark,
+            theme_overrides: ThemeOverrides::default(),
         }
     }
+}
+
+fn validate_theme_override_value(value: &str) -> Result<(), String> {
+    if value.len() > 32 {
+        return Err("theme override value too long".into());
+    }
+    Ok(())
+}
+
+fn validate_launcher_settings(settings: &LauncherSettings) -> Result<(), String> {
+    for value in [
+        settings.theme_overrides.background.as_deref(),
+        settings.theme_overrides.foreground.as_deref(),
+        settings.theme_overrides.primary.as_deref(),
+        settings.theme_overrides.card.as_deref(),
+        settings.theme_overrides.border.as_deref(),
+        settings.theme_overrides.muted.as_deref(),
+        settings.theme_overrides.muted_foreground.as_deref(),
+        settings.theme_overrides.radius.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        validate_theme_override_value(value)?;
+    }
+    Ok(())
 }
 
 // ── MMC Pack structures ──
@@ -642,6 +707,7 @@ fn load_launcher_settings() -> LauncherSettings {
 }
 
 fn write_launcher_settings(settings: &LauncherSettings) -> Result<(), String> {
+    validate_launcher_settings(settings)?;
     let path = launcher_settings_path();
     fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     let s = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
@@ -1333,6 +1399,7 @@ async fn get_launcher_settings() -> Result<LauncherSettings, String> {
 
 #[tauri::command]
 async fn save_launcher_settings(settings: LauncherSettings) -> Result<(), String> {
+    validate_launcher_settings(&settings)?;
     write_launcher_settings(&settings)
 }
 
@@ -1621,6 +1688,45 @@ mod tests {
                 r"C:\instances\GT New Horizons 2.9.0-beta-1\.minecraft\assets",
             ]
         );
+    }
+
+    #[test]
+    fn deserialize_legacy_launcher_settings() {
+        let json = r#"{ "microsoft_client_id": "abc" }"#;
+        let settings: LauncherSettings =
+            serde_json::from_str(json).expect("legacy launcher settings should parse");
+        assert_eq!(settings.microsoft_client_id, "abc");
+        assert!(matches!(settings.theme_mode, ThemeMode::Dark));
+        assert!(settings.theme_overrides.background.is_none());
+    }
+
+    #[test]
+    fn deserialize_full_launcher_settings() {
+        let json = r##"{
+            "microsoft_client_id": "abc",
+            "theme_mode": "light",
+            "theme_overrides": { "muted_foreground": "#b0b0b0" }
+        }"##;
+        let settings: LauncherSettings =
+            serde_json::from_str(json).expect("full launcher settings should parse");
+        assert!(matches!(settings.theme_mode, ThemeMode::Light));
+        assert_eq!(
+            settings.theme_overrides.muted_foreground.as_deref(),
+            Some("#b0b0b0")
+        );
+    }
+
+    #[test]
+    fn reject_oversized_override() {
+        let settings = LauncherSettings {
+            microsoft_client_id: "x".into(),
+            theme_mode: ThemeMode::Dark,
+            theme_overrides: ThemeOverrides {
+                background: Some("x".repeat(33)),
+                ..ThemeOverrides::default()
+            },
+        };
+        assert!(validate_launcher_settings(&settings).is_err());
     }
 
     #[test]
