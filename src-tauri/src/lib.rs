@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::process::{Child, Stdio};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -84,6 +85,9 @@ pub struct LaunchConfig {
     pub game_dir: String,
     pub assets_dir: String,
     pub jvm_args: Vec<String>,
+    pub program_args: Vec<String>,
+    pub minecraft_arguments_template: Option<String>,
+    pub asset_index_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,7 +125,18 @@ struct MmcPackJson {
 #[derive(Debug, Deserialize)]
 struct MmComponent {
     uid: String,
-    version: String,
+    version: Option<String>,
+    #[serde(rename = "cachedVersion")]
+    cached_version: Option<String>,
+}
+
+impl MmComponent {
+    fn effective_version(&self) -> &str {
+        self.version
+            .as_deref()
+            .or(self.cached_version.as_deref())
+            .unwrap_or("")
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,26 +147,302 @@ struct PatchJson {
     uid: Option<String>,
     #[allow(dead_code)]
     version: Option<String>,
+    order: Option<i32>,
+    #[serde(rename = "minecraftArguments")]
+    minecraft_arguments: Option<String>,
+    #[serde(rename = "assetIndex")]
+    asset_index: Option<PatchAssetIndex>,
     #[serde(rename = "mainClass")]
     main_class: Option<String>,
     #[serde(rename = "+mainClass")]
     plus_main_class: Option<String>,
-    libraries: Option<Vec<PatchLibrary>>,
+    #[serde(rename = "mainJar")]
+    main_jar: Option<PatchMainJar>,
+    libraries: Option<Vec<PatchLibraryEntry>>,
+    #[serde(rename = "+jvmArgs")]
+    plus_jvm_args: Option<Vec<String>>,
     #[serde(rename = "+args")]
     plus_args: Option<Vec<String>>,
+    #[serde(rename = "+tweakers")]
+    plus_tweakers: Option<Vec<String>>,
     #[serde(rename = "-args")]
     minus_args: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
-struct PatchLibrary {
+struct PatchAssetIndex {
+    id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PatchMainJar {
     name: String,
+    downloads: PatchDownloads,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatchLibraryEntry {
+    name: String,
+    #[serde(rename = "MMC-hint")]
+    mmc_hint: Option<String>,
+    downloads: Option<PatchDownloads>,
+    rules: Option<Vec<PatchRule>>,
+    natives: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PatchDownloads {
+    artifact: Option<PatchArtifact>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PatchArtifact {
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatchRule {
+    action: String,
+    os: Option<PatchRuleOs>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatchRuleOs {
+    name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct GradleSpec {
+    group: String,
+    artifact: String,
+    version: String,
+    classifier: Option<String>,
+    extension: String,
+}
+
+impl GradleSpec {
+    fn filename(&self) -> String {
+        let mut name = format!("{}-{}", self.artifact, self.version);
+        if let Some(classifier) = &self.classifier {
+            name.push('-');
+            name.push_str(classifier);
+        }
+        name.push('.');
+        name.push_str(&self.extension);
+        name
+    }
+
+    fn storage_path(&self) -> String {
+        format!(
+            "{}/{}/{}/{}",
+            self.group.replace('.', "/"),
+            self.artifact,
+            self.version,
+            self.filename()
+        )
+    }
+}
+
+fn library_coord_key(spec: &GradleSpec) -> String {
+    format!("{}:{}", spec.group, spec.artifact)
+}
+
+fn version_is_newer(candidate: &str, existing: &str) -> bool {
+    candidate.cmp(existing) == std::cmp::Ordering::Greater
+}
+
+struct ResolvedLibrary {
+    path: String,
+    version: String,
+}
+
+fn upsert_library(
+    libraries: &mut Vec<ResolvedLibrary>,
+    index: &mut HashMap<String, usize>,
+    spec: &GradleSpec,
+    path: String,
+) {
+    let key = library_coord_key(spec);
+    if let Some(&idx) = index.get(&key) {
+        if version_is_newer(&spec.version, &libraries[idx].version) {
+            libraries[idx] = ResolvedLibrary {
+                path,
+                version: spec.version.clone(),
+            };
+        }
+        return;
+    }
+    index.insert(key, libraries.len());
+    libraries.push(ResolvedLibrary {
+        path,
+        version: spec.version.clone(),
+    });
+}
+
+fn parse_gradle_spec(value: &str) -> Option<GradleSpec> {
+    let (coords, extension) = match value.split_once('@') {
+        Some((c, e)) => (c, e.to_string()),
+        None => (value, "jar".to_string()),
+    };
+    let parts: Vec<&str> = coords.split(':').collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    Some(GradleSpec {
+        group: parts[0].to_string(),
+        artifact: parts[1].to_string(),
+        version: parts[2].to_string(),
+        classifier: parts.get(3).map(|s| s.to_string()),
+        extension,
+    })
+}
+
+fn current_os_name() -> &'static str {
+    if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "osx"
+    } else {
+        "linux"
+    }
+}
+
+fn library_allowed(rules: Option<&[PatchRule]>) -> bool {
+    let rules = match rules {
+        Some(r) if !r.is_empty() => r,
+        _ => return true,
+    };
+    let mut allowed = false;
+    for rule in rules {
+        let applies = rule.os.as_ref().map_or(true, |os| {
+            os.name.as_deref() == Some(current_os_name())
+        });
+        if applies && rule.action != "defer" {
+            allowed = rule.action == "allow";
+        }
+    }
+    allowed
+}
+
+fn is_native_only(entry: &PatchLibraryEntry) -> bool {
+    entry.natives.is_some()
+        && entry
+            .downloads
+            .as_ref()
+            .and_then(|d| d.artifact.as_ref())
+            .is_none()
+}
+
+fn library_paths(pack_dir: &Path, entry: &PatchLibraryEntry) -> Vec<PathBuf> {
+    let Some(spec) = parse_gradle_spec(&entry.name) else {
+        return Vec::new();
+    };
+    let lib_root = pack_dir.join("libraries");
+    let mut paths = vec![lib_root.join(spec.storage_path())];
+    if entry.mmc_hint.as_deref() == Some("local") {
+        paths.insert(0, lib_root.join(spec.filename()));
+    }
+    paths
+}
+
+fn find_library(pack_dir: &Path, entry: &PatchLibraryEntry) -> Option<PathBuf> {
+    library_paths(pack_dir, entry)
+        .into_iter()
+        .find(|path| path.exists())
+}
+
+async fn download_file(
+    client: &reqwest::Client,
+    url: &str,
+    dest: &Path,
+) -> Result<(), String> {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("download failed ({url}): HTTP {}", resp.status()));
+    }
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    fs::write(dest, &bytes).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+async fn ensure_library(
+    client: &reqwest::Client,
+    pack_dir: &Path,
+    entry: &PatchLibraryEntry,
+    app: &tauri::AppHandle,
+    version: &str,
+) -> Result<Option<PathBuf>, String> {
+    if !library_allowed(entry.rules.as_deref()) || is_native_only(entry) {
+        return Ok(None);
+    }
+    if let Some(path) = find_library(pack_dir, entry) {
+        return Ok(Some(path));
+    }
+    let url = entry
+        .downloads
+        .as_ref()
+        .and_then(|d| d.artifact.as_ref())
+        .map(|a| a.url.as_str())
+        .ok_or_else(|| format!("no download URL for {}", entry.name))?;
+    let spec = parse_gradle_spec(&entry.name).ok_or_else(|| format!("bad library name: {}", entry.name))?;
+    let dest = if entry.mmc_hint.as_deref() == Some("local") {
+        pack_dir.join("libraries").join(spec.filename())
+    } else {
+        pack_dir.join("libraries").join(spec.storage_path())
+    };
+    emit_launch_log(app, version, "system", &format!("Downloading {}", entry.name));
+    download_file(client, url, &dest).await?;
+    Ok(Some(dest))
+}
+
+async fn ensure_main_jar(
+    client: &reqwest::Client,
+    pack_dir: &Path,
+    main_jar: &PatchMainJar,
+    mc_version: &str,
+    app: &tauri::AppHandle,
+    version: &str,
+) -> Result<Option<PathBuf>, String> {
+    let dest = pack_dir
+        .join(".minecraft")
+        .join("versions")
+        .join(mc_version)
+        .join(format!("{mc_version}.jar"));
+    if dest.exists() {
+        return Ok(Some(dest));
+    }
+    let url = main_jar
+        .downloads
+        .artifact
+        .as_ref()
+        .map(|a| a.url.as_str())
+        .ok_or("minecraft mainJar has no download URL")?;
+    emit_launch_log(app, version, "system", &format!("Downloading Minecraft {mc_version}"));
+    download_file(client, url, &dest).await?;
+    Ok(Some(dest))
 }
 
 // ── App State ──
 
 struct AppState {
     http: reqwest::Client,
+    running_instances: HashSet<String>,
+}
+
+struct RunningInstanceGuard<'a> {
+    state: &'a State<'a, Mutex<AppState>>,
+    version: String,
+}
+
+impl Drop for RunningInstanceGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = self.state.lock() {
+            guard.running_instances.remove(&self.version);
+        }
+    }
 }
 
 // ── Helpers ──
@@ -177,10 +468,77 @@ fn settings_path(version: &str) -> PathBuf {
     instance_dir(version).join("instance.json")
 }
 
+fn console_log_path(version: &str) -> PathBuf {
+    instance_dir(version).join("console.log")
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaunchLogLine {
+    pub stream: String,
+    pub line: String,
+}
+
+fn java_from_home(home: &str) -> Option<String> {
+    let home = home.trim();
+    if home.is_empty() {
+        return None;
+    }
+    let bin = PathBuf::from(home).join("bin");
+    let candidates = if cfg!(windows) {
+        vec![bin.join("java.exe"), bin.join("java")]
+    } else {
+        vec![bin.join("java")]
+    };
+    for candidate in candidates {
+        if candidate.exists() {
+            return Some(candidate.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+fn java_from_path() -> Option<String> {
+    let path_var = std::env::var("PATH").ok()?;
+    let sep = if cfg!(windows) { ';' } else { ':' };
+    for dir in path_var.split(sep) {
+        let dir = dir.trim();
+        if dir.is_empty() {
+            continue;
+        }
+        let candidates = if cfg!(windows) {
+            vec![PathBuf::from(dir).join("java.exe"), PathBuf::from(dir).join("java")]
+        } else {
+            vec![PathBuf::from(dir).join("java")]
+        };
+        for candidate in candidates {
+            if candidate.exists() {
+                return Some(candidate.to_string_lossy().to_string());
+            }
+        }
+    }
+    None
+}
+
 fn java_path() -> Option<String> {
-    std::env::var("JAVA_HOME").ok().map(|jh| {
-        let p = PathBuf::from(&jh).join("bin").join("java");
-        p.to_string_lossy().to_string()
+    std::env::var("JAVA_HOME")
+        .ok()
+        .and_then(|jh| java_from_home(&jh))
+        .or_else(java_from_path)
+}
+
+fn resolve_java(settings: &InstanceSettings) -> Result<String, String> {
+    if let Some(ref custom) = settings.java_path {
+        let custom = custom.trim();
+        if !custom.is_empty() {
+            let path = PathBuf::from(custom);
+            if path.exists() {
+                return Ok(path.to_string_lossy().to_string());
+            }
+            return Err(format!("configured Java not found: {custom}"));
+        }
+    }
+    java_path().ok_or_else(|| {
+        "no Java configured or found — set JAVA_HOME or pick a Java in instance settings".into()
     })
 }
 
@@ -416,6 +774,119 @@ fn emit<T: Serialize + Clone>(app: &tauri::AppHandle, event: &str, payload: &T) 
     let _ = app.emit(event, payload);
 }
 
+fn persist_console_log(version: &str, stream: &str, line: &str) {
+    let entry = LaunchLogLine {
+        stream: stream.to_string(),
+        line: line.to_string(),
+    };
+    let Ok(json) = serde_json::to_string(&entry) else {
+        return;
+    };
+    if let Ok(mut file) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(console_log_path(version))
+    {
+        let _ = writeln!(file, "{json}");
+    }
+}
+
+fn emit_launch_log(app: &tauri::AppHandle, version: &str, stream: &str, line: &str) {
+    persist_console_log(version, stream, line);
+    emit(
+        app,
+        "launch-log",
+        &serde_json::json!({ "version": version, "stream": stream, "line": line }),
+    );
+}
+
+fn pipe_launch_output<R: Read + Send + 'static>(
+    reader: R,
+    app: tauri::AppHandle,
+    version: String,
+    stream: &'static str,
+) {
+    std::thread::spawn(move || {
+        let reader = BufReader::new(reader);
+        for line in reader.lines().map_while(Result::ok) {
+            emit_launch_log(&app, &version, stream, &line);
+        }
+    });
+}
+
+fn build_classpath(libraries: &[String]) -> String {
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    libraries.join(sep)
+}
+
+fn write_launch_argfile(path: &Path, args: &[String]) -> Result<(), String> {
+    let content = args
+        .iter()
+        .map(|arg| {
+            // Classpath is one semicolon-joined string; quote the whole value for argfile readers.
+            if arg.contains(';') {
+                if arg.contains(' ') || arg.contains('"') {
+                    return format!("\"{}\"", arg.replace('"', "\\\""));
+                }
+                return arg.clone();
+            }
+            if arg.contains(' ') {
+                return format!("\"{}\"", arg.replace('"', "\\\""));
+            }
+            arg.clone()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(path, content).map_err(|e| e.to_string())
+}
+
+fn wait_for_launch(child: Child, app: tauri::AppHandle, version: String) -> Result<i32, String> {
+    let mut child = child;
+    if let Some(stdout) = child.stdout.take() {
+        pipe_launch_output(stdout, app.clone(), version.clone(), "stdout");
+    }
+    if let Some(stderr) = child.stderr.take() {
+        pipe_launch_output(stderr, app.clone(), version.clone(), "stderr");
+    }
+    let status = child.wait().map_err(|e| format!("process wait failed: {e}"))?;
+    let code = status.code().unwrap_or(-1);
+    emit_launch_log(
+        &app,
+        &version,
+        "system",
+        &format!("Process exited with code {code}"),
+    );
+    Ok(code)
+}
+
+#[tauri::command]
+fn get_instance_console_log(version: String) -> Result<Vec<LaunchLogLine>, String> {
+    let path = console_log_path(&version);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut lines = Vec::new();
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Ok(entry) = serde_json::from_str::<LaunchLogLine>(line) {
+            lines.push(entry);
+        }
+    }
+    Ok(lines)
+}
+
+#[tauri::command]
+fn clear_instance_console_log(version: String) -> Result<(), String> {
+    let path = console_log_path(&version);
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 async fn detect_java() -> Result<Vec<JavaInfo>, String> {
     let mut found = Vec::new();
@@ -532,79 +1003,152 @@ fn mmc_pack_dir(inst_dir: &Path) -> PathBuf {
     inst_dir.to_path_buf()
 }
 
-fn parse_mmc_pack(inst_dir: &Path) -> Result<LaunchConfig, String> {
+struct LoadedPatch {
+    order: i32,
+    uid: String,
+    patch: PatchJson,
+}
+
+fn expand_minecraft_arguments(template: &str, tokens: &HashMap<&str, String>) -> Vec<String> {
+    template
+        .split_whitespace()
+        .map(|part| {
+            let mut result = part.to_string();
+            for (key, value) in tokens {
+                result = result.replace(&format!("${{{key}}}"), value);
+            }
+            result
+        })
+        .collect()
+}
+
+async fn build_launch_config(
+    inst_dir: &Path,
+    client: &reqwest::Client,
+    app: &tauri::AppHandle,
+    version: &str,
+) -> Result<LaunchConfig, String> {
     let pack_dir = mmc_pack_dir(inst_dir);
     let mmc_path = pack_dir.join("mmc-pack.json");
     let mmc: MmcPackJson = serde_json::from_str(
-        &fs::read_to_string(&mmc_path).map_err(|e| format!("missing mmc-pack.json: {e}"))?
-    ).map_err(|e| format!("bad mmc-pack.json: {e}"))?;
+        &fs::read_to_string(&mmc_path).map_err(|e| format!("missing mmc-pack.json: {e}"))?,
+    )
+    .map_err(|e| format!("bad mmc-pack.json: {e}"))?;
 
-    let mut main_class = "net.minecraft.launchwrapper.Launch".to_string();
-    let mut extra_jvm_args: Vec<String> = Vec::new();
-    let mut mc_version = "1.12.2".to_string();
-
+    let mut loaded_patches: Vec<LoadedPatch> = Vec::new();
     for comp in &mmc.components {
         let patch_path = pack_dir.join("patches").join(format!("{}.json", comp.uid));
-        if patch_path.exists() {
-            let raw = fs::read_to_string(&patch_path).map_err(|e| format!("patch read: {e}"))?;
-            if let Ok(patch) = serde_json::from_str::<PatchJson>(&raw) {
-                if let Some(mc) = patch.plus_main_class.or(patch.main_class) {
-                    main_class = mc;
-                }
-                if let Some(args) = patch.plus_args {
-                    extra_jvm_args.extend(args);
+        if !patch_path.exists() {
+            continue;
+        }
+        let raw = fs::read_to_string(&patch_path).map_err(|e| format!("patch read: {e}"))?;
+        let patch: PatchJson =
+            serde_json::from_str(&raw).map_err(|e| format!("bad patch {}: {e}", comp.uid))?;
+        loaded_patches.push(LoadedPatch {
+            order: patch.order.unwrap_or(0),
+            uid: comp.uid.clone(),
+            patch,
+        });
+    }
+    loaded_patches.sort_by_key(|p| p.order);
+
+    let mut main_class = "net.minecraft.launchwrapper.Launch".to_string();
+    let mut jvm_args: Vec<String> = vec!["-Duser.language=en".to_string()];
+    let mut program_args: Vec<String> = Vec::new();
+    let mut mc_version = "1.12.2".to_string();
+    let mut resolved_libraries: Vec<ResolvedLibrary> = Vec::new();
+    let mut library_index: HashMap<String, usize> = HashMap::new();
+    let mut main_jar: Option<PatchMainJar> = None;
+    let mut minecraft_arguments: Option<String> = None;
+    let mut asset_index_id: Option<String> = None;
+
+    for loaded in &loaded_patches {
+        let patch = &loaded.patch;
+        let comp = mmc.components.iter().find(|c| c.uid == loaded.uid);
+
+        if let Some(mc) = patch.plus_main_class.clone().or_else(|| patch.main_class.clone()) {
+            main_class = mc;
+        }
+        if let Some(args) = &patch.plus_jvm_args {
+            jvm_args.extend(args.iter().cloned());
+        }
+        if let Some(tweakers) = &patch.plus_tweakers {
+            for tweaker in tweakers {
+                program_args.push("--tweakClass".to_string());
+                program_args.push(tweaker.clone());
+            }
+        }
+        if let Some(args) = &patch.plus_args {
+            let mut i = 0;
+            while i < args.len() {
+                if args[i] == "--tweakClass" && i + 1 < args.len() {
+                    program_args.push("--tweakClass".to_string());
+                    program_args.push(args[i + 1].clone());
+                    i += 2;
+                } else if args[i].starts_with("--tweakClass=") {
+                    program_args.push(args[i].clone());
+                    i += 1;
+                } else {
+                    jvm_args.push(args[i].clone());
+                    i += 1;
                 }
             }
         }
-        if comp.uid == "net.minecraft" {
-            mc_version = comp.version.clone();
+        if loaded.uid == "net.minecraft" {
+            if let Some(comp) = comp {
+                mc_version = comp.effective_version().to_string();
+            }
+            main_jar = patch.main_jar.clone();
+            minecraft_arguments = patch.minecraft_arguments.clone();
+            asset_index_id = patch.asset_index.as_ref().map(|a| a.id.clone());
+        }
+
+        if let Some(entries) = &patch.libraries {
+            for entry in entries {
+                if let Some(path) = ensure_library(client, &pack_dir, entry, app, version).await? {
+                    let Some(spec) = parse_gradle_spec(&entry.name) else {
+                        continue;
+                    };
+                    upsert_library(
+                        &mut resolved_libraries,
+                        &mut library_index,
+                        &spec,
+                        path.to_string_lossy().to_string(),
+                    );
+                }
+            }
         }
     }
 
-    // Gather all library jars
-    let lib_dir = pack_dir.join("libraries");
-    let mut libraries = Vec::new();
-    if lib_dir.exists() {
-        collect_jars(&lib_dir, &mut libraries);
+    if let Some(main_jar) = main_jar {
+        if let Some(path) = ensure_main_jar(client, &pack_dir, &main_jar, &mc_version, app, version).await? {
+            let path_str = path.to_string_lossy().to_string();
+            if let Some(spec) = parse_gradle_spec(&main_jar.name) {
+                upsert_library(
+                    &mut resolved_libraries,
+                    &mut library_index,
+                    &spec,
+                    path_str,
+                );
+            } else {
+                resolved_libraries.push(ResolvedLibrary {
+                    path: path_str,
+                    version: mc_version.clone(),
+                });
+            }
+        }
     }
 
-    // Also include Minecraft jar
-    let mc_jar = pack_dir.join(".minecraft").join("versions").join(&mc_version).join(format!("{mc_version}.jar"));
-    if mc_jar.exists() {
-        libraries.push(mc_jar.to_string_lossy().to_string());
-    }
-
-    // Handle lwjgl3ify natives if present
-    let natives_dir = pack_dir.join(".minecraft").join("bin");
-    if natives_dir.exists() {
-        collect_jars(&natives_dir, &mut libraries);
+    let libraries: Vec<String> = resolved_libraries.into_iter().map(|l| l.path).collect();
+    if libraries.is_empty() {
+        return Err("no libraries resolved for launch".into());
     }
 
     let game_dir = pack_dir.join(".minecraft").to_string_lossy().to_string();
     let assets_dir = pack_dir.join(".minecraft").join("assets").to_string_lossy().to_string();
-
-    // Remove --tweakClass from extra_jvm_args; they go in program args
-    let mut program_args = Vec::new();
-    let mut i = 0;
-    while i < extra_jvm_args.len() {
-        if extra_jvm_args[i] == "--tweakClass" && i + 1 < extra_jvm_args.len() {
-            program_args.push("--tweakClass".to_string());
-            program_args.push(extra_jvm_args[i + 1].clone());
-            i += 2;
-        } else if extra_jvm_args[i].starts_with("--tweakClass=") {
-            program_args.push(extra_jvm_args[i].clone());
-            i += 1;
-        } else {
-            i += 1;
-        }
-    }
-
-    let mut jvm_args: Vec<String> = extra_jvm_args.iter()
-        .filter(|a| !a.starts_with("--tweakClass"))
-        .cloned()
-        .collect();
-    // ponytail: all patch args kept; some may be noise, trim when launch fails
-    jvm_args.extend(program_args.iter().cloned());
+    let natives_dir = pack_dir.join("natives").to_string_lossy().to_string();
+    let _ = fs::create_dir_all(&natives_dir);
+    jvm_args.push(format!("-Djava.library.path={natives_dir}"));
 
     Ok(LaunchConfig {
         main_class,
@@ -613,39 +1157,43 @@ fn parse_mmc_pack(inst_dir: &Path) -> Result<LaunchConfig, String> {
         game_dir,
         assets_dir,
         jvm_args,
+        program_args,
+        minecraft_arguments_template: minecraft_arguments,
+        asset_index_id,
     })
 }
 
-fn collect_jars(dir: &Path, jars: &mut Vec<String>) {
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                collect_jars(&path, jars);
-            } else if path.extension().is_some_and(|e| e == "jar") {
-                jars.push(path.to_string_lossy().to_string());
-            }
-        }
-    }
-}
-
 #[tauri::command]
-async fn launch_instance(version: String) -> Result<(), String> {
+async fn launch_instance(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    version: String,
+) -> Result<(), String> {
+    let client = {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        if !guard.running_instances.insert(version.clone()) {
+            return Err("Instance is already running".into());
+        }
+        guard.http.clone()
+    };
+    let _running_guard = RunningInstanceGuard {
+        state: &state,
+        version: version.clone(),
+    };
+
     let inst_dir = instance_dir(&version);
     if !inst_dir.exists() {
         return Err("instance not installed".into());
     }
 
     let settings = load_settings(&version).ok_or("no settings")?;
-    let java = settings.java_path.clone()
-        .or_else(java_path)
-        .ok_or("no Java configured or found")?;
+    let java = resolve_java(&settings)?;
 
-    let config = parse_mmc_pack(&inst_dir)?;
+    let config = build_launch_config(&inst_dir, &client, &app, &version).await?;
+    let pack_dir = mmc_pack_dir(&inst_dir);
 
-    // Build classpath
-    let sep = if cfg!(windows) { ";" } else { ":" };
-    let classpath = config.libraries.join(sep);
+    let classpath = build_classpath(&config.libraries);
+    let classpath_len = classpath.len();
 
     // Build JVM args
     let mut args: Vec<String> = Vec::new();
@@ -654,10 +1202,13 @@ async fn launch_instance(version: String) -> Result<(), String> {
     if !settings.jvm_args.is_empty() {
         args.extend(settings.jvm_args.split_whitespace().map(String::from));
     }
-    args.extend(config.jvm_args);
+    // Classpath must be set before the custom system classloader initializes.
     args.push("-cp".to_string());
     args.push(classpath);
-    args.push(config.main_class);
+    args.extend(config.jvm_args);
+    let main_class = config.main_class;
+    args.push(main_class.clone());
+    args.extend(config.program_args);
 
     // Auth: Microsoft or offline
     let (username, access_token, uuid, user_type) = if settings.auth_mode == "microsoft" {
@@ -674,31 +1225,80 @@ async fn launch_instance(version: String) -> Result<(), String> {
         (settings.username.clone(), "0".into(), "00000000-0000-0000-0000-000000000000".into(), "mojang".into())
     };
 
-    // Minecraft program args
-    args.push("--username".to_string());
-    args.push(username);
-    args.push("--version".to_string());
-    args.push(config.minecraft_version);
-    args.push("--gameDir".to_string());
-    args.push(config.game_dir);
-    args.push("--assetsDir".to_string());
-    args.push(config.assets_dir);
-    args.push("--accessToken".to_string());
-    args.push(access_token);
-    args.push("--uuid".to_string());
-    args.push(uuid);
-    args.push("--userType".to_string());
-    args.push(user_type);
+    if let Some(template) = &config.minecraft_arguments_template {
+        let asset_index = config
+            .asset_index_id
+            .clone()
+            .unwrap_or_else(|| config.minecraft_version.clone());
+        let tokens: HashMap<&str, String> = HashMap::from([
+            ("auth_player_name", username.clone()),
+            ("version_name", config.minecraft_version.clone()),
+            ("game_directory", config.game_dir.clone()),
+            ("assets_root", config.assets_dir.clone()),
+            ("assets_index_name", asset_index),
+            ("auth_uuid", uuid.clone()),
+            ("auth_access_token", access_token.clone()),
+            ("user_properties", "{}".to_string()),
+            ("user_type", user_type.clone()),
+        ]);
+        args.extend(expand_minecraft_arguments(template, &tokens));
+    } else {
+        args.push("--username".to_string());
+        args.push(username);
+        args.push("--version".to_string());
+        args.push(config.minecraft_version);
+        args.push("--gameDir".to_string());
+        args.push(config.game_dir);
+        args.push("--assetsDir".to_string());
+        args.push(config.assets_dir);
+        args.push("--accessToken".to_string());
+        args.push(access_token);
+        args.push("--uuid".to_string());
+        args.push(uuid);
+        args.push("--userType".to_string());
+        args.push(user_type);
+    }
 
-    // Spawn
+    emit_launch_log(&app, &version, "system", "──────── Launch ────────");
+    emit_launch_log(&app, &version, "system", &format!("Java: {java}"));
+    emit_launch_log(&app, &version, "system", &format!("Main class: {main_class}"));
+    emit_launch_log(
+        &app,
+        &version,
+        "system",
+        &format!(
+            "Classpath: {} libraries ({} chars)",
+            config.libraries.len(),
+            classpath_len
+        ),
+    );
+
+    // Write launch.arg for debugging; Java @argfiles mangle long classpaths on Windows.
+    let argfile_path = inst_dir.join("launch.arg");
+    write_launch_argfile(&argfile_path, &args).ok();
+    emit_launch_log(
+        &app,
+        &version,
+        "system",
+        &format!("Launch args saved to {}", argfile_path.display()),
+    );
+
     let child = std::process::Command::new(&java)
+        .current_dir(&pack_dir)
         .args(&args)
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("launch failed: {e}"))?;
+        .map_err(|e| format!("launch failed ({java}): {e}"))?;
 
-    let _ = child.wait_with_output();
+    let launch_version = version.clone();
+    let exit_code = tokio::task::spawn_blocking(move || wait_for_launch(child, app, launch_version))
+        .await
+        .map_err(|e| format!("launch task failed: {e}"))??;
+
+    if exit_code != 0 {
+        return Err(format!("game exited with code {exit_code}"));
+    }
     Ok(())
 }
 
@@ -938,6 +1538,117 @@ async fn refresh_minecraft_token(acc: &MinecraftAccount) -> Result<String, Strin
     Ok(mc_token)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn argfile_quotes_classpath_with_spaces() {
+        let path = std::env::temp_dir().join("industrialis-test-launch.arg");
+        let cp = r"C:\GT New Horizons\a.jar;C:\GT New Horizons\b.jar".to_string();
+        write_launch_argfile(&path, &["-cp".into(), cp.clone()]).unwrap();
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains(r#""C:\GT New Horizons\a.jar;C:\GT New Horizons\b.jar""#));
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn classpath_joins_without_per_jar_quotes() {
+        let cp = build_classpath(&[
+            r"C:\Games\GT New Horizons\lib\a.jar".to_string(),
+            r"C:\Games\GT New Horizons\lib\b.jar".to_string(),
+        ]);
+        assert_eq!(
+            cp,
+            r"C:\Games\GT New Horizons\lib\a.jar;C:\Games\GT New Horizons\lib\b.jar"
+        );
+    }
+
+    #[test]
+    fn gradle_spec_resolves_log4j_path() {
+        let spec = parse_gradle_spec("org.apache.logging.log4j:log4j-api:2.0-beta9-fixed").unwrap();
+        assert_eq!(
+            spec.storage_path(),
+            "org/apache/logging/log4j/log4j-api/2.0-beta9-fixed/log4j-api-2.0-beta9-fixed.jar"
+        );
+    }
+
+    #[test]
+    fn java_from_home_trims_whitespace() {
+        let home = format!(" {}\\Program Files\\Java\\jdk-21", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()));
+        if PathBuf::from(home.trim()).join("bin").join("java.exe").exists() {
+            let resolved = java_from_home(&home).expect("java should resolve after trim");
+            assert!(resolved.ends_with("java.exe") || resolved.ends_with("java"));
+        }
+    }
+
+    #[test]
+    fn library_dedup_keeps_newer_guava() {
+        let mut libs = Vec::new();
+        let mut index = HashMap::new();
+        let old = parse_gradle_spec("com.google.guava:guava:15.0").unwrap();
+        let new = parse_gradle_spec("com.google.guava:guava:17.0").unwrap();
+        upsert_library(&mut libs, &mut index, &old, "guava-15.jar".into());
+        upsert_library(&mut libs, &mut index, &new, "guava-17.jar".into());
+        assert_eq!(libs.len(), 1);
+        assert_eq!(libs[0].path, "guava-17.jar");
+        assert_eq!(libs[0].version, "17.0");
+    }
+
+    #[test]
+    fn expand_minecraft_arguments_preserves_paths_with_spaces() {
+        let template = "--username ${auth_player_name} --gameDir ${game_directory} --assetsDir ${assets_root}";
+        let tokens = HashMap::from([
+            ("auth_player_name", "Player".to_string()),
+            (
+                "game_directory",
+                r"C:\instances\GT New Horizons 2.9.0-beta-1\.minecraft".to_string(),
+            ),
+            (
+                "assets_root",
+                r"C:\instances\GT New Horizons 2.9.0-beta-1\.minecraft\assets".to_string(),
+            ),
+        ]);
+        let args = expand_minecraft_arguments(template, &tokens);
+        assert_eq!(
+            args,
+            vec![
+                "--username",
+                "Player",
+                "--gameDir",
+                r"C:\instances\GT New Horizons 2.9.0-beta-1\.minecraft",
+                "--assetsDir",
+                r"C:\instances\GT New Horizons 2.9.0-beta-1\.minecraft\assets",
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_mmc_pack_components_without_version_field() {
+        let json = r#"{
+            "components": [
+                {"uid": "net.minecraft", "version": "1.7.10"},
+                {"uid": "me.eigenraven.lwjgl3ify.forgepatches", "cachedVersion": "3.0.23"}
+            ],
+            "formatVersion": 1
+        }"#;
+        let mmc: MmcPackJson = serde_json::from_str(json).expect("mmc-pack.json should parse");
+        let forgepatches = mmc
+            .components
+            .iter()
+            .find(|c| c.uid == "me.eigenraven.lwjgl3ify.forgepatches")
+            .expect("forgepatches component");
+        assert_eq!(forgepatches.version, None);
+        assert_eq!(forgepatches.effective_version(), "3.0.23");
+        let minecraft = mmc
+            .components
+            .iter()
+            .find(|c| c.uid == "net.minecraft")
+            .expect("minecraft component");
+        assert_eq!(minecraft.effective_version(), "1.7.10");
+    }
+}
+
 // ── App Entry ──
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -947,6 +1658,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(Mutex::new(AppState {
             http: reqwest::Client::new(),
+            running_instances: HashSet::new(),
         }))
         .invoke_handler(tauri::generate_handler![
             get_versions,
@@ -957,6 +1669,8 @@ pub fn run() {
             download_install,
             detect_java,
             launch_instance,
+            get_instance_console_log,
+            clear_instance_console_log,
             get_accounts,
             remove_account,
             start_microsoft_login,

@@ -49,6 +49,15 @@ interface DlProgress {
   pct: number;
 }
 
+interface LaunchLogLine {
+  stream: "stdout" | "stderr" | "system";
+  line: string;
+}
+
+interface LaunchLogEvent extends LaunchLogLine {
+  version: string;
+}
+
 interface AccountInfo {
   id: string;
   username: string;
@@ -66,6 +75,108 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+function formatLaunchLog(log: LaunchLogLine[]): string {
+  return log.map((entry) => entry.line).join("\n");
+}
+
+function LaunchConsole({
+  version,
+  instanceName,
+  launching,
+  log,
+  onClear,
+  onClose,
+}: {
+  version: string;
+  instanceName: string;
+  launching: boolean;
+  log: LaunchLogLine[];
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [log]);
+
+  const scrollToTop = () => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
+
+  const copyLogs = async () => {
+    const text = formatLaunchLog(log);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div className="fixed bottom-0 left-56 right-0 border-t border-border bg-card z-30 flex flex-col shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
+      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border shrink-0">
+        <div>
+          <div className="text-sm font-medium">
+            Console — {instanceName}
+            {launching && <span className="text-primary ml-2">(running)</span>}
+          </div>
+          <div className="text-xs text-muted-foreground">{version} · Java stdout / stderr</div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={scrollToTop} disabled={log.length === 0}>
+            Top
+          </Button>
+          <Button variant="outline" size="sm" onClick={scrollToBottom} disabled={log.length === 0}>
+            Bottom
+          </Button>
+          <Button variant="outline" size="sm" onClick={copyLogs} disabled={log.length === 0}>
+            {copied ? "Copied" : "Copy"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClear} disabled={log.length === 0 || launching}>
+            Clear
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+      <ScrollArea ref={scrollRef} className="h-[240px] bg-black/60 p-3 font-mono text-xs">
+        {log.length === 0 ? (
+          <div className="text-muted-foreground">No log output yet. Launch the instance or wait for output.</div>
+        ) : (
+          log.map((entry, i) => (
+            <div
+              key={i}
+              className={
+                entry.stream === "stderr"
+                  ? "text-red-400"
+                  : entry.stream === "system"
+                    ? "text-yellow-400"
+                    : "text-green-400"
+              }
+            >
+              {entry.line}
+            </div>
+          ))
+        )}
+      </ScrollArea>
+    </div>
+  );
+}
+
 // ponytail: one file, no router, no zustand
 
 export default function App() {
@@ -75,10 +186,15 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [editVersion, setEditVersion] = useState<string | null>(null);
   const [javaOptions, setJavaOptions] = useState<JavaInfo[]>([]);
-  const [launchLog, setLaunchLog] = useState<string[]>([]);
+  const [instanceLogs, setInstanceLogs] = useState<Record<string, LaunchLogLine[]>>({});
   const [launching, setLaunching] = useState<string | null>(null);
+  const launchingRef = useRef<string | null>(null);
+  const [consoleVersion, setConsoleVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    launchingRef.current = launching;
+  }, [launching]);
   const [showNewInstance, setShowNewInstance] = useState(false);
-  const logEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadInstances();
@@ -99,22 +215,59 @@ export default function App() {
     return () => { unlisten.then((f) => f()); };
   }, []);
 
-  useEffect(() => { logEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [launchLog]);
+  useEffect(() => {
+    const unlisten = listen<LaunchLogEvent>("launch-log", (e) => {
+      const { version, stream, line } = e.payload;
+      setInstanceLogs((prev) => ({
+        ...prev,
+        [version]: [...(prev[version] ?? []), { stream, line }],
+      }));
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
 
   const loadInstances = useCallback(() => {
     invoke<InstanceInfo[]>("get_instances").then(setInstances).catch(() => {});
   }, []);
 
+  const openConsole = async (version: string) => {
+    setConsoleVersion(version);
+    try {
+      const persisted = await invoke<LaunchLogLine[]>("get_instance_console_log", { version });
+      setInstanceLogs((prev) => {
+        if (launchingRef.current === version && (prev[version]?.length ?? 0) > 0) {
+          return prev;
+        }
+        return { ...prev, [version]: persisted };
+      });
+    } catch {
+      // keep in-memory logs if file read fails
+    }
+  };
+
   const handleLaunch = async (version: string) => {
+    if (launchingRef.current !== null) return;
+    launchingRef.current = version;
     setError(null);
-    setLaunchLog([]);
+    setConsoleVersion(version);
     setLaunching(version);
     try {
       await invoke("launch_instance", { version });
     } catch (e) {
       setError(`Launch failed: ${e}`);
+    } finally {
+      launchingRef.current = null;
+      setLaunching(null);
     }
-    setLaunching(null);
+  };
+
+  const handleClearConsole = async (version: string) => {
+    try {
+      await invoke("clear_instance_console_log", { version });
+      setInstanceLogs((prev) => ({ ...prev, [version]: [] }));
+    } catch (e) {
+      setError(`Clear console failed: ${e}`);
+    }
   };
 
   const handleDelete = async (version: string) => {
@@ -174,7 +327,7 @@ export default function App() {
       </aside>
 
       {/* Content */}
-      <main className="flex-1 p-6 overflow-auto">
+      <main className={`flex-1 p-6 overflow-auto ${consoleVersion ? "pb-[300px]" : ""}`}>
         {tab === "instances" && (<>
           {editVersion ? (
             <div>
@@ -198,29 +351,16 @@ export default function App() {
                     key={inst.version}
                     inst={inst}
                     onLaunch={() => handleLaunch(inst.version)}
+                    onConsole={() => openConsole(inst.version)}
                     onEdit={() => setEditVersion(inst.version)}
                     onDelete={() => handleDelete(inst.version)}
                     onRename={(name) => handleSaveSettings(inst.version, { ...inst.settings, name })}
                     disabled={launching !== null}
+                    consoleActive={consoleVersion === inst.version}
+                    running={launching === inst.version}
                   />
                 ))}
               </div>
-
-              {launching && launchLog.length > 0 && (
-                <Card className="mt-4">
-                  <CardHeader>
-                    <CardTitle className="text-sm">Console — {launching}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-[200px] bg-black/50 rounded p-3 font-mono text-xs">
-                      {launchLog.map((line, i) => (
-                        <div key={i} className="text-green-400">{line}</div>
-                      ))}
-                      <div ref={logEnd} />
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              )}
             </>
           )}
 
@@ -238,6 +378,21 @@ export default function App() {
         {tab === "settings" && <SettingsTab javaOptions={javaOptions} />}
         {tab === "accounts" && <AccountsTab />}
       </main>
+
+      {consoleVersion && (() => {
+        const inst = instances.find((i) => i.version === consoleVersion);
+        const name = inst?.settings.name || `GTNH ${consoleVersion}`;
+        return (
+          <LaunchConsole
+            version={consoleVersion}
+            instanceName={name}
+            launching={launching === consoleVersion}
+            log={instanceLogs[consoleVersion] ?? []}
+            onClear={() => handleClearConsole(consoleVersion)}
+            onClose={() => setConsoleVersion(null)}
+          />
+        );
+      })()}
 
       {/* Error toast */}
       {error && (
@@ -271,13 +426,16 @@ export default function App() {
 
 // ── Renameable Instance Card ──
 
-function RenameableCard({ inst, onLaunch, onEdit, onDelete, onRename, disabled }: {
+function RenameableCard({ inst, onLaunch, onConsole, onEdit, onDelete, onRename, disabled, consoleActive, running }: {
   inst: InstanceInfo;
   onLaunch: () => void;
+  onConsole: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onRename: (name: string) => void;
   disabled: boolean;
+  consoleActive: boolean;
+  running: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(inst.settings.name || `GTNH ${inst.version}`);
@@ -321,8 +479,16 @@ function RenameableCard({ inst, onLaunch, onEdit, onDelete, onRename, disabled }
         </div>
         <CardDescription>{formatBytes(inst.size_bytes)}</CardDescription>
       </CardHeader>
-      <CardContent className="flex gap-2">
-        <Button onClick={onLaunch} disabled={disabled}>Play</Button>
+      <CardContent className="flex flex-wrap gap-2">
+        <Button onClick={onLaunch} disabled={disabled}>
+          {running ? "Launching..." : "Play"}
+        </Button>
+        <Button
+          variant={consoleActive ? "default" : "outline"}
+          onClick={onConsole}
+        >
+          Console
+        </Button>
         <Button variant="secondary" onClick={onEdit}>Settings</Button>
         <Button variant="destructive" onClick={onDelete}>Delete</Button>
       </CardContent>
