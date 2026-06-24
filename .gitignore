@@ -7,9 +7,15 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build outputs
 dist
 dist-ssr
+.next
+out
+.turbo
 *.local
 
 # Editor directories and files
@@ -23,5 +29,8 @@ dist-ssr
 *.sln
 *.sw?
 
-# Build-time Microsoft OAuth client ID (see src-tauri/microsoft-client-id.example)
-src-tauri/microsoft-client-id
+# Build-time Microsoft OAuth client ID (see apps/launcher/src-tauri/microsoft-client-id.example)
+apps/launcher/src-tauri/microsoft-client-id
+
+# Rust
+apps/launcher/src-tauri/target

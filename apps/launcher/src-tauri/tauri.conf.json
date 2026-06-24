@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.yoggan.industrialis",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm dev:frontend",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm build:frontend",
     "frontendDist": "../dist"
   },
   "app": {
