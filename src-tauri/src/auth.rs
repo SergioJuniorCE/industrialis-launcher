@@ -126,10 +126,8 @@ impl AccountData {
     pub fn uhs(&self) -> Option<String> {
         self.user_token
             .as_ref()
-            .and_then(|t| t.extra.as_ref())
-            .and_then(|e| e.get("uhs"))
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
+            .and_then(token_uhs)
+            .or_else(|| self.mojangservices_token.as_ref().and_then(token_uhs))
     }
 
     pub fn needs_refresh(&self) -> bool {
@@ -295,16 +293,7 @@ pub async fn login_microsoft_account(
         device_code_flow(&device_client, &device_app, &device_cid, device_cancel).await
     });
 
-    let msa = tokio::select! {
-        result = oauth_task => {
-            let _ = cancel_tx.send(true);
-            result.map_err(|e| e.to_string())??
-        }
-        result = device_task => {
-            let _ = cancel_tx.send(true);
-            result.map_err(|e| e.to_string())??
-        }
-    };
+    let msa = race_oauth_and_device_code(oauth_task, device_task, cancel_tx).await?;
 
     let mut account = AccountData {
         format_version: 3,
@@ -385,8 +374,17 @@ fn cancel_oauth_wait() {
     *guard = None;
 }
 
+fn is_oauth_redirect_url(url: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
+    parsed.scheme() == "industrialislauncher"
+        && parsed.host_str() == Some("oauth")
+        && matches!(parsed.path(), "/microsoft" | "/microsoft/")
+}
+
 pub fn handle_oauth_callback(url: &str) -> Result<(), String> {
-    if !url.starts_with(OAUTH_REDIRECT_URI) {
+    if !is_oauth_redirect_url(url) {
         return Err("unexpected OAuth callback URL".into());
     }
 
@@ -438,7 +436,7 @@ async fn oauth_code_flow(
     let rx = begin_oauth_wait(state.clone());
 
     let auth_url = format!(
-        "{MSA_AUTH_URL}?client_id={}&response_type=code&redirect_uri={}&scope={}&state={}&response_mode=query",
+        "{MSA_AUTH_URL}?client_id={}&response_type=code&redirect_uri={}&scope={}&state={}&response_mode=query&prompt=select_account",
         urlencoding::encode(client_id),
         urlencoding::encode(OAUTH_REDIRECT_URI),
         urlencoding::encode(MSA_SCOPES),
@@ -470,14 +468,59 @@ async fn oauth_code_flow(
     exchange_auth_code(client, client_id, &code, OAUTH_REDIRECT_URI).await
 }
 
-async fn device_code_flow(
-    client: &Client,
-    app: &AppHandle,
-    client_id: &str,
-    cancel: watch::Receiver<bool>,
+/// Wait for the first successful OAuth or device-code flow. A failure in one path
+/// does not cancel the other — browser OAuth can still complete after device code
+/// fails (e.g. Azure app not marked as a mobile/public client).
+async fn race_oauth_and_device_code(
+    oauth_task: tokio::task::JoinHandle<Result<MsaToken, String>>,
+    device_task: tokio::task::JoinHandle<Result<MsaToken, String>>,
+    cancel_tx: watch::Sender<bool>,
 ) -> Result<MsaToken, String> {
-    let device: DeviceCodeResponse = client
+    let oauth = async { oauth_task.await.map_err(|e| e.to_string())? };
+    let device = async { device_task.await.map_err(|e| e.to_string())? };
+
+    tokio::pin!(oauth);
+    tokio::pin!(device);
+
+    let mut oauth_err = None;
+    let mut device_err = None;
+    let mut oauth_pending = true;
+    let mut device_pending = true;
+
+    while oauth_pending || device_pending {
+        tokio::select! {
+            result = &mut oauth, if oauth_pending => {
+                oauth_pending = false;
+                match result {
+                    Ok(msa) => {
+                        let _ = cancel_tx.send(true);
+                        return Ok(msa);
+                    }
+                    Err(e) => oauth_err = Some(e),
+                }
+            }
+            result = &mut device, if device_pending => {
+                device_pending = false;
+                match result {
+                    Ok(msa) => {
+                        let _ = cancel_tx.send(true);
+                        return Ok(msa);
+                    }
+                    Err(e) => device_err = Some(e),
+                }
+            }
+        }
+    }
+
+    Err(oauth_err.unwrap_or_else(|| {
+        device_err.unwrap_or_else(|| "Microsoft login failed".into())
+    }))
+}
+
+async fn request_device_code(client: &Client, client_id: &str) -> Result<DeviceCodeResponse, String> {
+    let body: serde_json::Value = client
         .post(MSA_DEVICE_CODE_URL)
+        .header("Accept", "application/json")
         .form(&[("client_id", client_id), ("scope", MSA_SCOPES)])
         .send()
         .await
@@ -485,6 +528,30 @@ async fn device_code_flow(
         .json()
         .await
         .map_err(|e| format!("device code request: {e}"))?;
+
+    if let Some(err) = body.get("error").and_then(|v| v.as_str()) {
+        let desc = body["error_description"].as_str().unwrap_or("");
+        return Err(format!("device code ({err}): {desc}"));
+    }
+
+    serde_json::from_value(body).map_err(|e| format!("device code response: {e}"))
+}
+
+async fn device_code_flow(
+    client: &Client,
+    app: &AppHandle,
+    client_id: &str,
+    cancel: watch::Receiver<bool>,
+) -> Result<MsaToken, String> {
+    // Device code is a fallback (see Prism Launcher MSALoginDialog). A setup error here
+    // must not block browser OAuth — race_oauth_and_device_code waits for both paths.
+    let device = match request_device_code(client, client_id).await {
+        Ok(device) => device,
+        Err(e) => {
+            eprintln!("device code fallback unavailable: {e}");
+            return Err(e);
+        }
+    };
 
     let _ = app.emit(
         "auth-device-code",
@@ -647,7 +714,8 @@ fn parse_msa_token_response_with_fallback(
 }
 
 fn parse_oauth_callback_url(url: &str) -> Result<(String, String), String> {
-    let query = url.split('?').nth(1).ok_or("no query in OAuth callback")?;
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid OAuth callback URL: {e}"))?;
+    let query = parsed.query().ok_or("no query in OAuth callback")?;
 
     if let Some(err) = extract_query_param(query, "error") {
         let desc = extract_query_param(query, "error_description").unwrap_or_default();
@@ -694,15 +762,17 @@ pub async fn run_pipeline(
 
     // Step 3: XSTS for Mojang services
     let xsts = xsts_mojang_auth(client, account.user_token.as_ref().unwrap()).await?;
+    let xsts_uhs = xbl_uhs(&xsts)?;
     account.mojangservices_token = Some(StoredToken {
         token: xsts["Token"].as_str().ok_or("no XSTS token")?.to_string(),
         expires_at: parse_xbox_expiry(&xsts),
-        extra: None,
+        extra: Some(serde_json::json!({ "uhs": xsts_uhs })),
     });
 
-    // Step 4: Minecraft launcher login
-    let uhs = account.uhs().ok_or("missing Xbox user hash (uhs)")?;
-    let xsts_token = account.mojangservices_token.as_ref().unwrap().token.clone();
+    // Step 4: Minecraft launcher login (Prism uses mojangservices uhs + XSTS token)
+    let mojang = account.mojangservices_token.as_ref().unwrap();
+    let uhs = token_uhs(mojang).ok_or("missing Xbox user hash (uhs) in XSTS token")?;
+    let xsts_token = mojang.token.clone();
     let mc = minecraft_launcher_login(client, &uhs, &xsts_token).await?;
     let mc_expires = mc["expires_in"].as_u64().unwrap_or(86400);
     account.yggdrasil_token = Some(StoredToken {
@@ -753,6 +823,15 @@ async fn xbox_user_auth(client: &Client, msa_access: &str) -> Result<serde_json:
     Ok(body)
 }
 
+fn token_uhs(token: &StoredToken) -> Option<String> {
+    token
+        .extra
+        .as_ref()
+        .and_then(|e| e.get("uhs"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+}
+
 async fn xsts_mojang_auth(
     client: &Client,
     user_token: &StoredToken,
@@ -760,6 +839,7 @@ async fn xsts_mojang_auth(
     let resp = client
         .post("https://xsts.auth.xboxlive.com/xsts/authorize")
         .header("Accept", "application/json")
+        .header("x-xbl-contract-version", "1")
         .json(&serde_json::json!({
             "Properties": {
                 "SandboxId": "RETAIL",
@@ -844,30 +924,77 @@ fn parse_rfc3339_to_unix(value: &str) -> Option<u64> {
     Some(secs as u64)
 }
 
+fn format_minecraft_login_error(body: &serde_json::Value) -> String {
+    let error = body.get("error").and_then(|v| v.as_str()).unwrap_or("");
+    if error.eq_ignore_ascii_case("FORBIDDEN") {
+        return "Minecraft API rejected this Azure application (FORBIDDEN). \
+                Custom client IDs must be approved by Mojang before they can log in — \
+                Prism Launcher ships a pre-approved ID, but your own registration needs review. \
+                Submit your Application (client) ID at https://aka.ms/mce-reviewappid, \
+                then try again after approval."
+            .into();
+    }
+    format!("Minecraft launcher login failed: {body}")
+}
+
+async fn post_minecraft_login(
+    client: &Client,
+    url: &str,
+    body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let resp = client
+        .post(url)
+        .header("Accept", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    resp.json()
+        .await
+        .map_err(|e| format!("minecraft login response: {e}"))
+}
+
 async fn minecraft_launcher_login(
     client: &Client,
     uhs: &str,
     xsts_token: &str,
 ) -> Result<serde_json::Value, String> {
-    let resp = client
-        .post("https://api.minecraftservices.com/launcher/login")
-        .json(&serde_json::json!({
-            "xtoken": format!("XBL3.0 x={uhs};{xsts_token}"),
-            "platform": "PC_LAUNCHER"
-        }))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let identity = format!("XBL3.0 x={uhs};{xsts_token}");
 
-    let body: serde_json::Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("minecraft launcher login: {e}"))?;
+    // Prism Launcher uses /launcher/login; wiki documents /authentication/login_with_xbox.
+    let launcher_body = serde_json::json!({
+        "xtoken": identity,
+        "platform": "PC_LAUNCHER"
+    });
+    let launcher = post_minecraft_login(
+        client,
+        "https://api.minecraftservices.com/launcher/login",
+        launcher_body,
+    )
+    .await?;
 
-    if body.get("access_token").is_none() {
-        return Err(format!("Minecraft launcher login failed: {body}"));
+    if launcher.get("access_token").is_some() {
+        return Ok(launcher);
     }
-    Ok(body)
+
+    if launcher.get("error").and_then(|v| v.as_str()) != Some("FORBIDDEN") {
+        return Err(format_minecraft_login_error(&launcher));
+    }
+
+    let xbox_body = serde_json::json!({ "identityToken": identity });
+    let xbox = post_minecraft_login(
+        client,
+        "https://api.minecraftservices.com/authentication/login_with_xbox",
+        xbox_body,
+    )
+    .await?;
+
+    if xbox.get("access_token").is_some() {
+        return Ok(xbox);
+    }
+
+    Err(format_minecraft_login_error(&launcher))
 }
 
 async fn check_entitlements(
@@ -1015,6 +1142,17 @@ mod tests {
             skin_png_base64: None,
         };
         assert!(account.needs_refresh());
+    }
+
+    #[test]
+    fn oauth_redirect_url_matches_prism_style_callback() {
+        assert!(is_oauth_redirect_url(
+            "industrialislauncher://oauth/microsoft?code=abc&state=xyz"
+        ));
+        assert!(is_oauth_redirect_url(
+            "industrialislauncher://oauth/microsoft/?code=abc&state=xyz"
+        ));
+        assert!(!is_oauth_redirect_url("https://example.com/oauth/microsoft?code=abc"));
     }
 
     #[test]
