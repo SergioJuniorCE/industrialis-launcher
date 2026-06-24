@@ -1,14 +1,18 @@
+mod auth;
+mod groups;
+
+use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::process::{Child, Stdio};
-use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::process::{Child, Stdio};
 use std::sync::Mutex;
-use futures::StreamExt;
-use serde::{Deserialize, Serialize};
 use tauri::{Emitter, State};
 use tokio::io::AsyncWriteExt;
+
+pub use auth::{AccountData, AccountInfo};
 
 // ── Types ──
 
@@ -44,6 +48,7 @@ pub struct InstanceInfo {
     pub installed: bool,
     pub size_bytes: u64,
     pub settings: InstanceSettings,
+    pub group: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,16 +96,6 @@ pub struct LaunchConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MinecraftAccount {
-    pub id: String,
-    pub username: String,
-    pub uuid: String,
-    pub access_token: String,
-    pub refresh_token: String,
-    pub expires_at: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeMode {
     Dark,
@@ -135,7 +130,6 @@ pub struct ThemeOverrides {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LauncherSettings {
-    pub microsoft_client_id: String,
     #[serde(default)]
     pub theme_mode: ThemeMode,
     #[serde(default)]
@@ -145,7 +139,6 @@ pub struct LauncherSettings {
 impl Default for LauncherSettings {
     fn default() -> Self {
         Self {
-            microsoft_client_id: String::new(),
             theme_mode: ThemeMode::Dark,
             theme_overrides: ThemeOverrides::default(),
         }
@@ -379,9 +372,10 @@ fn library_allowed(rules: Option<&[PatchRule]>) -> bool {
     };
     let mut allowed = false;
     for rule in rules {
-        let applies = rule.os.as_ref().map_or(true, |os| {
-            os.name.as_deref() == Some(current_os_name())
-        });
+        let applies = rule
+            .os
+            .as_ref()
+            .map_or(true, |os| os.name.as_deref() == Some(current_os_name()));
         if applies && rule.action != "defer" {
             allowed = rule.action == "allow";
         }
@@ -416,11 +410,7 @@ fn find_library(pack_dir: &Path, entry: &PatchLibraryEntry) -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
-async fn download_file(
-    client: &reqwest::Client,
-    url: &str,
-    dest: &Path,
-) -> Result<(), String> {
+async fn download_file(client: &reqwest::Client, url: &str, dest: &Path) -> Result<(), String> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -452,13 +442,19 @@ async fn ensure_library(
         .and_then(|d| d.artifact.as_ref())
         .map(|a| a.url.as_str())
         .ok_or_else(|| format!("no download URL for {}", entry.name))?;
-    let spec = parse_gradle_spec(&entry.name).ok_or_else(|| format!("bad library name: {}", entry.name))?;
+    let spec = parse_gradle_spec(&entry.name)
+        .ok_or_else(|| format!("bad library name: {}", entry.name))?;
     let dest = if entry.mmc_hint.as_deref() == Some("local") {
         pack_dir.join("libraries").join(spec.filename())
     } else {
         pack_dir.join("libraries").join(spec.storage_path())
     };
-    emit_launch_log(app, version, "system", &format!("Downloading {}", entry.name));
+    emit_launch_log(
+        app,
+        version,
+        "system",
+        &format!("Downloading {}", entry.name),
+    );
     download_file(client, url, &dest).await?;
     Ok(Some(dest))
 }
@@ -485,7 +481,12 @@ async fn ensure_main_jar(
         .as_ref()
         .map(|a| a.url.as_str())
         .ok_or("minecraft mainJar has no download URL")?;
-    emit_launch_log(app, version, "system", &format!("Downloading Minecraft {mc_version}"));
+    emit_launch_log(
+        app,
+        version,
+        "system",
+        &format!("Downloading Minecraft {mc_version}"),
+    );
     download_file(client, url, &dest).await?;
     Ok(Some(dest))
 }
@@ -519,6 +520,21 @@ fn data_dir() -> PathBuf {
 
 fn instances_dir() -> PathBuf {
     data_dir().join("instances")
+}
+
+fn list_instance_ids() -> Result<HashSet<String>, String> {
+    let dir = instances_dir();
+    if !dir.exists() {
+        return Ok(HashSet::new());
+    }
+    let mut ids = HashSet::new();
+    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.path().is_dir() {
+            ids.insert(entry.file_name().to_string_lossy().to_string());
+        }
+    }
+    Ok(ids)
 }
 
 fn instance_dir(version: &str) -> PathBuf {
@@ -571,7 +587,10 @@ fn java_from_path() -> Option<String> {
             continue;
         }
         let candidates = if cfg!(windows) {
-            vec![PathBuf::from(dir).join("java.exe"), PathBuf::from(dir).join("java")]
+            vec![
+                PathBuf::from(dir).join("java.exe"),
+                PathBuf::from(dir).join("java"),
+            ]
         } else {
             vec![PathBuf::from(dir).join("java")]
         };
@@ -610,7 +629,9 @@ fn resolve_java(settings: &InstanceSettings) -> Result<String, String> {
 // ── Commands ──
 
 #[tauri::command]
-async fn get_versions(state: State<'_, Mutex<AppState>>) -> Result<HashMap<String, GtnhVersion>, String> {
+async fn get_versions(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<HashMap<String, GtnhVersion>, String> {
     let client = state.lock().map_err(|e| e.to_string())?.http.clone();
     drop(state);
     let url = "https://raw.githubusercontent.com/GTNewHorizons/GTNewHorizons.github.io/refs/heads/master/public/versions.json";
@@ -625,23 +646,66 @@ async fn get_instances() -> Result<Vec<InstanceInfo>, String> {
     if !dir.exists() {
         return Ok(vec![]);
     }
+    let known_ids = list_instance_ids()?;
     let mut instances = vec![];
-    let mut entries: Vec<_> = fs::read_dir(&dir).map_err(|e| e.to_string())?.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    let mut entries: Vec<_> = fs::read_dir(&dir)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
     entries.sort_by_key(|e| e.file_name());
     for entry in entries {
         let name = entry.file_name().to_string_lossy().to_string();
         let inst_dir = entry.path();
-        if !inst_dir.is_dir() { continue; }
+        if !inst_dir.is_dir() {
+            continue;
+        }
         let size = dir_size(&inst_dir);
         let settings = load_settings(&name).unwrap_or_default();
+        let group = groups::get_instance_group(&dir, &name, &known_ids);
         instances.push(InstanceInfo {
             version: name,
             installed: true,
             size_bytes: size,
             settings,
+            group,
         });
     }
     Ok(instances)
+}
+
+#[tauri::command]
+async fn get_instance_groups() -> Result<groups::InstanceGroupsState, String> {
+    let dir = instances_dir();
+    let known_ids = list_instance_ids()?;
+    Ok(groups::get_groups_state(&dir, &known_ids))
+}
+
+#[tauri::command]
+async fn set_instance_group(version: String, group: String) -> Result<(), String> {
+    let dir = instances_dir();
+    let known_ids = list_instance_ids()?;
+    groups::set_instance_group(&dir, &version, &group, &known_ids)
+}
+
+#[tauri::command]
+async fn rename_group(old_name: String, new_name: String) -> Result<(), String> {
+    let dir = instances_dir();
+    let known_ids = list_instance_ids()?;
+    groups::rename_group(&dir, &old_name, &new_name, &known_ids)
+}
+
+#[tauri::command]
+async fn delete_group(name: String) -> Result<(), String> {
+    let dir = instances_dir();
+    let known_ids = list_instance_ids()?;
+    groups::delete_group(&dir, &name, &known_ids)
+}
+
+#[tauri::command]
+async fn set_group_collapsed(group: String, collapsed: bool) -> Result<(), String> {
+    let dir = instances_dir();
+    let known_ids = list_instance_ids()?;
+    groups::set_group_collapsed(&dir, &group, collapsed, &known_ids)
 }
 
 fn dir_size(path: &Path) -> u64 {
@@ -664,7 +728,9 @@ fn dir_size(path: &Path) -> u64 {
 
 fn load_settings(version: &str) -> Option<InstanceSettings> {
     let path = settings_path(version);
-    fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok())
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
 }
 
 fn save_settings_file(version: &str, settings: &InstanceSettings) -> Result<(), String> {
@@ -676,23 +742,12 @@ fn save_settings_file(version: &str, settings: &InstanceSettings) -> Result<(), 
     Ok(())
 }
 
-fn accounts_path() -> PathBuf {
-    data_dir().join("accounts.json")
+fn load_accounts() -> Vec<AccountData> {
+    auth::load_accounts(&data_dir())
 }
 
-fn load_accounts() -> Vec<MinecraftAccount> {
-    fs::read_to_string(accounts_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
-}
-
-fn save_accounts(accounts: &[MinecraftAccount]) -> Result<(), String> {
-    let path = accounts_path();
-    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-    let s = serde_json::to_string_pretty(accounts).map_err(|e| e.to_string())?;
-    fs::write(&path, s).map_err(|e| e.to_string())?;
-    Ok(())
+fn save_accounts(accounts: &[AccountData]) -> Result<(), String> {
+    auth::save_accounts(&data_dir(), accounts)
 }
 
 fn launcher_settings_path() -> PathBuf {
@@ -731,6 +786,9 @@ async fn delete_instance(version: String) -> Result<(), String> {
     if dir.exists() {
         fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
     }
+    let instances_root = instances_dir();
+    let known_ids = list_instance_ids()?;
+    groups::remove_instance_from_groups(&instances_root, &version, &known_ids)?;
     Ok(())
 }
 
@@ -740,6 +798,7 @@ async fn download_install(
     state: State<'_, Mutex<AppState>>,
     version: String,
     java_type: String,
+    group: Option<String>,
 ) -> Result<(), String> {
     let client = state.lock().map_err(|e| e.to_string())?.http.clone();
     drop(state);
@@ -760,10 +819,20 @@ async fn download_install(
     let zip_path = inst_dir.join("pack.zip");
 
     // Download
-    emit(&app, "dl-progress", &serde_json::json!({"stage": "downloading", "pct": 0.0}));
-    let resp = client.get(&dl_url).send().await.map_err(|e| e.to_string())?;
+    emit(
+        &app,
+        "dl-progress",
+        &serde_json::json!({"stage": "downloading", "pct": 0.0}),
+    );
+    let resp = client
+        .get(&dl_url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
     let total = resp.content_length().unwrap_or(0);
-    let mut file = tokio::fs::File::create(&zip_path).await.map_err(|e| e.to_string())?;
+    let mut file = tokio::fs::File::create(&zip_path)
+        .await
+        .map_err(|e| e.to_string())?;
     let mut stream = resp.bytes_stream();
     let mut downloaded: u64 = 0;
     while let Some(chunk) = stream.next().await {
@@ -773,14 +842,22 @@ async fn download_install(
         if total > 0 {
             let pct = downloaded as f64 / total as f64;
             if (pct * 100.0) as u32 % 5 == 0 {
-                emit(&app, "dl-progress", &serde_json::json!({"stage": "downloading", "pct": pct}));
+                emit(
+                    &app,
+                    "dl-progress",
+                    &serde_json::json!({"stage": "downloading", "pct": pct}),
+                );
             }
         }
     }
     drop(file);
 
     // Extract
-    emit(&app, "dl-progress", &serde_json::json!({"stage": "extracting", "pct": 0.0}));
+    emit(
+        &app,
+        "dl-progress",
+        &serde_json::json!({"stage": "extracting", "pct": 0.0}),
+    );
     let zip_file = fs::File::open(&zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(zip_file).map_err(|e| e.to_string())?;
     let total_files = archive.len();
@@ -798,7 +875,11 @@ async fn download_install(
         }
         let pct = (i as f64 + 1.0) / total_files as f64;
         if (pct * 100.0) as u32 % 10 == 0 {
-            emit(&app, "dl-progress", &serde_json::json!({"stage": "extracting", "pct": pct}));
+            emit(
+                &app,
+                "dl-progress",
+                &serde_json::json!({"stage": "extracting", "pct": pct}),
+            );
         }
     }
 
@@ -832,7 +913,17 @@ async fn download_install(
     };
     save_settings_file(&version, &settings)?;
 
-    emit(&app, "dl-progress", &serde_json::json!({"stage": "done", "pct": 1.0}));
+    if let Some(group) = group {
+        let instances_root = instances_dir();
+        let known_ids = list_instance_ids()?;
+        groups::set_instance_group(&instances_root, &version, &group, &known_ids)?;
+    }
+
+    emit(
+        &app,
+        "dl-progress",
+        &serde_json::json!({"stage": "done", "pct": 1.0}),
+    );
     Ok(())
 }
 
@@ -914,7 +1005,9 @@ fn wait_for_launch(child: Child, app: tauri::AppHandle, version: String) -> Resu
     if let Some(stderr) = child.stderr.take() {
         pipe_launch_output(stderr, app.clone(), version.clone(), "stderr");
     }
-    let status = child.wait().map_err(|e| format!("process wait failed: {e}"))?;
+    let status = child
+        .wait()
+        .map_err(|e| format!("process wait failed: {e}"))?;
     let code = status.code().unwrap_or(-1);
     emit_launch_log(
         &app,
@@ -1040,11 +1133,15 @@ async fn detect_java() -> Result<Vec<JavaInfo>, String> {
 }
 
 fn probe_java(path: &str) -> Option<JavaInfo> {
-    let output = std::process::Command::new(path).arg("-version").output().ok()?;
+    let output = std::process::Command::new(path)
+        .arg("-version")
+        .output()
+        .ok()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     // Parse "openjdk version \"21.0.3\"" or similar
     let version_str = stderr.lines().next()?;
-    let v: u32 = version_str.split(|c: char| !c.is_ascii_digit())
+    let v: u32 = version_str
+        .split(|c: char| !c.is_ascii_digit())
         .filter_map(|s| s.parse().ok())
         .next()?;
     Some(JavaInfo {
@@ -1132,7 +1229,11 @@ async fn build_launch_config(
         let patch = &loaded.patch;
         let comp = mmc.components.iter().find(|c| c.uid == loaded.uid);
 
-        if let Some(mc) = patch.plus_main_class.clone().or_else(|| patch.main_class.clone()) {
+        if let Some(mc) = patch
+            .plus_main_class
+            .clone()
+            .or_else(|| patch.main_class.clone())
+        {
             main_class = mc;
         }
         if let Some(args) = &patch.plus_jvm_args {
@@ -1187,15 +1288,12 @@ async fn build_launch_config(
     }
 
     if let Some(main_jar) = main_jar {
-        if let Some(path) = ensure_main_jar(client, &pack_dir, &main_jar, &mc_version, app, version).await? {
+        if let Some(path) =
+            ensure_main_jar(client, &pack_dir, &main_jar, &mc_version, app, version).await?
+        {
             let path_str = path.to_string_lossy().to_string();
             if let Some(spec) = parse_gradle_spec(&main_jar.name) {
-                upsert_library(
-                    &mut resolved_libraries,
-                    &mut library_index,
-                    &spec,
-                    path_str,
-                );
+                upsert_library(&mut resolved_libraries, &mut library_index, &spec, path_str);
             } else {
                 resolved_libraries.push(ResolvedLibrary {
                     path: path_str,
@@ -1211,7 +1309,11 @@ async fn build_launch_config(
     }
 
     let game_dir = pack_dir.join(".minecraft").to_string_lossy().to_string();
-    let assets_dir = pack_dir.join(".minecraft").join("assets").to_string_lossy().to_string();
+    let assets_dir = pack_dir
+        .join(".minecraft")
+        .join("assets")
+        .to_string_lossy()
+        .to_string();
     let natives_dir = pack_dir.join("natives").to_string_lossy().to_string();
     let _ = fs::create_dir_all(&natives_dir);
     jvm_args.push(format!("-Djava.library.path={natives_dir}"));
@@ -1279,16 +1381,42 @@ async fn launch_instance(
     // Auth: Microsoft or offline
     let (username, access_token, uuid, user_type) = if settings.auth_mode == "microsoft" {
         let accounts = load_accounts();
-        let acc = accounts.first().ok_or("No Microsoft account configured. Add one in Accounts.")?;
-        let token = if is_expired(acc.expires_at) {
-            // ponytail: refresh inline; token refresh is one HTTP call
-            refresh_minecraft_token(acc).await?
-        } else {
-            acc.access_token.clone()
-        };
-        (acc.username.clone(), token, acc.uuid.clone(), "ms".to_string())
+        let acc = accounts
+            .first()
+            .ok_or("No Microsoft account configured. Add one in Accounts.")?;
+        if let Some(ent) = &acc.minecraft_entitlement {
+            if !ent.can_play_minecraft {
+                return Err("This Microsoft account does not own Minecraft Java Edition.".into());
+            }
+        }
+        let token = auth::ensure_fresh_token(&client, &data_dir(), acc).await?;
+        let username = acc.profile_name();
+        let uuid = acc.profile_id();
+        if username.is_empty() || uuid.is_empty() {
+            return Err(
+                "This Microsoft account has no Minecraft profile yet. Set a username in the official launcher first.".into(),
+            );
+        }
+        (username, token, uuid, "msa".to_string())
     } else {
-        (settings.username.clone(), "0".into(), "00000000-0000-0000-0000-000000000000".into(), "mojang".into())
+        let accounts = load_accounts();
+        let has_msa = accounts.iter().any(|a| {
+            a.minecraft_entitlement
+                .as_ref()
+                .map(|e| e.can_play_minecraft)
+                .unwrap_or(false)
+        });
+        if !has_msa {
+            return Err(
+                "Offline mode requires at least one valid Microsoft account with Minecraft.".into(),
+            );
+        }
+        (
+            settings.username.clone(),
+            "0".into(),
+            "00000000-0000-0000-0000-000000000000".into(),
+            "legacy".to_string(),
+        )
     };
 
     if let Some(template) = &config.minecraft_arguments_template {
@@ -1327,7 +1455,12 @@ async fn launch_instance(
 
     emit_launch_log(&app, &version, "system", "──────── Launch ────────");
     emit_launch_log(&app, &version, "system", &format!("Java: {java}"));
-    emit_launch_log(&app, &version, "system", &format!("Main class: {main_class}"));
+    emit_launch_log(
+        &app,
+        &version,
+        "system",
+        &format!("Main class: {main_class}"),
+    );
     emit_launch_log(
         &app,
         &version,
@@ -1358,9 +1491,10 @@ async fn launch_instance(
         .map_err(|e| format!("launch failed ({java}): {e}"))?;
 
     let launch_version = version.clone();
-    let exit_code = tokio::task::spawn_blocking(move || wait_for_launch(child, app, launch_version))
-        .await
-        .map_err(|e| format!("launch task failed: {e}"))??;
+    let exit_code =
+        tokio::task::spawn_blocking(move || wait_for_launch(child, app, launch_version))
+            .await
+            .map_err(|e| format!("launch task failed: {e}"))??;
 
     if exit_code != 0 {
         return Err(format!("game exited with code {exit_code}"));
@@ -1368,21 +1502,19 @@ async fn launch_instance(
     Ok(())
 }
 
-#[derive(Serialize)]
-pub struct AccountInfo {
-    pub id: String,
-    pub username: String,
-    pub uuid: String,
-}
-
 #[tauri::command]
 async fn get_accounts() -> Result<Vec<AccountInfo>, String> {
     let accounts = load_accounts();
-    Ok(accounts.into_iter().map(|a| AccountInfo {
-        id: a.id,
-        username: a.username,
-        uuid: a.uuid,
-    }).collect())
+    Ok(accounts
+        .into_iter()
+        .map(|a| AccountInfo {
+            id: a.id.clone(),
+            username: a.profile_name(),
+            uuid: a.profile_id(),
+            skin_png_base64: a.skin_png_base64,
+            owns_minecraft: a.minecraft_entitlement.as_ref().map(|e| e.owns_minecraft),
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -1404,205 +1536,14 @@ async fn save_launcher_settings(settings: LauncherSettings) -> Result<(), String
 }
 
 #[tauri::command]
-async fn start_microsoft_login(state: State<'_, Mutex<AppState>>) -> Result<AccountInfo, String> {
+async fn start_microsoft_login(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<AccountInfo, String> {
     let client = state.lock().map_err(|e| e.to_string())?.http.clone();
     drop(state);
 
-    let ls = load_launcher_settings();
-    let cid = ls.microsoft_client_id;
-    if cid.is_empty() {
-        return Err("No Microsoft client ID configured. Create an Azure app and add the client ID in Accounts -> Settings.".into());
-    }
-
-    // Start local server for OAuth callback
-    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
-    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-    let redirect_uri = format!("http://localhost:{port}");
-    let state_str = uuid::Uuid::new_v4().to_string();
-
-    // Open browser
-    let auth_url = format!(
-        "https://login.live.com/oauth20_authorize.srf?client_id={cid}&response_type=code&\
-         redirect_uri={redirect_uri}&scope=XboxLive.signin+offline_access&\
-         state={state_str}"
-    );
-    // ponytail: use opener plugin instead of open crate
-    std::process::Command::new("cmd").args(["/C", "start", &auth_url]).spawn().ok();
-
-    // Wait for redirect
-    let code = tokio::task::spawn_blocking(move || {
-        listener.set_nonblocking(false).ok();
-        for stream in listener.incoming() {
-            if let Ok(mut s) = stream {
-                return parse_auth_code(&mut s);
-            }
-        }
-        Err("no connection received".to_string())
-    }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
-
-    // Exchange auth code → Microsoft tokens
-    let params: &[(&str, &str)] = &[
-        ("client_id", cid.as_str()),
-        ("code", code.as_str()),
-        ("redirect_uri", redirect_uri.as_str()),
-        ("grant_type", "authorization_code"),
-    ];
-    let token_resp: serde_json::Value = client
-        .post("https://login.live.com/oauth20_token.srf")
-        .form(params)
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("token exchange: {e}"))?;
-
-    let ms_access = token_resp["access_token"].as_str().ok_or("no access_token")?.to_string();
-    let ms_refresh = token_resp["refresh_token"].as_str().ok_or("no refresh_token")?.to_string();
-    let expires_in = token_resp["expires_in"].as_u64().unwrap_or(3600);
-    let expires_at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + expires_in;
-
-    // Xbox Live auth
-    let xbl: serde_json::Value = client
-        .post("https://user.auth.xboxlive.com/user/authenticate")
-        .json(&serde_json::json!({
-            "Properties": { "AuthMethod": "RPS", "SiteName": "user.auth.xboxlive.com", "RpsTicket": format!("d={ms_access}") },
-            "RelyingParty": "http://auth.xboxlive.com", "TokenType": "JWT"
-        }))
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("xbl auth: {e}"))?;
-    let xbl_token = xbl["Token"].as_str().ok_or("no xbl token")?.to_string();
-
-    // XSTS auth
-    let xsts: serde_json::Value = client
-        .post("https://xsts.auth.xboxlive.com/xsts/authorize")
-        .json(&serde_json::json!({
-            "Properties": { "SandboxId": "RETAIL", "UserTokens": [xbl_token] },
-            "RelyingParty": "rp://api.minecraftservices.com/", "TokenType": "JWT"
-        }))
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("xsts auth: {e}"))?;
-
-    let xsts_token = xsts["Token"].as_str().ok_or("no xsts token")?.to_string();
-    let uhs = xsts["DisplayClaims"]["xui"][0]["uhs"].as_str().ok_or("no uhs")?.to_string();
-
-    // Minecraft auth
-    let mc: serde_json::Value = client
-        .post("https://api.minecraftservices.com/authentication/login_with_xbox")
-        .json(&serde_json::json!({
-            "identityToken": format!("XBL3.0 x={uhs};{xsts_token}")
-        }))
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("mc auth: {e}"))?;
-
-    let mc_token = mc["access_token"].as_str().ok_or("no mc token")?.to_string();
-
-    // Get profile
-    let profile: serde_json::Value = client
-        .get("https://api.minecraftservices.com/minecraft/profile")
-        .header("Authorization", format!("Bearer {mc_token}"))
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("profile: {e}"))?;
-
-    let mc_uuid = profile["id"].as_str().ok_or("no uuid")?.to_string();
-    let mc_name = profile["name"].as_str().ok_or("no name")?.to_string();
-    let account_id = uuid::Uuid::new_v4().to_string();
-
-    let account = MinecraftAccount {
-        id: account_id.clone(),
-        username: mc_name.clone(),
-        uuid: mc_uuid,
-        access_token: mc_token,
-        refresh_token: ms_refresh,
-        expires_at,
-    };
-
-    let mut accounts = load_accounts();
-    let uuid_clone = account.uuid.clone();
-    accounts.retain(|a| a.uuid != uuid_clone);
-    accounts.push(account);
-    save_accounts(&accounts)?;
-
-    Ok(AccountInfo { id: account_id, username: mc_name, uuid: uuid_clone })
-}
-
-fn parse_auth_code(stream: &mut TcpStream) -> Result<String, String> {
-    let mut buf = [0u8; 4096];
-    let n = stream.read(&mut buf).map_err(|e| e.to_string())?;
-    let request = String::from_utf8_lossy(&buf[..n]);
-    let code = request.split("?code=")
-        .nth(1)
-        .and_then(|s| s.split('&').next())
-        .ok_or("no auth code")?;
-    let resp = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body><h1>You can close this window.</h1></body></html>";
-    stream.write_all(resp.as_bytes()).ok();
-    Ok(code.to_string())
-}
-
-fn is_expired(expires_at: u64) -> bool {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    now + 60 > expires_at // 1 min buffer
-}
-
-async fn refresh_minecraft_token(acc: &MinecraftAccount) -> Result<String, String> {
-    let client = reqwest::Client::new();
-    let ls = load_launcher_settings();
-    let params: &[(&str, &str)] = &[
-        ("client_id", ls.microsoft_client_id.as_str()),
-        ("refresh_token", acc.refresh_token.as_str()),
-        ("grant_type", "refresh_token"),
-        ("redirect_uri", "http://localhost:0"),
-    ];
-    let resp: serde_json::Value = client
-        .post("https://login.live.com/oauth20_token.srf")
-        .form(params)
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("refresh: {e}"))?;
-
-    let ms_access = resp["access_token"].as_str().ok_or("no access_token")?.to_string();
-    let expires_in = resp["expires_in"].as_u64().unwrap_or(3600);
-    let expires_at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + expires_in;
-
-    // Re-do Xbox → Minecraft chain with new Microsoft token
-    let xbl: serde_json::Value = client
-        .post("https://user.auth.xboxlive.com/user/authenticate")
-        .json(&serde_json::json!({
-            "Properties": { "AuthMethod": "RPS", "SiteName": "user.auth.xboxlive.com", "RpsTicket": format!("d={ms_access}") },
-            "RelyingParty": "http://auth.xboxlive.com", "TokenType": "JWT"
-        }))
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("xbl refresh: {e}"))?;
-    let xbl_token = xbl["Token"].as_str().ok_or("no xbl token")?.to_string();
-
-    let xsts: serde_json::Value = client
-        .post("https://xsts.auth.xboxlive.com/xsts/authorize")
-        .json(&serde_json::json!({
-            "Properties": { "SandboxId": "RETAIL", "UserTokens": [xbl_token] },
-            "RelyingParty": "rp://api.minecraftservices.com/", "TokenType": "JWT"
-        }))
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("xsts refresh: {e}"))?;
-    let xsts_token = xsts["Token"].as_str().ok_or("no xsts token")?.to_string();
-    let uhs = xsts["DisplayClaims"]["xui"][0]["uhs"].as_str().ok_or("no uhs")?.to_string();
-
-    let mc: serde_json::Value = client
-        .post("https://api.minecraftservices.com/authentication/login_with_xbox")
-        .json(&serde_json::json!({
-            "identityToken": format!("XBL3.0 x={uhs};{xsts_token}")
-        }))
-        .send().await.map_err(|e| e.to_string())?
-        .json().await.map_err(|e| format!("mc refresh: {e}"))?;
-    let mc_token = mc["access_token"].as_str().ok_or("no mc token")?.to_string();
-
-    // Update stored account
-    let mut accounts = load_accounts();
-    if let Some(stored) = accounts.iter_mut().find(|a| a.id == acc.id) {
-        stored.access_token = mc_token.clone();
-        stored.expires_at = expires_at;
-        stored.refresh_token = resp["refresh_token"].as_str().unwrap_or(&acc.refresh_token).to_string();
-    }
-    save_accounts(&accounts).ok();
-
-    Ok(mc_token)
+    auth::login_microsoft_account(&client, &app, &data_dir()).await
 }
 
 #[cfg(test)]
@@ -1642,8 +1583,15 @@ mod tests {
 
     #[test]
     fn java_from_home_trims_whitespace() {
-        let home = format!(" {}\\Program Files\\Java\\jdk-21", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()));
-        if PathBuf::from(home.trim()).join("bin").join("java.exe").exists() {
+        let home = format!(
+            " {}\\Program Files\\Java\\jdk-21",
+            std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())
+        );
+        if PathBuf::from(home.trim())
+            .join("bin")
+            .join("java.exe")
+            .exists()
+        {
             let resolved = java_from_home(&home).expect("java should resolve after trim");
             assert!(resolved.ends_with("java.exe") || resolved.ends_with("java"));
         }
@@ -1664,7 +1612,8 @@ mod tests {
 
     #[test]
     fn expand_minecraft_arguments_preserves_paths_with_spaces() {
-        let template = "--username ${auth_player_name} --gameDir ${game_directory} --assetsDir ${assets_root}";
+        let template =
+            "--username ${auth_player_name} --gameDir ${game_directory} --assetsDir ${assets_root}";
         let tokens = HashMap::from([
             ("auth_player_name", "Player".to_string()),
             (
@@ -1695,7 +1644,6 @@ mod tests {
         let json = r#"{ "microsoft_client_id": "abc" }"#;
         let settings: LauncherSettings =
             serde_json::from_str(json).expect("legacy launcher settings should parse");
-        assert_eq!(settings.microsoft_client_id, "abc");
         assert!(matches!(settings.theme_mode, ThemeMode::Dark));
         assert!(settings.theme_overrides.background.is_none());
     }
@@ -1703,7 +1651,6 @@ mod tests {
     #[test]
     fn deserialize_full_launcher_settings() {
         let json = r##"{
-            "microsoft_client_id": "abc",
             "theme_mode": "light",
             "theme_overrides": { "muted_foreground": "#b0b0b0" }
         }"##;
@@ -1719,7 +1666,6 @@ mod tests {
     #[test]
     fn reject_oversized_override() {
         let settings = LauncherSettings {
-            microsoft_client_id: "x".into(),
             theme_mode: ThemeMode::Dark,
             theme_overrides: ThemeOverrides {
                 background: Some("x".repeat(33)),
@@ -1757,11 +1703,45 @@ mod tests {
 
 // ── App Entry ──
 
+fn handle_oauth_deep_links(urls: &[url::Url]) {
+    for url in urls {
+        if let Err(e) = auth::handle_oauth_callback(url.as_str()) {
+            eprintln!("OAuth deep link: {e}");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}));
+    }
+
+    builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            use tauri_plugin_deep_link::DeepLinkExt;
+
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                app.deep_link().register_all()?;
+            }
+
+            if let Some(urls) = app.deep_link().get_current()? {
+                handle_oauth_deep_links(&urls);
+            }
+
+            app.deep_link().on_open_url(|event| {
+                handle_oauth_deep_links(&event.urls());
+            });
+
+            Ok(())
+        })
         .manage(Mutex::new(AppState {
             http: reqwest::Client::new(),
             running_instances: HashSet::new(),
@@ -1769,6 +1749,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_versions,
             get_instances,
+            get_instance_groups,
+            set_instance_group,
+            rename_group,
+            delete_group,
+            set_group_collapsed,
             delete_instance,
             save_settings,
             get_settings,

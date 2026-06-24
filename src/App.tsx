@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "./components/ui/button";
@@ -11,7 +11,6 @@ import { Select } from "./components/ui/select";
 import { ScrollArea } from "./components/ui/scroll-area";
 import { ThemeEditor } from "./components/ThemeEditor";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
-import { useLauncherSettings } from "./context/LauncherSettingsContext";
 import "./App.css";
 
 // ── Types ──
@@ -30,6 +29,12 @@ interface InstanceInfo {
   installed: boolean;
   size_bytes: number;
   settings: InstanceSettings;
+  group: string;
+}
+
+interface InstanceGroupsState {
+  collapsed: Record<string, boolean>;
+  groups: string[];
 }
 
 interface InstanceSettings {
@@ -65,6 +70,14 @@ interface AccountInfo {
   id: string;
   username: string;
   uuid: string;
+  skin_png_base64?: string;
+  owns_minecraft?: boolean;
+}
+
+interface DeviceCodeInfo {
+  user_code: string;
+  verification_uri: string;
+  message: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -194,11 +207,19 @@ export default function App() {
     launchingRef.current = launching;
   }, [launching]);
   const [showNewInstance, setShowNewInstance] = useState(false);
+  const [groupsState, setGroupsState] = useState<InstanceGroupsState>({ collapsed: {}, groups: [] });
+  const [changeGroupVersion, setChangeGroupVersion] = useState<string | null>(null);
+  const [lastUsedGroup, setLastUsedGroup] = useState("");
+
+  const loadGroups = useCallback(() => {
+    invoke<InstanceGroupsState>("get_instance_groups").then(setGroupsState).catch(() => {});
+  }, []);
 
   useEffect(() => {
     loadInstances();
+    loadGroups();
     invoke<JavaInfo[]>("detect_java").then(setJavaOptions).catch(() => {});
-  }, []);
+  }, [loadGroups]);
 
   useEffect(() => {
     const unlisten = listen<DlProgress>("dl-progress", (e) => {
@@ -226,8 +247,54 @@ export default function App() {
   }, []);
 
   const loadInstances = useCallback(() => {
-    invoke<InstanceInfo[]>("get_instances").then(setInstances).catch(() => {});
-  }, []);
+    invoke<InstanceInfo[]>("get_instances")
+      .then((list) => {
+        setInstances(list);
+        loadGroups();
+      })
+      .catch(() => {});
+  }, [loadGroups]);
+
+  const handleSetInstanceGroup = async (version: string, group: string) => {
+    try {
+      await invoke("set_instance_group", { version, group });
+      setLastUsedGroup(group);
+      loadInstances();
+    } catch (e) {
+      setError(`Change group failed: ${e}`);
+    }
+  };
+
+  const handleRenameGroup = async (oldName: string, newName: string) => {
+    try {
+      await invoke("rename_group", { oldName, newName });
+      loadInstances();
+    } catch (e) {
+      setError(`Rename group failed: ${e}`);
+    }
+  };
+
+  const handleDeleteGroup = async (name: string) => {
+    try {
+      await invoke("delete_group", { name });
+      loadInstances();
+    } catch (e) {
+      setError(`Delete group failed: ${e}`);
+    }
+  };
+
+  const handleToggleGroupCollapsed = async (group: string, collapsed: boolean) => {
+    setGroupsState((prev) => ({
+      ...prev,
+      collapsed: { ...prev.collapsed, [group]: collapsed },
+    }));
+    try {
+      await invoke("set_group_collapsed", { group, collapsed });
+    } catch (e) {
+      setError(`Failed to save group state: ${e}`);
+      loadGroups();
+    }
+  };
 
   const openConsole = async (version: string) => {
     setConsoleVersion(version);
@@ -348,34 +415,55 @@ export default function App() {
               {instances.length === 0 && (
                 <p className="text-muted-foreground">No instances installed. Click "+ Add Instance" to get started.</p>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {instances.map((inst) => (
-                  <RenameableCard
-                    key={inst.version}
-                    inst={inst}
-                    onLaunch={() => handleLaunch(inst.version)}
-                    onConsole={() => openConsole(inst.version)}
-                    onEdit={() => setEditVersion(inst.version)}
-                    onDelete={() => handleDelete(inst.version)}
-                    onRename={(name) => handleSaveSettings(inst.version, { ...inst.settings, name })}
-                    disabled={launching !== null}
-                    consoleActive={consoleVersion === inst.version}
-                    running={launching === inst.version}
-                  />
-                ))}
-              </div>
+              <InstanceGroupList
+                instances={instances}
+                groupsState={groupsState}
+                onToggleCollapsed={handleToggleGroupCollapsed}
+                onRenameGroup={handleRenameGroup}
+                onDeleteGroup={handleDeleteGroup}
+                onLaunch={handleLaunch}
+                onConsole={openConsole}
+                onEdit={setEditVersion}
+                onDelete={handleDelete}
+                onRename={(version, name) => {
+                  const inst = instances.find((i) => i.version === version);
+                  if (inst) handleSaveSettings(version, { ...inst.settings, name });
+                }}
+                onChangeGroup={setChangeGroupVersion}
+                disabled={launching !== null}
+                consoleVersion={consoleVersion}
+                launching={launching}
+              />
             </>
           )}
 
           {showNewInstance && <NewInstanceDialog
             onClose={() => setShowNewInstance(false)}
-            onInstall={async (version, javaType) => {
+            onInstall={async (version, javaType, group) => {
               setError(null);
-              try { await invoke("download_install", { version, javaType }); }
+              try {
+                await invoke("download_install", { version, javaType, group: group || null });
+                if (group) setLastUsedGroup(group);
+              }
               catch (e) { setError(`Install failed: ${e}`); setDlProgress(null); }
             }}
             installedVersions={new Set(instances.map((i) => i.version))}
+            existingGroups={groupsState.groups}
+            initialGroup={lastUsedGroup}
           />}
+
+          {changeGroupVersion && (
+            <ChangeGroupDialog
+              version={changeGroupVersion}
+              currentGroup={instances.find((i) => i.version === changeGroupVersion)?.group ?? ""}
+              existingGroups={groupsState.groups}
+              onClose={() => setChangeGroupVersion(null)}
+              onSave={(group) => {
+                handleSetInstanceGroup(changeGroupVersion, group);
+                setChangeGroupVersion(null);
+              }}
+            />
+          )}
         </>)}
 
         {tab === "settings" && <SettingsTab javaOptions={javaOptions} />}
@@ -427,15 +515,344 @@ export default function App() {
   );
 }
 
+// ── Instance Groups ──
+
+interface GroupSection {
+  id: string;
+  label: string;
+  items: InstanceInfo[];
+}
+
+function buildGroupSections(
+  instances: InstanceInfo[],
+  groupNames: string[],
+): GroupSection[] {
+  const buckets = new Map<string, InstanceInfo[]>();
+  for (const inst of instances) {
+    const key = inst.group || "";
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(inst);
+  }
+
+  const sections: GroupSection[] = [];
+  const sortedNames = [...groupNames].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" }),
+  );
+
+  for (const name of sortedNames) {
+    const items = buckets.get(name);
+    if (items && items.length > 0) {
+      sections.push({ id: name, label: name, items });
+      buckets.delete(name);
+    }
+  }
+
+  for (const [key, items] of buckets) {
+    if (key && items.length > 0) {
+      sections.push({ id: key, label: key, items });
+    }
+  }
+
+  const ungrouped = buckets.get("") ?? [];
+  if (ungrouped.length > 0) {
+    sections.push({ id: "", label: "Ungrouped", items: ungrouped });
+  }
+
+  return sections;
+}
+
+function InstanceGroupList({
+  instances,
+  groupsState,
+  onToggleCollapsed,
+  onRenameGroup,
+  onDeleteGroup,
+  onLaunch,
+  onConsole,
+  onEdit,
+  onDelete,
+  onRename,
+  onChangeGroup,
+  disabled,
+  consoleVersion,
+  launching,
+}: {
+  instances: InstanceInfo[];
+  groupsState: InstanceGroupsState;
+  onToggleCollapsed: (group: string, collapsed: boolean) => void;
+  onRenameGroup: (oldName: string, newName: string) => void;
+  onDeleteGroup: (name: string) => void;
+  onLaunch: (version: string) => void;
+  onConsole: (version: string) => void;
+  onEdit: (version: string) => void;
+  onDelete: (version: string) => void;
+  onRename: (version: string, name: string) => void;
+  onChangeGroup: (version: string) => void;
+  disabled: boolean;
+  consoleVersion: string | null;
+  launching: string | null;
+}) {
+  const sections = useMemo(
+    () => buildGroupSections(instances, groupsState.groups),
+    [instances, groupsState.groups],
+  );
+
+  if (sections.length === 0) return null;
+
+  return (
+    <div className="space-y-6">
+      {sections.map((section) => (
+        <InstanceGroupSection
+          key={section.id || "__ungrouped__"}
+          section={section}
+          collapsed={groupsState.collapsed[section.id] ?? false}
+          onToggleCollapsed={(collapsed) => onToggleCollapsed(section.id, collapsed)}
+          onRenameGroup={section.id ? onRenameGroup : undefined}
+          onDeleteGroup={section.id ? onDeleteGroup : undefined}
+          onLaunch={onLaunch}
+          onConsole={onConsole}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onRename={onRename}
+          onChangeGroup={onChangeGroup}
+          disabled={disabled}
+          consoleVersion={consoleVersion}
+          launching={launching}
+        />
+      ))}
+    </div>
+  );
+}
+
+function InstanceGroupSection({
+  section,
+  collapsed,
+  onToggleCollapsed,
+  onRenameGroup,
+  onDeleteGroup,
+  onLaunch,
+  onConsole,
+  onEdit,
+  onDelete,
+  onRename,
+  onChangeGroup,
+  disabled,
+  consoleVersion,
+  launching,
+}: {
+  section: GroupSection;
+  collapsed: boolean;
+  onToggleCollapsed: (collapsed: boolean) => void;
+  onRenameGroup?: (oldName: string, newName: string) => void;
+  onDeleteGroup?: (name: string) => void;
+  onLaunch: (version: string) => void;
+  onConsole: (version: string) => void;
+  onEdit: (version: string) => void;
+  onDelete: (version: string) => void;
+  onRename: (version: string, name: string) => void;
+  onChangeGroup: (version: string) => void;
+  disabled: boolean;
+  consoleVersion: string | null;
+  launching: string | null;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(section.label);
+
+  useEffect(() => {
+    setRenameValue(section.label);
+  }, [section.label]);
+
+  const commitRename = () => {
+    setRenaming(false);
+    const trimmed = renameValue.trim();
+    if (!onRenameGroup || !section.id || !trimmed || trimmed === section.label) {
+      setRenameValue(section.label);
+      return;
+    }
+    onRenameGroup(section.id, trimmed);
+  };
+
+  const handleDelete = () => {
+    if (!onDeleteGroup || !section.id) return;
+    if (window.confirm(`Delete group "${section.label}"? Instances will be moved to Ungrouped.`)) {
+      onDeleteGroup(section.id);
+    }
+  };
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3 group/header">
+        <button
+          type="button"
+          onClick={() => onToggleCollapsed(!collapsed)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left hover:text-foreground transition-colors"
+          aria-expanded={!collapsed}
+        >
+          <span className="text-muted-foreground text-xs w-4 shrink-0">
+            {collapsed ? "▶" : "▼"}
+          </span>
+          {renaming ? (
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") {
+                  setRenaming(false);
+                  setRenameValue(section.label);
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="h-7 text-sm max-w-xs"
+              autoFocus
+            />
+          ) : (
+            <h2 className="text-sm font-semibold tracking-tight truncate">{section.label}</h2>
+          )}
+          <Badge variant="secondary" className="shrink-0">
+            {section.items.length}
+          </Badge>
+        </button>
+        {section.id && onRenameGroup && onDeleteGroup && !renaming && (
+          <div className="flex items-center gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setRenaming(true)}
+            >
+              Rename
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+              onClick={handleDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        )}
+      </div>
+      {!collapsed && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {section.items.map((inst) => (
+            <RenameableCard
+              key={inst.version}
+              inst={inst}
+              onLaunch={() => onLaunch(inst.version)}
+              onConsole={() => onConsole(inst.version)}
+              onEdit={() => onEdit(inst.version)}
+              onDelete={() => onDelete(inst.version)}
+              onRename={(name) => onRename(inst.version, name)}
+              onChangeGroup={() => onChangeGroup(inst.version)}
+              disabled={disabled}
+              consoleActive={consoleVersion === inst.version}
+              running={launching === inst.version}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ChangeGroupDialog({
+  version,
+  currentGroup,
+  existingGroups,
+  onClose,
+  onSave,
+}: {
+  version: string;
+  currentGroup: string;
+  existingGroups: string[];
+  onClose: () => void;
+  onSave: (group: string) => void;
+}) {
+  const [group, setGroup] = useState(currentGroup);
+  const listId = "change-group-options";
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Change Group</CardTitle>
+            <Button variant="ghost" size="sm" onClick={onClose}>✕</Button>
+          </div>
+          <CardDescription>{version}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Group</label>
+            <Input
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              placeholder="No group"
+              list={listId}
+              onKeyDown={(e) => e.key === "Enter" && onSave(group.trim())}
+              autoFocus
+            />
+            <datalist id={listId}>
+              {existingGroups.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
+            <p className="text-xs text-muted-foreground mt-1">
+              Pick an existing group or type a new name. Leave empty for Ungrouped.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button className="flex-1" onClick={() => onSave(group.trim())}>Save</Button>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function GroupPicker({
+  value,
+  onChange,
+  existingGroups,
+  id,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  existingGroups: string[];
+  id: string;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-medium">Group</label>
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="No group"
+        list={id}
+      />
+      <datalist id={id}>
+        {existingGroups.map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
 // ── Renameable Instance Card ──
 
-function RenameableCard({ inst, onLaunch, onConsole, onEdit, onDelete, onRename, disabled, consoleActive, running }: {
+function RenameableCard({ inst, onLaunch, onConsole, onEdit, onDelete, onRename, onChangeGroup, disabled, consoleActive, running }: {
   inst: InstanceInfo;
   onLaunch: () => void;
   onConsole: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onRename: (name: string) => void;
+  onChangeGroup: () => void;
   disabled: boolean;
   consoleActive: boolean;
   running: boolean;
@@ -493,6 +910,7 @@ function RenameableCard({ inst, onLaunch, onConsole, onEdit, onDelete, onRename,
           Console
         </Button>
         <Button variant="secondary" onClick={onEdit}>Settings</Button>
+        <Button variant="outline" onClick={onChangeGroup}>Group</Button>
         <Button variant="destructive" onClick={onDelete}>Delete</Button>
       </CardContent>
     </Card>
@@ -501,15 +919,18 @@ function RenameableCard({ inst, onLaunch, onConsole, onEdit, onDelete, onRename,
 
 // ── New Instance Dialog ──
 
-function NewInstanceDialog({ onClose, onInstall, installedVersions }: {
+function NewInstanceDialog({ onClose, onInstall, installedVersions, existingGroups, initialGroup }: {
   onClose: () => void;
-  onInstall: (version: string, javaType: string) => void;
+  onInstall: (version: string, javaType: string, group: string) => void;
   installedVersions: Set<string>;
+  existingGroups: string[];
+  initialGroup: string;
 }) {
   const [versions, setVersions] = useState<Record<string, GtnhVersion> | null>(null);
   const [filter, setFilter] = useState<"all" | "stable" | "beta">("all");
   const [sel, setSel] = useState<string | null>(null);
   const [javaType, setJavaType] = useState("java17+");
+  const [group, setGroup] = useState(initialGroup);
 
   useEffect(() => {
     invoke<Record<string, GtnhVersion>>("get_versions").then(setVersions).catch(() => {});
@@ -576,7 +997,14 @@ function NewInstanceDialog({ onClose, onInstall, installedVersions }: {
             ))}
           </div>
 
-          <Button className="w-full" disabled={!sel} onClick={() => sel && onInstall(sel, javaType)}>
+          <GroupPicker
+            value={group}
+            onChange={setGroup}
+            existingGroups={existingGroups}
+            id="new-instance-group-options"
+          />
+
+          <Button className="w-full" disabled={!sel} onClick={() => sel && onInstall(sel, javaType, group.trim())}>
             Install {sel || ""}
           </Button>
         </CardContent>
@@ -687,10 +1115,9 @@ function SettingsTab({ javaOptions }: { javaOptions: JavaInfo[] }) {
 // ── Accounts Tab ──
 
 function AccountsTab() {
-  const { settings, updateSettings, saveSettingsNow } = useLauncherSettings();
-  const [tab, setTab] = useState<"accounts" | "setup">("accounts");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [deviceCode, setDeviceCode] = useState<DeviceCodeInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
@@ -698,9 +1125,17 @@ function AccountsTab() {
   };
   useEffect(load, []);
 
+  useEffect(() => {
+    const unlisten = listen<DeviceCodeInfo>("auth-device-code", (e) => {
+      setDeviceCode(e.payload);
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
+
   const handleLogin = async () => {
     setLoggingIn(true);
     setError(null);
+    setDeviceCode(null);
     try {
       await invoke<AccountInfo>("start_microsoft_login");
       load();
@@ -708,6 +1143,7 @@ function AccountsTab() {
       setError(`${e}`);
     }
     setLoggingIn(false);
+    setDeviceCode(null);
   };
 
   const handleRemove = async (id: string) => {
@@ -715,55 +1151,9 @@ function AccountsTab() {
     load();
   };
 
-  const handleSaveClientId = async () => {
-    await saveSettingsNow();
-  };
-
-  if (tab === "setup") {
-    return (
-      <div className="space-y-4 max-w-lg">
-        <Button variant="ghost" size="sm" onClick={() => setTab("accounts")} className="mb-2">← Back</Button>
-        <Card>
-          <CardHeader><CardTitle>Microsoft App Setup</CardTitle></CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <p className="text-muted-foreground">
-              To use Microsoft login, you need to create an Azure app registration:
-            </p>
-            <ol className="space-y-2 text-muted-foreground list-decimal list-inside">
-              <li>Go to <a className="text-foreground underline hover:text-muted-foreground" href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noreferrer">Azure portal → App registrations</a></li>
-              <li>Register a new app (any name, supported account type: "Personal Microsoft accounts only")</li>
-              <li>Add redirect URI: <code className="bg-muted px-1 rounded">http://localhost</code> (type: Web)</li>
-              <li>Enable "Allow public client flows" → "Yes"</li>
-              <li>Under "Certificates & secrets", note the Application (client) ID</li>
-              <li>Paste the client ID below</li>
-            </ol>
-            <div>
-              <label className="text-sm font-medium">Client ID</label>
-              <Input
-                value={settings.microsoft_client_id}
-                onChange={(e) => updateSettings({ microsoft_client_id: e.target.value })}
-              />
-            </div>
-            <Button onClick={handleSaveClientId}>Save Client ID</Button>
-          </CardContent>
-        </Card>
-        {error && <p className="text-destructive text-sm">{error}</p>}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4 max-w-lg">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Microsoft Accounts</h2>
-        <Button variant="ghost" size="sm" onClick={() => setTab("setup")}>Setup</Button>
-      </div>
-
-      {!settings.microsoft_client_id && (
-        <p className="text-sm text-muted-foreground">
-          Configure your Microsoft client ID in Setup before logging in.
-        </p>
-      )}
+      <h2 className="text-lg font-semibold">Microsoft Accounts</h2>
 
       {accounts.length === 0 && (
         <p className="text-muted-foreground">No accounts linked.</p>
@@ -772,20 +1162,55 @@ function AccountsTab() {
       {accounts.map((acc) => (
         <Card key={acc.id}>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">{acc.username}</CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {acc.skin_png_base64 && (
+                  <img
+                    src={`data:image/png;base64,${acc.skin_png_base64}`}
+                    alt=""
+                    className="w-8 h-8 rounded-sm shrink-0 image-pixelated"
+                    style={{ imageRendering: "pixelated" }}
+                  />
+                )}
+                <div className="min-w-0">
+                  <CardTitle className="text-base truncate">
+                    {acc.username || "(no Minecraft username)"}
+                  </CardTitle>
+                  {acc.uuid && (
+                    <CardDescription className="font-mono text-xs truncate">{acc.uuid}</CardDescription>
+                  )}
+                </div>
+              </div>
               <Button size="sm" variant="destructive" onClick={() => handleRemove(acc.id)}>Remove</Button>
             </div>
-            <CardDescription className="font-mono text-xs">{acc.uuid}</CardDescription>
+            {acc.owns_minecraft === false && (
+              <p className="text-xs text-amber-500 mt-2">This account does not own Minecraft Java Edition.</p>
+            )}
           </CardHeader>
         </Card>
       ))}
 
-      {settings.microsoft_client_id && (
-        <Button onClick={handleLogin} disabled={loggingIn} className="w-full">
-          {loggingIn ? "Logging in..." : "Add Microsoft Account"}
-        </Button>
+      {loggingIn && deviceCode && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Device code login</CardTitle>
+            <CardDescription>
+              If the browser did not open, enter this code at{" "}
+              <a className="text-foreground underline" href={deviceCode.verification_uri} target="_blank" rel="noreferrer">
+                {deviceCode.verification_uri}
+              </a>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-mono tracking-widest">{deviceCode.user_code}</p>
+            <p className="text-xs text-muted-foreground mt-2">{deviceCode.message}</p>
+          </CardContent>
+        </Card>
       )}
+
+      <Button onClick={handleLogin} disabled={loggingIn} className="w-full">
+        {loggingIn ? "Logging in..." : "Add Microsoft Account"}
+      </Button>
 
       {error && <p className="text-destructive text-sm">{error}</p>}
     </div>

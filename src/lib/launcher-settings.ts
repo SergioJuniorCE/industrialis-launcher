@@ -12,13 +12,11 @@ export interface ThemeOverrides {
 }
 
 export interface LauncherSettingsData {
-  microsoft_client_id: string;
   theme_mode: ThemeMode;
   theme_overrides: ThemeOverrides;
 }
 
 export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
-  microsoft_client_id: "",
   theme_mode: "dark",
   theme_overrides: {},
 };

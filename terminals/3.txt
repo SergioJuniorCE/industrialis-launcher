@@ -1,0 +1,22 @@
+---
+pid: 11280
+cwd: "C:\Users\sergi\dev\industrialis-launcher"
+command: "Set-Location C:\\Users\\sergi\\dev\\industrialis-launcher\\src-tauri; cargo build --release"
+started_at: 2026-06-23T19:07:35.422Z
+running_for_ms: 44309999 
+---
+   Compiling industrialis-launcher v0.1.0 (C:\Users\sergi\dev\industrialis-launcher\src-tauri)
+warning: field `minus_args` is never read
+   --> src\lib.rs:169:5
+    |
+143 | struct PatchJson {
+    |        --------- field in this struct
+...
+169 |     minus_args: Option<Vec<String>>,
+    |     ^^^^^^^^^^
+    |
+    = note: `PatchJson` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `industrialis-launcher` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 4m 35s

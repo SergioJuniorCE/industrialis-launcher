@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build-time Microsoft OAuth client ID (see src-tauri/microsoft-client-id.example)
+src-tauri/microsoft-client-id

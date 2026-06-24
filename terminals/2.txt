@@ -1,0 +1,38 @@
+---
+pid: 26716
+cwd: "C:\Users\sergi\dev\industrialis-launcher"
+command: "cd C:\\Users\\sergi\\dev\\industrialis-launcher\\src-tauri; cargo build --release 2>&1"
+started_at: 2026-06-23T17:43:30.779Z
+running_for_ms: 49355006 
+---
+cargo :    Compiling industrialis-launcher v0.1.0 (C:\Users\sergi\dev\industrialis-launcher\src-tauri)
+At line:1 char:56
++ ... sergi\dev\industrialis-launcher\src-tauri; cargo build --release 2>&1
++                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling in...cher\src-tauri):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: field `minus_args` is never read
+   --> src\lib.rs:162:5
+    |
+141 | struct PatchJson {
+    |        --------- field in this struct
+...
+162 |     minus_args: Option<Vec<String>>,
+    |     ^^^^^^^^^^
+    |
+    = note: `PatchJson` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code 
+analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+warning: field `name` is never read
+   --> src\lib.rs:167:5
+    |
+166 | struct PatchMainJar {
+    |        ------------ field in this struct
+167 |     name: String,
+    |     ^^^^
+    |
+    = note: `PatchMainJar` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead 
+code analysis
+warning: `industrialis-launcher` (lib) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 5m 49s
