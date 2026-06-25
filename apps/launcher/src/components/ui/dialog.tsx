@@ -13,30 +13,34 @@ function Dialog({ open, onOpenChange, children }: {
 }) {
   return (
     <DialogContext.Provider value={{ open, onOpenChange }}>
-      {children}
-      {open && (
+      {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="fixed inset-0 bg-black/50"
             onClick={() => onOpenChange(false)}
+            aria-hidden
           />
-          <div className="relative z-50 w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
+          <div
+            className="relative z-50 w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+            role="dialog"
+            aria-modal="true"
+          >
             {children}
           </div>
         </div>
-      )}
+      ) : null}
     </DialogContext.Provider>
   );
 }
 
-function DialogTrigger({ asChild, children, ...props }: {
+function DialogTrigger({ children, ...props }: {
   asChild?: boolean;
   children: React.ReactNode;
   [key: string]: unknown;
 }) {
   const ctx = React.useContext(DialogContext);
   return (
-    <button onClick={() => ctx?.onOpenChange(true)} {...props}>
+    <button type="button" onClick={() => ctx?.onOpenChange(true)} {...props}>
       {children}
     </button>
   );

@@ -1,66 +1,24 @@
 import type { ThemeMode, ThemeOverrides, ThemePresetId } from "./launcher-settings";
 import {
   DEFAULT_THEME_PRESET_ID,
-  resolveThemePreset,
+  resolveThemePresetOrDefault,
   tokensForPreset,
   type SavedThemePreset,
+  type ThemeBackgroundEffect,
   type ThemeTokens,
 } from "./theme-presets";
+import { THEME_TOKEN_CSS_VARS, tokensToCssVars, validateHexColor } from "./theme-utils";
+
+export { THEME_TOKEN_CSS_VARS, validateHexColor, validateRadius } from "./theme-utils";
 
 export const THEME_CACHE_KEY = "industrialis-theme-cache";
-
-export const THEME_TOKEN_CSS_VARS = {
-  background: "--theme-background",
-  foreground: "--theme-foreground",
-  card: "--theme-card",
-  card_foreground: "--theme-card-foreground",
-  popover: "--theme-popover",
-  popover_foreground: "--theme-popover-foreground",
-  primary: "--theme-primary",
-  primary_foreground: "--theme-primary-foreground",
-  secondary: "--theme-secondary",
-  secondary_foreground: "--theme-secondary-foreground",
-  muted: "--theme-muted",
-  muted_foreground: "--theme-muted-foreground",
-  accent: "--theme-accent",
-  accent_foreground: "--theme-accent-foreground",
-  destructive: "--theme-destructive",
-  destructive_foreground: "--theme-destructive-foreground",
-  border: "--theme-border",
-  input: "--theme-input",
-  ring: "--theme-ring",
-  radius: "--theme-radius",
-} as const satisfies Record<keyof ThemeTokens, string>;
-
-export const THEME_OVERRIDE_CSS_VARS = {
-  background: "--theme-background",
-  foreground: "--theme-foreground",
-  primary: "--theme-primary",
-  card: "--theme-card",
-  border: "--theme-border",
-  muted: "--theme-muted",
-  muted_foreground: "--theme-muted-foreground",
-  accent: "--theme-accent",
-  accent_foreground: "--theme-accent-foreground",
-  radius: "--theme-radius",
-} as const satisfies Record<keyof ThemeOverrides, string>;
 
 export interface ThemeCache {
   mode: ThemeMode;
   preset: ThemePresetId;
+  effect: ThemeBackgroundEffect;
   overrides: ThemeOverrides;
   vars: Record<string, string>;
-}
-
-const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
-const RADIUS_RE = /^\d+(\.\d+)?(rem|px)$/;
-
-export function validateHexColor(value: string): boolean {
-  return value.length <= 9 && HEX_RE.test(value);
-}
-
-export function validateRadius(value: string): boolean {
-  return value.length <= 16 && RADIUS_RE.test(value);
 }
 
 export function computeThemeCssVars(
@@ -69,17 +27,9 @@ export function computeThemeCssVars(
   overrides: ThemeOverrides = {},
   customPresets: SavedThemePreset[] = []
 ): Record<string, string> {
-  const preset = resolveThemePreset(presetId, customPresets);
+  const preset = resolveThemePresetOrDefault(presetId, customPresets);
   const tokens = tokensForPreset(preset, mode);
-  const vars: Record<string, string> = {};
-
-  for (const [key, cssVar] of Object.entries(THEME_TOKEN_CSS_VARS)) {
-    const tokenKey = key as keyof ThemeTokens;
-    const override = overrides[tokenKey as keyof ThemeOverrides];
-    vars[cssVar] = override ?? tokens[tokenKey];
-  }
-
-  return vars;
+  return tokensToCssVars(tokens, overrides);
 }
 
 export function applyTheme(
@@ -89,11 +39,12 @@ export function applyTheme(
   customPresets: SavedThemePreset[] = []
 ): void {
   const root = document.documentElement;
-  const preset = resolveThemePreset(presetId, customPresets);
-  const vars = computeThemeCssVars(mode, preset.id, overrides, customPresets);
+  const preset = resolveThemePresetOrDefault(presetId, customPresets);
+  const vars = tokensToCssVars(tokensForPreset(preset, mode), overrides);
 
   root.setAttribute("data-theme", mode);
   root.setAttribute("data-theme-preset", preset.id);
+  root.setAttribute("data-theme-effect", preset.background_effect);
   root.style.colorScheme = mode;
 
   for (const cssVar of Object.values(THEME_TOKEN_CSS_VARS)) {
@@ -127,7 +78,9 @@ export function readThemeCache(): ThemeCache | null {
       parsed.vars && typeof parsed.vars === "object"
         ? parsed.vars
         : computeThemeCssVars(mode, preset, overrides);
-    return { mode, preset, overrides, vars };
+    const effect: ThemeBackgroundEffect =
+      parsed.effect === "grid" ? "grid" : preset === "industrialis" ? "grid" : "none";
+    return { mode, preset, effect, overrides, vars };
   } catch {
     return null;
   }
@@ -139,8 +92,15 @@ export function writeThemeCache(
   overrides: ThemeOverrides,
   customPresets: SavedThemePreset[] = []
 ): void {
-  const vars = computeThemeCssVars(mode, presetId, overrides, customPresets);
-  const payload: ThemeCache = { mode, preset: presetId, overrides, vars };
+  const preset = resolveThemePresetOrDefault(presetId, customPresets);
+  const vars = tokensToCssVars(tokensForPreset(preset, mode), overrides);
+  const payload: ThemeCache = {
+    mode,
+    preset: presetId,
+    effect: preset.background_effect,
+    overrides,
+    vars,
+  };
   localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(payload));
 }
 
@@ -193,17 +153,4 @@ export function hasLowContrast(foreground?: string, background?: string): boolea
   return contrastRatio(foreground, background) < 4.5;
 }
 
-export function effectiveOverrideValue(
-  key: keyof ThemeOverrides,
-  mode: ThemeMode,
-  presetId: string,
-  overrides: ThemeOverrides,
-  customPresets: SavedThemePreset[] = []
-): string | undefined {
-  if (overrides[key]) return overrides[key];
-  const preset = resolveThemePreset(presetId, customPresets);
-  const tokens = tokensForPreset(preset, mode);
-  const tokenKey = key as keyof ThemeTokens;
-  if (tokenKey in tokens) return tokens[tokenKey];
-  return undefined;
-}
+export type { ThemeTokens };

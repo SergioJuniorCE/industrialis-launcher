@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
-  THEME_OVERRIDE_CSS_VARS,
   THEME_TOKEN_CSS_VARS,
   applyTheme,
   computeThemeCssVars,
@@ -12,21 +11,23 @@ import {
   THEME_CACHE_KEY,
 } from "./theme";
 import { DEFAULT_LAUNCHER_SETTINGS } from "./launcher-settings";
+import { parseSavedThemePresets } from "./theme-store";
 
 describe("theme helpers", () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-theme-preset");
+    document.documentElement.removeAttribute("data-theme-effect");
     for (const cssVar of Object.values(THEME_TOKEN_CSS_VARS)) {
       document.documentElement.style.removeProperty(cssVar);
     }
   });
 
-  it("maps override keys to kebab-case css vars", () => {
-    expect(THEME_OVERRIDE_CSS_VARS.muted_foreground).toBe("--theme-muted-foreground");
-    expect(THEME_OVERRIDE_CSS_VARS.background).toBe("--theme-background");
-    expect(THEME_OVERRIDE_CSS_VARS.accent).toBe("--theme-accent");
+  it("maps token keys to kebab-case css vars", () => {
+    expect(THEME_TOKEN_CSS_VARS.muted_foreground).toBe("--theme-muted-foreground");
+    expect(THEME_TOKEN_CSS_VARS.background).toBe("--theme-background");
+    expect(THEME_TOKEN_CSS_VARS.accent).toBe("--theme-accent");
   });
 
   it("validates hex and radius", () => {
@@ -37,14 +38,15 @@ describe("theme helpers", () => {
     expect(validateRadius("bad")).toBe(false);
   });
 
-  it("applyTheme sets data attributes and full token vars", () => {
+  it("applyTheme sets data attributes, effect, and full token vars", () => {
     applyTheme("light", "industrialis", { background: "#ffffff" });
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
     expect(document.documentElement.getAttribute("data-theme-preset")).toBe("industrialis");
+    expect(document.documentElement.getAttribute("data-theme-effect")).toBe("grid");
     expect(document.documentElement.style.getPropertyValue("--theme-background")).toBe("#ffffff");
     expect(document.documentElement.style.getPropertyValue("--theme-accent")).toBe("#b8921f");
     applyTheme("dark", "monochrome", {});
-    expect(document.documentElement.getAttribute("data-theme-preset")).toBe("monochrome");
+    expect(document.documentElement.getAttribute("data-theme-effect")).toBe("none");
     expect(document.documentElement.style.getPropertyValue("--theme-accent")).toBe("#262626");
   });
 
@@ -54,11 +56,12 @@ describe("theme helpers", () => {
     expect(vars["--theme-ring"]).toBe("#c9a227");
   });
 
-  it("reads and writes theme cache with preset and vars", () => {
+  it("reads and writes theme cache with preset, effect, and vars", () => {
     writeThemeCache("dark", "midnight", { muted_foreground: "#b0b0b0" });
     const cache = readThemeCache();
     expect(cache?.mode).toBe("dark");
     expect(cache?.preset).toBe("midnight");
+    expect(cache?.effect).toBe("none");
     expect(cache?.overrides.muted_foreground).toBe("#b0b0b0");
     expect(cache?.vars["--theme-muted-foreground"]).toBe("#b0b0b0");
     expect(localStorage.getItem(THEME_CACHE_KEY)).toContain("midnight");
@@ -73,5 +76,19 @@ describe("theme helpers", () => {
     expect(merged.theme_mode).toBe("light");
     expect(merged.theme_preset).toBe("sandstone");
     expect(merged.theme_overrides.background).toBe("#fafafa");
+  });
+
+  it("parseSavedThemePresets rejects invalid token payloads", () => {
+    const valid = parseSavedThemePresets([
+      {
+        id: "custom-abc12345",
+        name: "Mine",
+        description: "x",
+        background_effect: "grid",
+        dark: { background: "#0a0a0a" },
+        light: { background: "#fafafa" },
+      },
+    ]);
+    expect(valid).toHaveLength(0);
   });
 });

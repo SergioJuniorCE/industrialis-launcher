@@ -1,0 +1,1320 @@
+
+FullName                                                                                                               
+--------                                                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\console.log                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\instance.json                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\launch.arg                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\.minecraft    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\backups       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\config        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\fonts         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\libraries     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\logs          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\mods          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\natives       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\patches       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\saves         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\schematics    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\scripts       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\.healer.log   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\gtnh_icon.png 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\instance.cfg  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\mmc-pack.json 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\OpenComputersMod-1.12.44-GTNH-52-libjnlua52-windows-x86_64.dll                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\OpenComputersMod-1.12.44-GTNH-53-libjnlua53-windows-x86_64.dll                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\OpenComputersMod-1.12.44-GTNH-54-libjnlua54-windows-x86_64.dll                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\assets                                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\blueprints                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config                                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\coretweaks                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\crash-reports                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\falsepattern                                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\journeymap                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\logs                                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods                                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\nestedmods                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\resourcepacks                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\saves                                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\serverutilities                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\shaderpacks                                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\versions                                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\BotaniaVars.dat                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\changelog from 2.8.4 to 2.9.0-beta-1.md                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech.lang                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_de_DE.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_es_ES.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_fr_FR.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_ja_JP.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_ko_KR.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_pl_PL.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_pt_BR.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_ru_RU.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_tr_TR.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\GregTech_zh_CN.lang                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\knownkeys.txt                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\localconfig.cfg                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\optionsnf.txt                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\servers.dat                                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\assets\asset_director                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\assets\indexes                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\assets\objects                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\amazingtrophies                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\AppliedEnergistics2                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bdlib                                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Betterloadingscreen                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\betterquesting                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\biomesoplenty                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\BloodMagic                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bogosorter                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bugtorch                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\buildcraft                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ClimateControl                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\cofh                                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\cropsnh                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\CustomMainMenu                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\draconicevolution                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\endercore                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\enderio                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\enderzoo                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\EnhancedLootBags                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\etfuturum                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\forestry                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\GalacticGreg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Galacticraft                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\GalaxySpace                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\gendustry                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\GregTech                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\GTNewHorizons                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\GTPlusPlus                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\guidenh                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\HungerOverhaul                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ic2                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\IguanaTinkerTweaks                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\InGameInfoXML                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\kubatech                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\lootgames                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\mixingasm                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\mobsinfo                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\NEI                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\notfine                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\opencomputers                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\OpenSecurity                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\railcraft                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\roguelike_dungeons                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\RTG                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\salisarcana                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\simpleskinbackport                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\SlimeKnights                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\SpiceOfLife                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\SuperTiC                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ThaumcraftMobAspects                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TooMuchLoot                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\txloader                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\vendingmachine                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\VillageNames4                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\warptheory                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\WitcheryExtras                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\AdvancedSolarPanel.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\adventurebackpack.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ae2fc.cfg                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\AFSU.cfg                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\akashictome.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\angelica-compat.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\angelica-modules.cfg                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\angelica-options.json                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\angelica.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\angermod.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\AppleCore.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\archaicfix.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ArchitectureCraft.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\asielib.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\aspectrecipeindex.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Automagy.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Avaritia.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Avaritiaddons.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\AWWayofTime.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\backhand.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Backpack.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bartworks.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\battlegear2.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Baubles.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\beebetteratbees.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\BetterAchievements.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\betterbuilderswands.cfg                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bettercrashes.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\betterp2p.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\betterquesting.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\BiblioCraft.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\BloodArsenal.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bogosorter.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Botania.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bq_rf.cfg                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bq_standard.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\bq_themed.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\CarpentersBlocks.cfg                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\catwalks.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\chisel.cfg                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ChiselTones.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\chromatictooltips.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\chromatictooltipscompat.cfg                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\climatecontrol.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\CodeChickenCore.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\compactkineticgenerators.cfg                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\computronics.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\cookingforblockheads.cfg                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\coretweaks.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\craftingtweaks-general.cfg                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\craftingtweaks.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\craftpresence.json                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\darkerer.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\defaultserverlist.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\defaultworldgenerator.cfg                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\DraconicEvolution.Balance.cfg                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\DraconicEvolution.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\DreamCoreMod.properties                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\DummyCore.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\duradisplay.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\EMT.cfg                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\EnderStorage.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\endlessids.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\eternalsingularity.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ExtendedPASupport.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ExtraBees.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ExtraTrees.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ExtraUtilities.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\extremesoundmuffler.cfg                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\falsepatternlib-early.json                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\falsepatternlib.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\fether.cfg                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\findit.cfg                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\FloodLights.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ForbiddenMagic.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\forge.cfg                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\forgeChunkLoading.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ForgeRelocation.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\freecam.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\gadomancy.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\GalacticraftAmunRa.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Genetics.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ggfab.cfg                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\GoodGenerator.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\GraviSuite.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\gtneioreplugin.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\gtnh-credits.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\gtnhintergalactic.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\gtnhlib-number-formatting.cfg                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\gtnhlib.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\HardcoreEnderExpansion.cfg                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\harvestcraft.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\hodgepodge.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\hodgepodgeEarly.properties                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\holoinventory.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\hydroenergy.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\IC2.ini                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Ic2Nei.cfg                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\IC2NuclearControl.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ifu.cfg                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\IGWMod.cfg                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\InfernalMobs.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\InGameInfoXML.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\injectedDependencies.json                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\IronChest.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ironchestminecarts.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\JABBA.cfg                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\jarjar.properties                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\localconfig-example.txt                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\localconfig.txt                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\LogisticsPipes.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\LunatriusCore.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\lwjgl3ify-early.json                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\lwjgl3ify.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\MagicBees.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\malisisdoors.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\matter-manipulator.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\MCFrames.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\mcpatcherforge.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\microblocks.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\MineTweaker3.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\modularui.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\modularui2.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\MouseTweaks.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\MrTJPCore.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\multipart.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Natura-Dynamic.json                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Natura.cfg                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\naturescompass.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\navigator.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\NEIAddons.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\NEICustomDiagram.cfg                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\NEID.cfg                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\neiintegration.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\NotEnoughEnergistics.cfg                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\nutrition.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\OpenBlocks.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\OpenComputers.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\openglasses.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\OpenMods.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\OpenModsLibCore.json                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\openmodularturrets.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\openprinter.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\opensecurity.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Opis.cfg                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\overloadedarmorbar.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\personalspace.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ProjectBlue.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ProjectRed.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\RandomThings.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\RIO.cfg                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\RWG.cfg                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\salisarcana.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Schematica.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\SGCraft.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\shaders.properties                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\SpecialMobs.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\SpiceOfLife.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\splash.properties                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\StevesAddons.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\StevesCarts.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\StorageDrawers.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\structurelib.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\supersolarpanel.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TaintedMagic.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\tc4tweak.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\tcneiadditions.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\tcnodetracker.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TConstruct_AOEExclusions.cfg                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\tectech.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TGregworks.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Thaumcraft.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\thaumcraftneiplugin.cfg                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Thaumic Bases.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\thaumicboots.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\thaumicenergistics.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ThaumicExploration.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ThaumicHorizons.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\thaumicinsurgence.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ThaumicMachina.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\ThaumicTinkerer.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TinkersConstruct.cfg                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\tinkersdefense.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TinkersModules.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TMechworks.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\torohealthmod.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Translocator.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TravellersGear.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TravellersGear_inv.cfg                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\TwilightForest.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\unimixins.properties                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\UniversalSingularities.cfg                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\UpdateCheckLib.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\vendingmachine.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\visualprospecting.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Waila.cfg                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\WailaHarvestability.cfg                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\wailaplugins.cfg                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\WarpTheory.cfg                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\WirelessCraftingTerminal.cfg                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\WirelessRedstone.cfg                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\witchery.cfg                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\witchery_debug.cfg                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\WitchingGadgets.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\config\Ztones.cfg                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\coretweaks\cache                                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\coretweaks\out                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\crash-reports\crash-2026-06-24_23.10.22-client.txt                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\crash-reports\crash-2026-06-24_23.13.52-client.txt                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\crash-reports\crash-2026-06-24_23.15.03-client.txt                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\falsepattern\com.mojang-brigadier-1.0.18.jar                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\falsepattern\fplib_deploader.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\falsepattern\it.unimi.dsi-fastutil-8.5.16.jar                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\falsepattern\org.joml-joml-1.10.8.jar                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\falsepattern\xyz.wagyourtail.jvmdowngrader-jvmdowngrader-java-api-1.3.6-downgraded-17.jar      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\journeymap\config                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\journeymap\icon                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\journeymap\journeymap.log                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\logs\falsepattern_tmp                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\logs\Explosion.log                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\logs\GregTech.log                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\1.7.10                                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\carpentersblocks                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ic2                                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\OpenSecurity                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\+unimixins-all-1.7.10-0.3.1.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\AdvancedSolarPanel-1.7.10-3.5.1a.jar                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\adventurebackpack-1.4.21-GTNH.jar                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ae2fc-1.5.88-gtnh.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\AFSU-1.3.2-GTNH.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\akashictome-1.2.7.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\alchgrate-1.3.2-GTNH.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\amazingtrophies-1.4.2.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\AmunRa-GC-0.8.12.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\angelica-2.1.32.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\AngerMod-1.0.6.jar                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\AppleCore-3.3.11.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\appliedenergistics2-rv3-beta-977-GTNH.jar                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\archaicfix-0.8.0.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ArchitectureCraft-1.12.13.jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\AsieLib-0.7.2.jar                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\aspectrecipeindex-1.1.1.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Automagy-1.7.10-0.28.2.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Avaritia-1.97.jar                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Avaritiaddons-1.9.4-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\backhand-1.8.10.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\backpack-2.6.13-GTNH.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\battlegear2-1.6.8-backhand.jar                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BaublesExpanded-2.2.21-GTNH.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\bdlib-1.11.0-GTNH.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\beebetteratbees-0.4.6-GTNH.jar                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BetterAchievements-0.3.3.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BetterBuildersWands-0.13.11-GTNH.jar                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\bettercrashes-1.4.5-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\betterloadingscreen-1.7.8-GTNH.jar                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\betterp2p-1.4.3.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BetterQuesting-3.8.70-GTNH.jar                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BiblioCraft[v1.11.7][MC1.7.10].jar                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BiblioWoods[BiomesOPlenty][v1.9].jar                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BiblioWoods[Forestry][v1.7].jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BiblioWoods[Natura][v1.5].jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\binnie-mods-2.6.32.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BiomesOPlenty-1.7.10-2.1.0.2308-universal.jar                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BlockLimiter-0.7.0.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\blockrenderer6343-1.4.14.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BloodArsenal-1.5.10.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BloodMagic-1.9.4.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\bogosorter-1.3.29-GTNH.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Botania-1.13.25-GTNH.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BotanicHorizons-1.12.8-GTNH.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\bugtorch-1.2.14.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\buildcraft-7.1.60.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\buildcraft-compat-7.1.21.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\BuildCraftOilTweak-1.1.3.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\CarpentersBlocks-3.7.2-GTNH.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\catwalks-2.4.1-GTNH.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\chisel-2.17.27-GTNH.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\chiseltones-1.2.0-GTNH.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\chromatictooltips-1.0.29-GTNH.jar                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\chromatictooltipscompat-1.0.31-GTNH.jar                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\chunkapi-mc1.7.10-0.8.3.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\CodeChickenCore-1.4.15.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\CoFHCore-[1.7.10]3.1.4-329.jar                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\CompactKineticGenerators-1.7.10-1.0.jar                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Computronics-1.9.8-GTNH.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\controlling-2.1.7.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\CookingForBlockheads-1.4.12-GTNH.jar                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\coretweaks-0.3.4.6-GTNH.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\cosmeticarmorreworked-1.0.5-GTNH.jar                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\craftingtweaks-1.0.3.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\CraftPresence-2.7.1+1.7.10-forge.jar                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\CraftTweaker-3.4.7.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\cropsnh-2.0.69.jar                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\custommainmenu-1.14.1.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\darkerer-1.1.0.jar                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\defaultkeys-1.3.1.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\defaultserverlist-1.7.3.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\defaultworldgenerator-0.4.0.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Draconic-Evolution-1.5.26-GTNH.jar                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\DummyCore-1.21.0.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\duradisplay-1.4.2.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\EMT-1.7.22.jar                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\endercore-0.5.14.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\EnderIO-2.10.30.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\EnderStorage-1.8.3.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\EnderZoo-1.3.4.jar                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\endlessids-mc1.7.10-1.7.3.jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\EnhancedLootBags-1.3.4.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\esm-legacy-1.7.10-1.1.0.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\eternalsingularity-1.4.3.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\etfuturum-2.6.40-GTNH.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\extrautilities-1.2.12.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\falsepatternlib-mc1.7.10-1.12.0.jar                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\fether-2.0.5.jar                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\findit-1.4.3.jar                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\FloodLights-1.5.6.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Forbidden.Magic-0.9.16-GTNH.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Forestry-4.11.26.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\forgelin-2.0.3-GTNH.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ForgeMultipart-1.7.7.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ForgeRelocation-0.3.6.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ForgeRelocationFMP-0.2.0.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\freecam-1.0.8.jar                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\gadomancy-1.5.12.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Galacticraft-3.4.29-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\GalaxySpace-1.1.139-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\gendustry-1.9.9-GTNH.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\GraviSuite-1.7.10-2.0.3.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\gravisuiteneo-1.3.12.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\gregtech-5.09.52.594.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\GTNewHorizonsCoreMod-2.8.279.jar                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\GTNH-TC-Wands-1.4.14.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\gtnhcredits-1.3.1.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\gtnhextlib-1.0.1.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\gtnhlib-0.11.9.jar                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\GTTweaker-2.3.3.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\guidenh-1.3.5.jar                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\HardcoreEnderExpansion-1.12.22-GTNH.jar                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\harvestcraft-1.3.11-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Healer-1.2.1.jar                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\HelpFixer-1.3.1.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\hodgepodge-2.7.160.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\holoinventory-2.5.13-GTNH.jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\HungerOverhaul-1.7.10-1.0.0.jenkins104.jar                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\hydroenergy-1.4.20.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\IC2NuclearControl-2.7.9.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ifu-1.11.8.jar                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\IguanaTweaksTConstruct-2.7.7.jar                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\industrialcraft-2-2.2.828-experimental.jar                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\InfernalMobs-1.10.5-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\InGameInfoXML-2.9.3.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\IronChest-6.1.13.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\IronChestMinecarts-1.2.1.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\irontankminecarts-1.0.12.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\irontanks-1.4.6.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\JABBA-1.5.20.jar                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\jarjar-0.3.3-beta.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\journeymap-1.7.10-v5.2.17-fairplay.jar                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\littletiles-1.6.28.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\logisticspipes-1.5.26-GTNH.jar                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\lootgames-2.2.12.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\LunatriusCore-1.2.1-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\lwjgl3ify-3.0.23.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\magicbees-2.10.9-GTNH.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\malisisdoors-1.19.8-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Mantle-0.5.2.jar                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\matter-manipulator-0.1.37-GTNH.jar                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\mobsinfo-0.5.17-GTNH.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\modernmarkings-0.3.13-1.7.10.jar                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ModTweaker2-0.13.0.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\modularui-1.3.4.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\modularui2-2.3.73-1.7.10.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\MouseTweaks-2.5.2-GTNH.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\MrTJPCore-1.3.7.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Natura-2.8.19.jar                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\naturescompass-1.5.2-GTNH.jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\navigator-1.1.3.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\NEIAddons-1.18.1.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\NEICustomDiagram-1.8.29.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\NEIIntegration-1.5.3.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\netherportalfix-1.4.0.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\NodalMechanics-1.3.4-GTNH.jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\nohotbarneeded-0.0.5.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\NotEnoughEnergistics-1.7.30.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\NotEnoughItems-2.8.101-GTNH.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\nutrition-0.1.9.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\oauth-1.3.4-GTNH.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\OpenBlocks-1.12.14-GTNH.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\OpenComputers-1.12.44-GTNH.jar                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\OpenGlasses-1.6.7-GTNH.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\OpenModsLibs-0.10.14.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\OpenModularTurrets-2.4.5.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\openprinter-0.3.1-GTNH.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\opensecurity-1.2.2-GTNH.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Opis-1.4.8-mapless.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\overloadedarmorbar-1.1.1.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\personalspace-1.0.39.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\PlayerAPI-1.5.0.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\postea-1.2.5.jar                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ProjectBlue-1.2.10-GTNH.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ProjRed-4.12.38-GTNH.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Railcraft-9.17.26.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\randomboubles-1.1.6.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\RandomThings-2.7.7.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\RemoteIO-2.7.9.jar                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\roguelike-1.6.6-GTNH.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\RWG-alpha-1.5.2.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\salisarcana-1.1.64-GTNH.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Schematica-1.12.6-GTNH.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ServerUtilities-2.3.0.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\SGCraft-1.4.13-GTNH.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\sharewhereiam-2.1.6.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\simpleskinbackport-1.0.2-GTNH.jar                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\sleepingbag-0.3.1.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\SpecialMobs-3.7.4.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\SpiceOfLife-2.2.9-carrot.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\StevesAddons-0.15.5.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\StevesCarts-2.3.14.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\StevesFactoryManager-1.3.12-GTNH.jar                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\StorageDrawers-2.2.25-GTNH.jar                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\structurecompat-0.7.4.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\structurelib-1.4.38.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\supersolarpanel-1.1.5.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\SuperTic-1.5.4.jar                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Tainted-Magic-7.7.8-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\tcnodetracker-1.4.5.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\TConstruct-1.14.91-GTNH.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\TGregworks-1.7.10-GTNH-1.0.33.jar                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Thaumcraft-1.7.10-4.2.3.5.jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Thaumcraft4Tweaks-1.5.44.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ThaumcraftMobAspects-1.2.1-GTNH.jar                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ThaumcraftResearchTweaks-1.3.2.jar                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Thaumic-Based-1.9.18.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Thaumic-Exploration-1.5.24-GTNH.jar                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\thaumicboots-1.5.12.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\thaumicenergistics-1.7.53-GTNH.jar                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ThaumicHorizons-1.8.20.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\thaumicinsurgence-0.4.1.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ThaumicMachina-0.2.3-GTNH.jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\ThaumicTinkerer-2.12.22.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\TiCTooltips-1.4.1.jar                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\tinkersdefense-1.3.4.jar                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\TMechworks-0.4.2.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\TooMuchLoot-4.3.0-GTNH.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\torohealth-1.2.2.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Translocator-1.4.4.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\TwilightForest-2.7.33.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\txloader-1.8.11.jar                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\UniLib-1.2.1+1.7.10-forge.jar                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Universal-Singularities-8.15.1.jar                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\vendingmachine-0.4.87.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\VillageNames-4.5.15-GTNH.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\visualprospecting-1.5.28.jar                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Waila-1.19.30.jar                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\WailaHarvestability-1.3.6-GTNH.jar                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\WAILAPlugins-0.7.2.jar                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\WanionLib-1.10.1.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\WarpTheory-1.5.7-GTNH.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Wawla-1.3.3-GTNH.jar                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\WirelessCraftingTerminal-1.12.16.jar                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\witchery-1.7.10-0.24.1.jar                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\WitcheryExtras-1.4.15.jar                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\WitchingGadgets-1.8.47-GTNH.jar                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\WR-CBE-1.7.6.jar                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\YAMCore-0.7.5.jar                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\mods\Ztones-1.7.10-2.2.2.jar                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\resourcepacks\Fast Leaves Fix.zip                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\resourcepacks\Glow Lines Only Galacticraft Thermal Padding GT V1.0.0.zip                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\resourcepacks\Hidden Galacticraft Thermal Padding GT V1.0.0.zip                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\resourcepacks\Legacy IronChest Textures.zip                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\resourcepacks\Legacy Ore Textures.zip                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\resourcepacks\Realistic Sky GT New Horizons.zip                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\resourcepacks\Round Large Turbine Overlay.zip                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\saves\asd                                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\serverutilities\client                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\serverutilities\server                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\serverutilities\aurora.cfg                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\serverutilities\serverutilities.cfg                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\.minecraft\versions\1.7.10                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\Betterloadingscreen                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\betterquesting                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\BloodMagic                                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\salisarcana                                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\vendingmachine                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\WitcheryExtras                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\Avaritiaddons.cfg                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\craftpresence.json                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\gadomancy.cfg                                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\RandomThings.cfg                                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\salisarcana.cfg                                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\UniversalSingularities.cfg                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\Betterloadingscreen\tips                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\Betterloadingscreen\betterloadingscreen.cfg                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\betterquesting\resources                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\BloodMagic\meteors                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\BloodMagic\schematics                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\salisarcana\addons.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\salisarcana\bugfixes.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\salisarcana\commands.cfg                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\salisarcana\enhancements.cfg                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\salisarcana\mod_integrations.cfg                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\salisarcana\thaumcraft_configuration.cfg                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\vendingmachine\favourites                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\config\WitcheryExtras\asm.cfg                                                                             
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\fonts\Digital-7 Mono.bin                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\fonts\Digital-7 Mono.png                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\libraries\com 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\commons-codec                                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\commons-logging                                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\libraries\io  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\java3d                                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\libraries\lzma
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\libraries\net 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\libraries\org 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\libraries\tv  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\lwjgl3ify-3.0.23-forgePatches.jar                                                               
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\com\google                                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\com\ibm                                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\com\mojang                                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\com\paulscode                                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\com\typesafe                                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\commons-codec\commons-codec                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\commons-logging\commons-logging                                                                 
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\io\netty                                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\java3d\vecmath                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\lzma\lzma                                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\net\java                                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\net\minecraftforge                                                                              
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\net\sf                                                                                          
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\org\apache                                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\org\lwjgl                                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\org\scala-lang                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\libraries\tv\twitch                                                                                       
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\2026-06-22-1.log.gz                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\2026-06-23-1.log.gz                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\2026-06-24-1.log.gz                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\2026-06-24-2.log.gz                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\2026-06-24-3.log.gz                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\fml-client-1.log                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\fml-client-2.log                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\fml-client-3.log                                                                                     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\fml-client-latest.log                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\fml-junk-earlystartup.log                                                                            
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\latest.log                                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\LootGames.log                                                                                        
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\LootGames.log.1                                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\LootGames.log.lck                                                                                    
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\logs\minetweaker.log                                                                                      
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\mods\OpenSecurity                                                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\mods\OpenSecurity\sounds                                                                                  
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\patches\me.eigenraven.lwjgl3ify.forgepatches.json                                                         
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\patches\me.eigenraven.lwjgl3ify.launchargs.json                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\patches\net.minecraft.json                                                                                
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\patches\net.minecraftforge.json                                                                           
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\patches\org.lwjgl3.json                                                                                   
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons 2.9.0-beta-1\saves\NEI     
+C:\Users\sergi\AppData\Roaming\industrialis-launcher\instances\2.9.0-beta-1\GT New Horizons                            
+2.9.0-beta-1\saves\NEI\client.dat                                                                                      
+
+

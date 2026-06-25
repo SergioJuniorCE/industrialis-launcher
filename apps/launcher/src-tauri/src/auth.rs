@@ -543,7 +543,7 @@ async fn device_code_flow(
     client_id: &str,
     cancel: watch::Receiver<bool>,
 ) -> Result<MsaToken, String> {
-    // Device code is a fallback (see Prism Launcher MSALoginDialog). A setup error here
+    // Device code is a fallback. A setup error here
     // must not block browser OAuth — race_oauth_and_device_code waits for both paths.
     let device = match request_device_code(client, client_id).await {
         Ok(device) => device,
@@ -769,7 +769,7 @@ pub async fn run_pipeline(
         extra: Some(serde_json::json!({ "uhs": xsts_uhs })),
     });
 
-    // Step 4: Minecraft launcher login (Prism uses mojangservices uhs + XSTS token)
+    // Step 4: Minecraft launcher login
     let mojang = account.mojangservices_token.as_ref().unwrap();
     let uhs = token_uhs(mojang).ok_or("missing Xbox user hash (uhs) in XSTS token")?;
     let xsts_token = mojang.token.clone();
@@ -928,8 +928,7 @@ fn format_minecraft_login_error(body: &serde_json::Value) -> String {
     let error = body.get("error").and_then(|v| v.as_str()).unwrap_or("");
     if error.eq_ignore_ascii_case("FORBIDDEN") {
         return "Minecraft API rejected this Azure application (FORBIDDEN). \
-                Custom client IDs must be approved by Mojang before they can log in — \
-                Prism Launcher ships a pre-approved ID, but your own registration needs review. \
+                Custom client IDs must be approved by Mojang before they can log in. \
                 Submit your Application (client) ID at https://aka.ms/mce-reviewappid, \
                 then try again after approval."
             .into();
@@ -962,7 +961,7 @@ async fn minecraft_launcher_login(
 ) -> Result<serde_json::Value, String> {
     let identity = format!("XBL3.0 x={uhs};{xsts_token}");
 
-    // Prism Launcher uses /launcher/login; wiki documents /authentication/login_with_xbox.
+    // Primary endpoint; /authentication/login_with_xbox is the documented fallback.
     let launcher_body = serde_json::json!({
         "xtoken": identity,
         "platform": "PC_LAUNCHER"
@@ -1145,7 +1144,7 @@ mod tests {
     }
 
     #[test]
-    fn oauth_redirect_url_matches_prism_style_callback() {
+    fn oauth_redirect_url_matches_custom_scheme_callback() {
         assert!(is_oauth_redirect_url(
             "industrialislauncher://oauth/microsoft?code=abc&state=xyz"
         ));

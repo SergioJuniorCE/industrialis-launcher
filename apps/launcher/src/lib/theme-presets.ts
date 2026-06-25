@@ -1,4 +1,7 @@
 import type { ThemeMode } from "./launcher-settings";
+import { deriveTokens } from "./theme-utils";
+
+export type ThemeBackgroundEffect = "grid" | "none";
 
 export interface ThemeTokens {
   background: string;
@@ -28,6 +31,7 @@ export interface ThemePreset {
   name: string;
   description: string;
   builtin: boolean;
+  background_effect: ThemeBackgroundEffect;
   dark: ThemeTokens;
   light: ThemeTokens;
 }
@@ -85,25 +89,21 @@ const MONOCHROME_LIGHT: ThemeTokens = {
 };
 
 /** Matches apps/website — dark neutral base with bronze accent. */
-const INDUSTRIALIS_DARK: ThemeTokens = {
-  ...MONOCHROME_DARK,
+const INDUSTRIALIS_DARK = deriveTokens(MONOCHROME_DARK, {
   accent: "#c9a227",
   accent_foreground: "#0a0a0a",
-  primary: "#fafafa",
-  primary_foreground: "#0a0a0a",
   ring: "#c9a227",
   radius: "0.5rem",
-};
+});
 
-const INDUSTRIALIS_LIGHT: ThemeTokens = {
-  ...MONOCHROME_LIGHT,
+const INDUSTRIALIS_LIGHT = deriveTokens(MONOCHROME_LIGHT, {
   accent: "#b8921f",
   accent_foreground: "#fafafa",
   ring: "#b8921f",
   radius: "0.5rem",
-};
+});
 
-const MIDNIGHT_DARK: ThemeTokens = {
+const MIDNIGHT_DARK = deriveTokens(MONOCHROME_DARK, {
   background: "#070b14",
   foreground: "#e8edf8",
   card: "#0f1623",
@@ -118,15 +118,13 @@ const MIDNIGHT_DARK: ThemeTokens = {
   muted_foreground: "#8fa3bf",
   accent: "#3b82f6",
   accent_foreground: "#f8fafc",
-  destructive: "#b91c1c",
-  destructive_foreground: "#fafafa",
   border: "#243044",
   input: "#243044",
   ring: "#60a5fa",
   radius: "0.5rem",
-};
+});
 
-const MIDNIGHT_LIGHT: ThemeTokens = {
+const MIDNIGHT_LIGHT = deriveTokens(MONOCHROME_LIGHT, {
   background: "#f4f7fc",
   foreground: "#0c1524",
   card: "#ffffff",
@@ -141,15 +139,13 @@ const MIDNIGHT_LIGHT: ThemeTokens = {
   muted_foreground: "#5b6b82",
   accent: "#2563eb",
   accent_foreground: "#f8fafc",
-  destructive: "#dc2626",
-  destructive_foreground: "#fafafa",
   border: "#d5deed",
   input: "#d5deed",
   ring: "#2563eb",
   radius: "0.5rem",
-};
+});
 
-const SANDSTONE_DARK: ThemeTokens = {
+const SANDSTONE_DARK = deriveTokens(MONOCHROME_DARK, {
   background: "#12100d",
   foreground: "#f5efe6",
   card: "#1c1814",
@@ -164,15 +160,13 @@ const SANDSTONE_DARK: ThemeTokens = {
   muted_foreground: "#b8a998",
   accent: "#c17f3a",
   accent_foreground: "#12100d",
-  destructive: "#9f2d2d",
-  destructive_foreground: "#fafafa",
   border: "#3a322a",
   input: "#3a322a",
   ring: "#c17f3a",
   radius: "0.5rem",
-};
+});
 
-const SANDSTONE_LIGHT: ThemeTokens = {
+const SANDSTONE_LIGHT = deriveTokens(MONOCHROME_LIGHT, {
   background: "#f7f1e8",
   foreground: "#1a1510",
   card: "#fffdf9",
@@ -187,13 +181,11 @@ const SANDSTONE_LIGHT: ThemeTokens = {
   muted_foreground: "#7a6a58",
   accent: "#b87333",
   accent_foreground: "#fffdf9",
-  destructive: "#c2410c",
-  destructive_foreground: "#fafafa",
   border: "#e0d4c4",
   input: "#e0d4c4",
   ring: "#b87333",
   radius: "0.5rem",
-};
+});
 
 export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
   {
@@ -201,6 +193,7 @@ export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
     name: "Monochrome",
     description: "Neutral dark UI — the original launcher look.",
     builtin: true,
+    background_effect: "none",
     dark: MONOCHROME_DARK,
     light: MONOCHROME_LIGHT,
   },
@@ -209,6 +202,7 @@ export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
     name: "Industrialis",
     description: "Website design — charcoal base with bronze highlights.",
     builtin: true,
+    background_effect: "grid",
     dark: INDUSTRIALIS_DARK,
     light: INDUSTRIALIS_LIGHT,
   },
@@ -217,6 +211,7 @@ export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
     name: "Midnight",
     description: "Cool blue industrial palette for late-night sessions.",
     builtin: true,
+    background_effect: "none",
     dark: MIDNIGHT_DARK,
     light: MIDNIGHT_LIGHT,
   },
@@ -225,6 +220,7 @@ export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
     name: "Sandstone",
     description: "Warm parchment tones inspired by factory lighting.",
     builtin: true,
+    background_effect: "none",
     dark: SANDSTONE_DARK,
     light: SANDSTONE_LIGHT,
   },
@@ -232,12 +228,10 @@ export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
 
 export const DEFAULT_THEME_PRESET_ID: BuiltinThemePresetId = "industrialis";
 
-export const CUSTOM_PRESETS_STORAGE_KEY = "industrialis-custom-theme-presets";
+/** @deprecated Legacy localStorage key — migrated to Tauri settings on first load. */
+export const LEGACY_CUSTOM_PRESETS_STORAGE_KEY = "industrialis-custom-theme-presets";
 
-export function tokensForPreset(
-  preset: ThemePreset,
-  mode: ThemeMode
-): ThemeTokens {
+export function tokensForPreset(preset: ThemePreset, mode: ThemeMode): ThemeTokens {
   return mode === "dark" ? preset.dark : preset.light;
 }
 
@@ -245,30 +239,24 @@ export function findBuiltinPreset(id: string): ThemePreset | undefined {
   return BUILTIN_THEME_PRESETS.find((p) => p.id === id);
 }
 
+export function isBuiltinPresetId(id: string): id is BuiltinThemePresetId {
+  return findBuiltinPreset(id) !== undefined;
+}
+
 export function resolveThemePreset(
   id: string,
   customPresets: SavedThemePreset[] = []
-): ThemePreset {
+): ThemePreset | undefined {
   const builtin = findBuiltinPreset(id);
   if (builtin) return builtin;
-  const custom = customPresets.find((p) => p.id === id);
-  if (custom) return custom;
-  return findBuiltinPreset(DEFAULT_THEME_PRESET_ID)!;
+  return customPresets.find((p) => p.id === id);
 }
 
-export function readCustomThemePresets(): SavedThemePreset[] {
-  try {
-    const raw = localStorage.getItem(CUSTOM_PRESETS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as SavedThemePreset[];
-    return Array.isArray(parsed) ? parsed.filter((p) => p.id && p.name) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function writeCustomThemePresets(presets: SavedThemePreset[]): void {
-  localStorage.setItem(CUSTOM_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+export function resolveThemePresetOrDefault(
+  id: string,
+  customPresets: SavedThemePreset[] = []
+): ThemePreset {
+  return resolveThemePreset(id, customPresets) ?? findBuiltinPreset(DEFAULT_THEME_PRESET_ID)!;
 }
 
 export function createCustomPresetId(): string {

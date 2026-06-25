@@ -5,26 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Industrialis</title>
-    <script>
-      // KEEP IN SYNC with src/lib/theme.ts — applies cached vars before React boots.
-      (function () {
-        try {
-          var c = JSON.parse(localStorage.getItem("industrialis-theme-cache") || "{}");
-          var mode = c.mode === "light" ? "light" : "dark";
-          var preset = typeof c.preset === "string" && c.preset ? c.preset : "industrialis";
-          var root = document.documentElement;
-          root.setAttribute("data-theme", mode);
-          root.setAttribute("data-theme-preset", preset);
-          root.style.colorScheme = mode;
-          if (c.vars && typeof c.vars === "object") {
-            Object.keys(c.vars).forEach(function (cssVar) {
-              var val = c.vars[cssVar];
-              if (val) root.style.setProperty(cssVar, val);
-            });
-          }
-        } catch (_) {}
-      })();
-    </script>
+    <!-- theme-boot -->
+    <script></script>
+    <!-- /theme-boot -->
   </head>
 
   <body>

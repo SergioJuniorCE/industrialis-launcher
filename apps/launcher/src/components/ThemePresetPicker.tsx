@@ -151,7 +151,8 @@ export function ThemePresetPicker() {
         <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
           <DialogTitle>Save theme preset</DialogTitle>
           <DialogDescription>
-            Saves the active preset plus any overrides you have set for both light and dark modes.
+            Saves the active preset plus overrides for the current light/dark mode. The other mode
+            keeps the base preset palette.
           </DialogDescription>
           <div className="mt-4 space-y-3">
             <div>

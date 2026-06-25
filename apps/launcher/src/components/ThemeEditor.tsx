@@ -1,12 +1,8 @@
+import { useMemo } from "react";
 import { useLauncherSettings } from "../context/LauncherSettingsContext";
 import type { ThemeOverrides } from "../lib/launcher-settings";
-import { resolveThemePreset } from "../lib/theme-presets";
-import {
-  effectiveOverrideValue,
-  hasLowContrast,
-  validateHexColor,
-  validateRadius,
-} from "../lib/theme";
+import { resolveThemePresetOrDefault } from "../lib/theme-presets";
+import { hasLowContrast, validateHexColor, validateRadius } from "../lib/theme";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -31,7 +27,22 @@ const TOKEN_FIELDS: {
 export function ThemeEditor() {
   const { settings, customPresets, setThemeOverrides, resetThemeOverrides } = useLauncherSettings();
   const overrides = settings.theme_overrides;
-  const preset = resolveThemePreset(settings.theme_preset, customPresets);
+
+  const preset = useMemo(
+    () => resolveThemePresetOrDefault(settings.theme_preset, customPresets),
+    [settings.theme_preset, customPresets]
+  );
+
+  const presetDefaults = useMemo(() => {
+    const tokens = settings.theme_mode === "dark" ? preset.dark : preset.light;
+    return TOKEN_FIELDS.reduce(
+      (acc, { key }) => {
+        acc[key] = tokens[key as keyof typeof tokens];
+        return acc;
+      },
+      {} as Record<keyof ThemeOverrides, string>
+    );
+  }, [preset, settings.theme_mode]);
 
   const updateField = (key: keyof ThemeOverrides, raw: string) => {
     const field = TOKEN_FIELDS.find((f) => f.key === key);
@@ -48,20 +59,10 @@ export function ThemeEditor() {
     setThemeOverrides(next);
   };
 
-  const effectiveForeground = effectiveOverrideValue(
-    "foreground",
-    settings.theme_mode,
-    settings.theme_preset,
-    overrides,
-    customPresets
-  );
-  const effectiveBackground = effectiveOverrideValue(
-    "background",
-    settings.theme_mode,
-    settings.theme_preset,
-    overrides,
-    customPresets
-  );
+  const effectiveForeground =
+    overrides.foreground ?? presetDefaults.foreground;
+  const effectiveBackground =
+    overrides.background ?? presetDefaults.background;
   const lowContrast = hasLowContrast(effectiveForeground, effectiveBackground);
 
   return (
@@ -70,8 +71,8 @@ export function ThemeEditor() {
         <CardTitle>Theme Editor</CardTitle>
         <CardDescription>
           Base: {preset.name} ({settings.theme_mode === "dark" ? "dark" : "light"}). Leave a field
-          empty to use the preset default. Secondary, destructive, ring, and input tokens follow the
-          preset.
+          empty to use the preset default. Overrides apply to the active mode only when saving a
+          custom preset.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -83,13 +84,8 @@ export function ThemeEditor() {
         <div className="grid gap-3">
           {TOKEN_FIELDS.map(({ key, label, type }) => {
             const value = overrides[key] ?? "";
-            const presetDefault = effectiveOverrideValue(
-              key,
-              settings.theme_mode,
-              settings.theme_preset,
-              {},
-              customPresets
-            );
+            const presetDefault = presetDefaults[key];
+            const displayColor = value || presetDefault || "#0a0a0a";
             return (
               <div key={key} className="flex items-center gap-3">
                 <label className="text-sm w-32 shrink-0">{label}</label>
@@ -98,9 +94,8 @@ export function ThemeEditor() {
                     <input
                       type="color"
                       value={
-                        (value || presetDefault || "#0a0a0a").startsWith("#") &&
-                        (value || presetDefault || "#0a0a0a").length >= 7
-                          ? (value || presetDefault || "#0a0a0a").slice(0, 7)
+                        displayColor.startsWith("#") && displayColor.length >= 7
+                          ? displayColor.slice(0, 7)
                           : "#0a0a0a"
                       }
                       onChange={(e) => updateField(key, e.target.value)}

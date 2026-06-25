@@ -1,4 +1,4 @@
-import type { BuiltinThemePresetId } from "./theme-presets";
+import type { BuiltinThemePresetId, SavedThemePreset } from "./theme-presets";
 import { DEFAULT_THEME_PRESET_ID } from "./theme-presets";
 
 export type ThemeMode = "dark" | "light";
@@ -22,10 +22,12 @@ export interface LauncherSettingsData {
   theme_mode: ThemeMode;
   theme_preset: ThemePresetId;
   theme_overrides: ThemeOverrides;
+  custom_theme_presets: SavedThemePreset[];
 }
 
 export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
   theme_mode: "dark",
   theme_preset: DEFAULT_THEME_PRESET_ID,
   theme_overrides: {},
+  custom_theme_presets: [],
 };
