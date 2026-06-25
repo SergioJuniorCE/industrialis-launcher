@@ -1,7 +1,0 @@
----
-pid: 33368
-cwd: "C:\Users\sergi\dev\industrialis-launcher"
-command: "Set-Location C:\\Users\\sergi\\dev\\industrialis-launcher; robocopy src-tauri apps\\launcher\\src-tauri /E /NFL /NDL /NJH /NJS /nc /ns /np; if ($LASTEXITCODE -le 7) { Write-Output \"robocopy ok\" }"
-started_at: 2026-06-24T21:50:00.573Z
-running_for_ms: 9875014  
----
