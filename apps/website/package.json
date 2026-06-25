@@ -3,15 +3,20 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port 3000 --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.21.0",
     "next": "^16.2.9",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.32",

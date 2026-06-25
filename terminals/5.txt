@@ -1,0 +1,23 @@
+---
+pid: 34176
+cwd: "C:\Users\sergi\dev\industrialis-launcher"
+command: "Set-Location C:\\Users\\sergi\\dev\\industrialis-launcher\\apps\\website; pnpm dev"
+started_at: 2026-06-24T22:39:16.004Z
+running_for_ms: 7049999  
+---
+
+> @industrialis/website@0.1.0 dev C:\Users\sergi\dev\industrialis-launcher\apps\website
+> next dev --port 3000 --webpack
+
+⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use :::3000
+    at <unknown> (Error: listen EADDRINUSE: address already in use :::3000)
+    at new Promise (<anonymous>) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+
+ ELIFECYCLE  Command failed with exit code 1.

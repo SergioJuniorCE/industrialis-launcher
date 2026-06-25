@@ -1,0 +1,20 @@
+---
+pid: 20084
+cwd: "C:\Users\sergi\dev\industrialis-launcher"
+command: "Set-Location C:\\Users\\sergi\\dev\\industrialis-launcher\\apps\\website; pnpm exec next dev --port 3001 --webpack"
+started_at: 2026-06-24T22:39:30.724Z
+running_for_ms: 7034993  
+---
+▲ Next.js 16.2.9 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://169.254.83.107:3001
+✓ Ready in 926ms
+⨯ Another next dev server is already running.
+
+
+- Local:        http://localhost:3000
+- PID:          31408
+- Dir:          C:\Users\sergi\dev\industrialis-launcher\apps\website
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 31408 /F to stop it.
