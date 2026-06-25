@@ -1,0 +1,8 @@
+{
+  "name": "preview_status",
+  "description": "Report whether the scoped thread has an automation-capable desktop preview, including its active tab, URL, title, visibility, and loading state.",
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false
+  }
+}

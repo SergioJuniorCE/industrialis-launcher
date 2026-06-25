@@ -1,6 +1,7 @@
 export interface InstanceSettings {
   name: string;
   pack_version: string;
+  pack_java_type: string;
   java_path: string | null;
   min_ram_mb: number;
   max_ram_mb: number;
@@ -50,6 +51,7 @@ export interface InstanceSettings {
 export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   name: "",
   pack_version: "",
+  pack_java_type: "java17+",
   java_path: null,
   min_ram_mb: 4096,
   max_ram_mb: 6144,

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
+import { Button } from "./button";
 
 const TabsContext = React.createContext<{
   value: string;
@@ -25,7 +26,7 @@ function TabsList({ className, children, ...props }: React.HTMLAttributes<HTMLDi
   return (
     <div
       className={cn(
-        "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
+        "inline-flex h-7 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground",
         className
       )}
       {...props}
@@ -43,17 +44,20 @@ function TabsTrigger({ value, className, children, ...props }: {
   const ctx = React.useContext(TabsContext);
   const isActive = ctx?.value === value;
   return (
-    <button
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
       onClick={() => ctx?.onValueChange(value)}
       className={cn(
-        "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all",
+        "h-7 rounded-sm px-2.5 py-0.5 text-xs font-medium shadow-none",
         isActive ? "bg-background text-foreground shadow" : "hover:text-foreground",
-        className
+        className,
       )}
       {...props}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -65,7 +69,7 @@ function TabsContent({ value, className, children, ...props }: {
   const ctx = React.useContext(TabsContext);
   if (ctx?.value !== value) return null;
   return (
-    <div className={cn("mt-4", className)} {...props}>
+    <div className={cn("mt-2", className)} {...props}>
       {children}
     </div>
   );

@@ -1,0 +1,56 @@
+{
+  "name": "preview_open",
+  "description": "Show and initialize the browser preview for the scoped thread, optionally reusing its current tab and navigating to a URL.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "anyOf": [
+          {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+              },
+              {
+                "minLength": 1,
+                "description": "Absolute http(s) URL or a schemeless host such as t3.chat or localhost:5173. Schemeless public hosts use https; loopback hosts use http."
+              },
+              {
+                "maxLength": 2048
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Optional initial page URL, for example https://t3.chat or localhost:5173. Omit to open a blank tab."
+      },
+      "show": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Whether to reveal the preview panel to the human. Defaults to true."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "reuseExistingTab": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Reuse the thread's active browser tab when available. Defaults to true; set false to create a new tab."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "additionalProperties": false,
+    "description": "Opens the collaborative browser for the current thread. Use preview_navigate afterward when readiness waiting matters."
+  }
+}

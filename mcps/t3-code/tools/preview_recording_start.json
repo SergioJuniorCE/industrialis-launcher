@@ -1,0 +1,8 @@
+{
+  "name": "preview_recording_start",
+  "description": "Start recording the active collaborative browser tab while keeping it interactive for both agent and human use.",
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false
+  }
+}

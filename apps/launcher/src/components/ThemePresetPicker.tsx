@@ -4,8 +4,9 @@ import { useLauncherSettings } from "../context/LauncherSettingsContext";
 import { BUILTIN_THEME_PRESETS } from "../lib/theme-presets";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Dialog, DialogDescription, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 function PresetSwatch({ accent, background }: { accent: string; background: string }) {
   return (
@@ -53,14 +54,13 @@ export function ThemePresetPicker() {
   ) => {
     const selected = activeId === id;
     return (
-      <button
+      <Button
         key={id}
         type="button"
+        variant={selected ? "secondary" : "outline"}
         onClick={() => setThemePreset(id)}
-        className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
-          selected
-            ? "border-accent bg-accent/10"
-            : "border-border bg-card hover:bg-muted/50"
+        className={`h-auto w-full items-start gap-3 p-3 text-left font-normal ${
+          selected ? "border-accent bg-accent/10" : ""
         }`}
       >
         <PresetSwatch accent={accent} background={background} />
@@ -76,7 +76,7 @@ export function ThemePresetPicker() {
             </span>
           )}
         </span>
-      </button>
+      </Button>
     );
   };
 
@@ -149,34 +149,36 @@ export function ThemePresetPicker() {
           Save current look as preset
         </Button>
         <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+          <DialogContent>
           <DialogTitle>Save theme preset</DialogTitle>
           <DialogDescription>
             Saves the active preset plus overrides for the current light/dark mode. The other mode
             keeps the base preset palette.
           </DialogDescription>
           <div className="mt-4 space-y-3">
-            <div>
-              <label className="text-sm">Name</label>
+            <div className="space-y-2">
+              <Label htmlFor="preset-name">Name</Label>
               <Input
+                id="preset-name"
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
                 placeholder="My GTNH theme"
-                className="mt-1"
               />
             </div>
-            <div>
-              <label className="text-sm">Description (optional)</label>
+            <div className="space-y-2">
+              <Label htmlFor="preset-description">Description (optional)</Label>
               <Input
+                id="preset-description"
                 value={presetDescription}
                 onChange={(e) => setPresetDescription(e.target.value)}
                 placeholder="Warm bronze accents"
-                className="mt-1"
               />
             </div>
             <Button onClick={handleSave} disabled={!presetName.trim()} className="w-full">
               Save preset
             </Button>
           </div>
+          </DialogContent>
         </Dialog>
       </CardContent>
     </Card>

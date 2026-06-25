@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { Button } from "./ui/button";
+import { Label } from "./ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
@@ -42,12 +43,12 @@ function SettingsSection({
 }) {
   const enabled = override === undefined || override;
   return (
-    <Card className="border-border/80">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
+    <Card className="border-border/80 shadow-none">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <CardTitle className="text-base">{title}</CardTitle>
-            {description ? <CardDescription className="mt-1">{description}</CardDescription> : null}
+            <CardTitle className="text-sm">{title}</CardTitle>
+            {description ? <CardDescription className="mt-0.5 text-xs">{description}</CardDescription> : null}
           </div>
           {onOverrideChange ? (
             <Checkbox
@@ -59,7 +60,7 @@ function SettingsSection({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className={enabled ? "space-y-3" : "space-y-3 opacity-50 pointer-events-none"}>
+      <CardContent className={enabled ? "space-y-2" : "space-y-2 opacity-50 pointer-events-none"}>
         {children}
       </CardContent>
     </Card>
@@ -69,8 +70,8 @@ function SettingsSection({
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
     <div>
-      <label className="text-sm font-medium">{children}</label>
-      {hint ? <p className="text-xs text-muted-foreground mt-0.5">{hint}</p> : null}
+      <Label className="text-xs">{children}</Label>
+      {hint ? <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p> : null}
     </div>
   );
 }
@@ -190,30 +191,31 @@ export function InstanceSettingsPanel({
   };
 
   return (
-    <div className="flex flex-col gap-3 max-w-2xl pb-4">
-      <button
+    <div className="flex flex-col gap-2 max-w-2xl pb-2">
+      <Button
         type="button"
+        variant="outline"
         onClick={onOpenLauncherSettings}
-        className="text-left rounded-lg border border-border bg-muted/30 px-4 py-3 hover:bg-muted/50 transition-colors"
+        className="h-auto w-full flex-col items-start gap-0.5 bg-muted/30 px-3 py-2 text-left font-normal hover:bg-muted/50"
       >
-        <div className="font-medium text-sm">Open launcher settings</div>
-        <div className="text-xs text-muted-foreground mt-0.5">
+        <span className="font-medium text-xs">Open launcher settings</span>
+        <span className="text-[11px] text-muted-foreground font-normal">
           Instance settings below override defaults only when each section&apos;s override box is checked.
-        </div>
-      </button>
+        </span>
+      </Button>
 
       <Tabs value={settingsTab} onValueChange={setSettingsTab} className="w-full">
-        <TabsList className="flex flex-wrap h-auto gap-1">
+        <TabsList className="flex flex-wrap h-auto gap-0.5">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="java">Java</TabsTrigger>
           <TabsTrigger value="commands">Custom Commands</TabsTrigger>
           <TabsTrigger value="environment">Environment</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="space-y-3 mt-3">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Instance</CardTitle>
+        <TabsContent value="general" className="space-y-2 mt-2">
+          <Card className="shadow-none">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Instance</CardTitle>
             </CardHeader>
             <CardContent>
               <FieldLabel>Display name</FieldLabel>
@@ -317,7 +319,7 @@ export function InstanceSettingsPanel({
             override={settings.override_account}
             onOverrideChange={(v) => update({ override_account: v })}
           >
-            <FieldLabel hint="Leave empty to use the first linked Microsoft account, or offline username flow.">
+            <FieldLabel hint="Leave empty to use the launcher default account for every launch.">
               Account
             </FieldLabel>
             <Select
@@ -325,7 +327,7 @@ export function InstanceSettingsPanel({
               value={settings.account_id ?? ""}
               onChange={(e) => update({ account_id: e.target.value || null })}
             >
-              <option value="">Default (first linked / offline)</option>
+              <option value="">Use launcher default account</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.username || a.id}
@@ -352,7 +354,7 @@ export function InstanceSettingsPanel({
           </SettingsSection>
         </TabsContent>
 
-        <TabsContent value="java" className="space-y-3 mt-3">
+        <TabsContent value="java" className="space-y-2 mt-2">
           <SettingsSection
             title="Java installation"
             override={settings.override_java_location}
@@ -436,7 +438,7 @@ export function InstanceSettingsPanel({
           </SettingsSection>
         </TabsContent>
 
-        <TabsContent value="commands" className="space-y-3 mt-3">
+        <TabsContent value="commands" className="space-y-2 mt-2">
           <SettingsSection
             title="Custom commands"
             description="Pre-launch runs before the game starts; post-exit runs after it closes. Wrapper wraps the Java command."
@@ -468,7 +470,7 @@ export function InstanceSettingsPanel({
           </SettingsSection>
         </TabsContent>
 
-        <TabsContent value="environment" className="space-y-3 mt-3">
+        <TabsContent value="environment" className="space-y-2 mt-2">
           <SettingsSection
             title="Environment variables"
             override={settings.override_env}

@@ -1,0 +1,8 @@
+{
+  "name": "preview_recording_stop",
+  "description": "Stop the active browser recording and save it as a local evidence artifact.",
+  "inputSchema": {
+    "type": "object",
+    "additionalProperties": false
+  }
+}

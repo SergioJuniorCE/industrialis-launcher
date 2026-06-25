@@ -60,12 +60,39 @@ export function useLauncherSettings(): LauncherSettingsContextValue {
 }
 
 function normalizeDiskSettings(disk: Partial<LauncherSettingsData>): LauncherSettingsData {
+  const defaultAccountId =
+    disk.default_account_id ?? disk.active_account_id ?? DEFAULT_LAUNCHER_SETTINGS.default_account_id;
+  const themeMode =
+    disk.theme_mode === "light" || disk.theme_mode === "dark"
+      ? disk.theme_mode
+      : DEFAULT_LAUNCHER_SETTINGS.theme_mode;
   return {
     ...DEFAULT_LAUNCHER_SETTINGS,
     ...disk,
+    theme_mode: themeMode,
     theme_preset: disk.theme_preset ?? DEFAULT_LAUNCHER_SETTINGS.theme_preset,
     custom_theme_presets: parseSavedThemePresets(disk.custom_theme_presets ?? []),
     theme_overrides: disk.theme_overrides ?? {},
+    default_account_id: defaultAccountId ?? null,
+    active_account_id: undefined,
+  };
+}
+
+function mergeSettings(
+  prev: LauncherSettingsData,
+  patch: Partial<LauncherSettingsData>,
+): LauncherSettingsData {
+  return {
+    ...prev,
+    ...patch,
+    theme_overrides:
+      patch.theme_overrides !== undefined
+        ? { ...prev.theme_overrides, ...patch.theme_overrides }
+        : prev.theme_overrides,
+    custom_theme_presets:
+      patch.custom_theme_presets !== undefined
+        ? parseSavedThemePresets(patch.custom_theme_presets)
+        : prev.custom_theme_presets,
   };
 }
 
@@ -97,76 +124,82 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
 
   const clearSaveError = useCallback(() => setSaveError(null), []);
 
+  const commitSettings = useCallback((next: LauncherSettingsData) => {
+    settingsRef.current = next;
+    setSettings(next);
+  }, []);
+
+  const persistSettings = useCallback(
+    async (snapshot: LauncherSettingsData) => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      settingsRef.current = snapshot;
+      if (!isTauri()) return;
+      try {
+        await invoke("save_launcher_settings", { settings: snapshot });
+        clearSaveError();
+      } catch (e) {
+        setSaveError(`Save failed: ${e}`);
+      }
+    },
+    [clearSaveError],
+  );
+
   const saveSettingsNow = useCallback(async () => {
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-    const snapshot = settingsRef.current;
-    if (!isTauri()) return;
-    try {
-      await invoke("save_launcher_settings", { settings: snapshot });
-      clearSaveError();
-    } catch (e) {
-      setSaveError(`Save failed: ${e}`);
-    }
-  }, [clearSaveError]);
+    await persistSettings(settingsRef.current);
+  }, [persistSettings]);
 
   const scheduleSaveSettings = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
-      void saveSettingsNow();
+      void persistSettings(settingsRef.current);
     }, 300);
-  }, [saveSettingsNow]);
+  }, [persistSettings]);
 
-  const updateSettings = useCallback((patch: Partial<LauncherSettingsData>) => {
-    setSettings((prev) => ({
-      ...prev,
-      ...patch,
-      theme_overrides:
-        patch.theme_overrides !== undefined
-          ? { ...prev.theme_overrides, ...patch.theme_overrides }
-          : prev.theme_overrides,
-      custom_theme_presets:
-        patch.custom_theme_presets !== undefined
-          ? parseSavedThemePresets(patch.custom_theme_presets)
-          : prev.custom_theme_presets,
-    }));
-  }, []);
+  const updateSettings = useCallback(
+    (patch: Partial<LauncherSettingsData>) => {
+      commitSettings(mergeSettings(settingsRef.current, patch));
+    },
+    [commitSettings],
+  );
 
   const setThemeMode = useCallback(
     (mode: ThemeMode) => {
-      updateSettings({ theme_mode: mode });
-      void saveSettingsNow();
+      const next = mergeSettings(settingsRef.current, { theme_mode: mode });
+      commitSettings(next);
+      void persistSettings(next);
     },
-    [updateSettings, saveSettingsNow]
+    [commitSettings, persistSettings],
   );
 
   const setThemePreset = useCallback(
     (presetId: ThemePresetId) => {
-      setSettings((prev) => ({
-        ...prev,
+      const next = mergeSettings(settingsRef.current, {
         theme_preset: presetId,
         theme_overrides: {},
-      }));
-      void saveSettingsNow();
+      });
+      commitSettings(next);
+      void persistSettings(next);
     },
-    [saveSettingsNow]
+    [commitSettings, persistSettings],
   );
 
   const setThemeOverrides = useCallback(
     (overrides: ThemeOverrides) => {
-      setSettings((prev) => ({ ...prev, theme_overrides: overrides }));
+      commitSettings(mergeSettings(settingsRef.current, { theme_overrides: overrides }));
       scheduleSaveSettings();
     },
-    [scheduleSaveSettings]
+    [commitSettings, scheduleSaveSettings],
   );
 
   const resetThemeOverrides = useCallback(() => {
-    setSettings((prev) => ({ ...prev, theme_overrides: {} }));
-    void saveSettingsNow();
-  }, [saveSettingsNow]);
+    const next = mergeSettings(settingsRef.current, { theme_overrides: {} });
+    commitSettings(next);
+    void persistSettings(next);
+  }, [commitSettings, persistSettings]);
 
   const saveCustomPreset = useCallback(
     (name: string, description?: string) => {
@@ -174,12 +207,12 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
         settingsRef.current,
         settingsRef.current.custom_theme_presets,
         name,
-        description
+        description,
       );
-      setSettings(nextSettings);
-      void saveSettingsNow();
+      commitSettings(nextSettings);
+      void persistSettings(nextSettings);
     },
-    [saveSettingsNow]
+    [commitSettings, persistSettings],
   );
 
   const deleteCustomPreset = useCallback(
@@ -187,12 +220,12 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
       const { settings: nextSettings } = deleteCustomPresetFromSettings(
         settingsRef.current,
         settingsRef.current.custom_theme_presets,
-        id
+        id,
       );
-      setSettings(nextSettings);
-      void saveSettingsNow();
+      commitSettings(nextSettings);
+      void persistSettings(nextSettings);
     },
-    [saveSettingsNow]
+    [commitSettings, persistSettings],
   );
 
   useEffect(() => {
@@ -200,7 +233,7 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
       const migrated = migrateSettingsFromLegacyStorage(settingsRef.current);
       const repaired = repairThemeSettings(migrated.settings, migrated.settings.custom_theme_presets);
       if (migrated.migrated || repaired.repaired) {
-        setSettings(repaired.settings);
+        commitSettings(repaired.settings);
         setPresetRepaired(repaired.repaired);
       }
       setLoaded(true);
@@ -211,12 +244,12 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
         const migrated = migrateSettingsFromLegacyStorage(normalizeDiskSettings(disk));
         const repaired = repairThemeSettings(
           migrated.settings,
-          migrated.settings.custom_theme_presets
+          migrated.settings.custom_theme_presets,
         );
-        setSettings(repaired.settings);
+        commitSettings(repaired.settings);
         setPresetRepaired(repaired.repaired);
         if (migrated.migrated || repaired.repaired) {
-          void invoke("save_launcher_settings", { settings: repaired.settings }).catch(() => {});
+          void persistSettings(repaired.settings);
         }
         setLoaded(true);
       })

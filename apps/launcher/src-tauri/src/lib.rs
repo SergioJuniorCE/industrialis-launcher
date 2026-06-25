@@ -1,10 +1,13 @@
 mod auth;
 mod groups;
+mod minecraft_files;
+mod pack;
 mod settings;
 
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -13,8 +16,6 @@ use std::process::{Child, Stdio};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
-use tokio::io::AsyncWriteExt;
-
 pub use auth::{AccountData, AccountInfo};
 
 // ── Types ──
@@ -59,6 +60,8 @@ pub struct InstanceSettings {
     pub name: String,
     #[serde(default)]
     pub pack_version: String,
+    #[serde(default = "default_pack_java_type")]
+    pub pack_java_type: String,
     pub java_path: Option<String>,
     pub min_ram_mb: u32,
     pub max_ram_mb: u32,
@@ -151,11 +154,16 @@ fn default_true() -> bool {
     true
 }
 
+fn default_pack_java_type() -> String {
+    "java17+".to_string()
+}
+
 impl Default for InstanceSettings {
     fn default() -> Self {
         Self {
             name: String::new(),
             pack_version: String::new(),
+            pack_java_type: default_pack_java_type(),
             java_path: None,
             min_ram_mb: 4096,
             max_ram_mb: 6144,
@@ -765,6 +773,7 @@ async fn ensure_main_jar(
 struct AppState {
     http: reqwest::Client,
     running_processes: HashMap<String, Arc<Mutex<Child>>>,
+    delete_cancel: HashMap<String, Arc<AtomicBool>>,
 }
 
 struct RunningInstanceGuard<'a> {
@@ -819,37 +828,55 @@ fn instance_dir(id: &str) -> PathBuf {
 }
 
 fn sanitize_name(s: &str) -> String {
-    s.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_")
+    s.chars()
+        .map(|c| {
+            if c.is_whitespace() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+fn validate_instance_id(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("instance id cannot be empty".into());
+    }
+    let id = sanitize_name(trimmed);
+    if id.is_empty() {
+        return Err("instance id cannot be empty".into());
+    }
+    Ok(id)
 }
 
 /// Offline-mode UUID — matches Minecraft's `OfflinePlayer:<name>` convention.
-fn offline_player_uuid(username: &str) -> String {
-    let digest = md5::compute(format!("OfflinePlayer:{username}"));
-    let mut bytes = digest.0;
-    bytes[6] = (bytes[6] & 0x0f) | 0x30;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    uuid::Uuid::from_bytes(bytes).hyphenated().to_string()
-}
-
-fn resolve_offline_identity(settings: &InstanceSettings) -> Result<(String, String, String), String> {
-    let trimmed = settings.username.trim();
-    let username = if trimmed.is_empty() { "Player" } else { trimmed };
-    if username.len() > 16 {
-        return Err("Offline username must be 16 characters or fewer.".into());
+fn pick_launch_account<'a>(
+    settings: &InstanceSettings,
+    accounts: &'a [AccountData],
+    default_account_id: Option<&str>,
+) -> Result<&'a AccountData, String> {
+    if accounts.is_empty() {
+        return Err("Add an account in Accounts before launching.".into());
     }
-    if !username
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_')
-    {
-        return Err(
-            "Offline username may only contain letters, numbers, and underscores.".into(),
-        );
+    if settings.override_account {
+        if let Some(id) = settings.account_id.as_ref() {
+            return accounts
+                .iter()
+                .find(|a| &a.id == id)
+                .ok_or_else(|| "The account selected in instance settings was not found.".into());
+        }
     }
-    Ok((
-        username.to_string(),
-        "0".into(),
-        offline_player_uuid(username),
-    ))
+    if let Some(id) = default_account_id {
+        if let Some(acc) = accounts.iter().find(|a| a.id == id) {
+            return Ok(acc);
+        }
+    }
+    if accounts.len() == 1 {
+        return Ok(&accounts[0]);
+    }
+    Err("Set a default account in Accounts before launching.".into())
 }
 
 fn settings_path(id: &str) -> PathBuf {
@@ -980,29 +1007,7 @@ fn instance_command_vars(
     ])
 }
 
-fn should_use_microsoft(settings: &InstanceSettings, accounts: &[AccountData]) -> bool {
-    if accounts.is_empty() {
-        return false;
-    }
-    if settings.override_account {
-        if let Some(ref id) = settings.account_id {
-            return accounts.iter().any(|a| &a.id == id);
-        }
-    }
-    settings.auth_mode == "microsoft"
-}
 
-fn pick_microsoft_account<'a>(
-    settings: &InstanceSettings,
-    accounts: &'a [AccountData],
-) -> Option<&'a AccountData> {
-    if settings.override_account {
-        if let Some(ref id) = settings.account_id {
-            return accounts.iter().find(|a| &a.id == id);
-        }
-    }
-    accounts.first()
-}
 
 fn record_play_time(version: &str, elapsed_secs: u64) {
     if elapsed_secs == 0 {
@@ -1219,6 +1224,48 @@ fn write_launcher_settings(settings: &LauncherSettings) -> Result<(), String> {
     settings::write_launcher_settings(&data_dir(), settings)
 }
 
+/// Moves per-instance `username` values into launcher accounts and sets instance overrides.
+fn migrate_legacy_instance_usernames() {
+    let instances_root = instances_dir();
+    if !instances_root.exists() {
+        return;
+    }
+    let Ok(known_ids) = list_instance_ids() else {
+        return;
+    };
+
+    let data = data_dir();
+
+    for id in known_ids {
+        let Some(mut settings) = load_settings(&id) else {
+            continue;
+        };
+        let username = settings.username.trim();
+        if username.is_empty() {
+            continue;
+        }
+
+        let Ok(account) = auth::find_or_create_offline_account(&data, username) else {
+            continue;
+        };
+
+        settings.override_account = true;
+        settings.account_id = Some(account.id);
+        settings.username.clear();
+        settings.offline_username_confirmed = false;
+        let _ = save_settings_file(&id, &settings);
+    }
+
+    let mut launcher_settings = load_launcher_settings();
+    if launcher_settings.default_account_id.is_none() {
+        let accounts = load_accounts();
+        if accounts.len() == 1 {
+            launcher_settings.default_account_id = Some(accounts[0].id.clone());
+            let _ = write_launcher_settings(&launcher_settings);
+        }
+    }
+}
+
 #[tauri::command]
 async fn save_settings(id: String, settings: InstanceSettings) -> Result<(), String> {
     save_settings_file(&id, &settings)
@@ -1246,15 +1293,19 @@ fn emit_delete_progress(app: &tauri::AppHandle, id: &str, pct: f64) {
         "dl-progress",
         &serde_json::json!({
             "stage": "deleting",
+            "operation": "delete",
             "pct": pct,
             "id": id,
         }),
     );
 }
 
-#[tauri::command]
-async fn delete_instance(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    let dir = instance_dir(&id);
+fn run_delete_instance(
+    app: &tauri::AppHandle,
+    id: &str,
+    cancel_flag: &AtomicBool,
+) -> Result<(), String> {
+    let dir = instance_dir(id);
     let mut paths = Vec::new();
     if dir.exists() {
         collect_delete_paths(&dir, &mut paths)?;
@@ -1262,9 +1313,13 @@ async fn delete_instance(app: tauri::AppHandle, id: String) -> Result<(), String
 
     let total = paths.len().max(1);
     let mut last_emitted_pct = -1i32;
-    emit_delete_progress(&app, &id, 0.0);
+    emit_delete_progress(app, id, 0.0);
 
     for (i, path) in paths.iter().enumerate() {
+        if cancel_flag.load(Ordering::Relaxed) {
+            return Err("deletion cancelled".into());
+        }
+
         if path.is_dir() {
             fs::remove_dir(path).map_err(|e| {
                 format!("failed to remove directory {}: {e}", path.display())
@@ -1278,20 +1333,68 @@ async fn delete_instance(app: tauri::AppHandle, id: String) -> Result<(), String
         let pct = (i + 1) as f64 / total as f64;
         let pct_ui = (pct * 100.0) as i32;
         if i + 1 == total || pct_ui / 5 > last_emitted_pct / 5 {
-            emit_delete_progress(&app, &id, pct);
+            emit_delete_progress(app, id, pct);
             last_emitted_pct = pct_ui;
         }
     }
 
+    if cancel_flag.load(Ordering::Relaxed) {
+        return Err("deletion cancelled".into());
+    }
+
     let instances_root = instances_dir();
     let known_ids = list_instance_ids()?;
-    groups::remove_instance_from_groups(&instances_root, &id, &known_ids)?;
+    groups::remove_instance_from_groups(&instances_root, id, &known_ids)?;
 
     emit(
-        &app,
+        app,
         "dl-progress",
-        &serde_json::json!({ "stage": "done", "pct": 1.0, "id": id }),
+        &serde_json::json!({
+            "stage": "done",
+            "operation": "delete",
+            "pct": 1.0,
+            "id": id,
+        }),
     );
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_instance(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        guard.delete_cancel.insert(id.clone(), cancel_flag.clone());
+    }
+
+    let app_bg = app.clone();
+    let id_bg = id.clone();
+    let result = tokio::task::spawn_blocking(move || run_delete_instance(&app_bg, &id_bg, &cancel_flag))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        guard.delete_cancel.remove(&id);
+    }
+
+    result
+}
+
+#[tauri::command]
+fn cancel_delete_instance(state: State<'_, Mutex<AppState>>, id: String) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    let guard = state.lock().map_err(|e| e.to_string())?;
+    let flag = guard
+        .delete_cancel
+        .get(&id)
+        .ok_or("no deletion in progress for this instance")?;
+    flag.store(true, Ordering::Relaxed);
     Ok(())
 }
 
@@ -1318,10 +1421,7 @@ async fn download_install(
     group: Option<String>,
     name: Option<String>,
 ) -> Result<(), String> {
-    let id = sanitize_name(id.trim());
-    if id.is_empty() {
-        return Err("instance id cannot be empty".into());
-    }
+    let id = validate_instance_id(&id)?;
     let known_ids = list_instance_ids()?;
     if known_ids.contains(&id) {
         return Err("an instance with that id already exists".into());
@@ -1329,94 +1429,42 @@ async fn download_install(
 
     let client = state.lock().map_err(|e| e.to_string())?.http.clone();
     drop(state);
-    let url = format!(
-        "https://raw.githubusercontent.com/GTNewHorizons/GTNewHorizons.github.io/refs/heads/master/public/versions.json"
-    );
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
-    let versions: HashMap<String, GtnhVersion> = resp.json().await.map_err(|e| e.to_string())?;
-    let v = versions
-        .get(&pack_version)
-        .ok_or("pack version not found")?;
-    let dl_url = if java_type == "java8" {
-        v.mmc.java8_url.clone()
-    } else {
-        v.mmc.java17_2x_url.clone()
-    };
 
     let inst_dir = instance_dir(&id);
     fs::create_dir_all(&inst_dir).map_err(|e| e.to_string())?;
-    let zip_path = inst_dir.join("pack.zip");
 
-    // Download
-    emit(
+    pack::download_and_extract_to_staging(
         &app,
-        "dl-progress",
-        &serde_json::json!({"stage": "downloading", "pct": 0.0}),
-    );
-    let resp = client
-        .get(&dl_url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    let total = resp.content_length().unwrap_or(0);
-    let mut file = tokio::fs::File::create(&zip_path)
-        .await
-        .map_err(|e| e.to_string())?;
-    let mut stream = resp.bytes_stream();
-    let mut downloaded: u64 = 0;
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| e.to_string())?;
-        file.write_all(&chunk).await.map_err(|e| e.to_string())?;
-        downloaded += chunk.len() as u64;
-        if total > 0 {
-            let pct = downloaded as f64 / total as f64;
-            if (pct * 100.0) as u32 % 5 == 0 {
-                emit(
-                    &app,
-                    "dl-progress",
-                    &serde_json::json!({"stage": "downloading", "pct": pct}),
-                );
+        &client,
+        &pack_version,
+        &java_type,
+        &inst_dir,
+        "install",
+        Some(&id),
+    )
+    .await?;
+
+    let staging = inst_dir.join("staging");
+    for entry in fs::read_dir(&staging).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let dest = inst_dir.join(entry.file_name());
+        if dest.exists() {
+            if dest.is_dir() {
+                fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
+            } else {
+                fs::remove_file(&dest).map_err(|e| e.to_string())?;
             }
         }
-    }
-    drop(file);
-
-    // Extract
-    emit(
-        &app,
-        "dl-progress",
-        &serde_json::json!({"stage": "extracting", "pct": 0.0}),
-    );
-    let zip_file = fs::File::open(&zip_path).map_err(|e| e.to_string())?;
-    let mut archive = zip::ZipArchive::new(zip_file).map_err(|e| e.to_string())?;
-    let total_files = archive.len();
-    for i in 0..total_files {
-        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-        let out_path = inst_dir.join(entry.name());
-        if entry.name().ends_with('/') {
-            fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
+        if entry.path().is_dir() {
+            pack::copy_tree_merge(&entry.path(), &dest)?;
         } else {
-            if let Some(parent) = out_path.parent() {
-                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-            }
-            let mut outfile = fs::File::create(&out_path).map_err(|e| e.to_string())?;
-            std::io::copy(&mut entry, &mut outfile).map_err(|e| e.to_string())?;
-        }
-        let pct = (i as f64 + 1.0) / total_files as f64;
-        if (pct * 100.0) as u32 % 10 == 0 {
-            emit(
-                &app,
-                "dl-progress",
-                &serde_json::json!({"stage": "extracting", "pct": pct}),
-            );
+            pack::copy_file_create_parent(&entry.path(), &dest)?;
         }
     }
+    fs::remove_dir_all(&staging).map_err(|e| e.to_string())?;
 
     flatten_nested_pack(&inst_dir)?;
     prepare_instance_configs(&inst_dir, true)?;
-
-    // Cleanup zip
-    fs::remove_file(&zip_path).map_err(|e| e.to_string())?;
 
     let display_name = name
         .map(|n| n.trim().to_string())
@@ -1425,6 +1473,7 @@ async fn download_install(
     let settings = InstanceSettings {
         name: display_name,
         pack_version: pack_version.clone(),
+        pack_java_type: java_type.clone(),
         ..Default::default()
     };
     save_settings_file(&id, &settings)?;
@@ -1438,12 +1487,396 @@ async fn download_install(
     emit(
         &app,
         "dl-progress",
-        &serde_json::json!({"stage": "done", "pct": 1.0, "id": id}),
+        &serde_json::json!({"stage": "done", "pct": 1.0, "id": id, "operation": "install"}),
     );
     Ok(())
 }
 
-fn emit<T: Serialize + Clone>(app: &tauri::AppHandle, event: &str, payload: &T) {
+#[tauri::command]
+async fn preview_update_mods(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+    pack_version: String,
+    java_type: String,
+) -> Result<pack::UpdateModPreview, String> {
+    let id = sanitize_name(id.trim());
+    let known_ids = list_instance_ids()?;
+    if !known_ids.contains(&id) {
+        return Err("instance not found".into());
+    }
+
+    let inst_dir = instance_dir(&id);
+    let settings = load_settings(&id).unwrap_or_default();
+    let current = if settings.pack_version.is_empty() {
+        id.clone()
+    } else {
+        settings.pack_version.clone()
+    };
+
+    let client = state.lock().map_err(|e| e.to_string())?.http.clone();
+
+    let preview_dir = inst_dir.join(".update-preview");
+    if preview_dir.exists() {
+        fs::remove_dir_all(&preview_dir).map_err(|e| e.to_string())?;
+    }
+
+    pack::emit_dl_progress(
+        &app,
+        "preview",
+        0.0,
+        "preview",
+        Some(&id),
+        Some(&format!(
+            "Preparing mod analysis: {current} → {pack_version}"
+        )),
+    );
+
+    let staging = pack::download_and_extract_to_staging(
+        &app,
+        &client,
+        &pack_version,
+        &java_type,
+        &preview_dir,
+        "preview",
+        Some(&id),
+    )
+    .await?;
+
+    pack::emit_dl_progress(
+        &app,
+        "preview",
+        0.85,
+        "preview",
+        Some(&id),
+        Some("Scanning mods in current instance…"),
+    );
+    let old_mods = pack::list_mods_in_dir(&pack::resolve_mods_dir(&inst_dir))?;
+    pack::emit_dl_progress(
+        &app,
+        "preview",
+        0.88,
+        "preview",
+        Some(&id),
+        Some(&format!("Found {} mod(s) in current instance", old_mods.len())),
+    );
+
+    pack::emit_dl_progress(
+        &app,
+        "preview",
+        0.9,
+        "preview",
+        Some(&id),
+        Some("Scanning mods in target pack…"),
+    );
+    let new_mods = pack::list_mods_in_dir(&pack::resolve_mods_dir(&staging))?;
+    pack::emit_dl_progress(
+        &app,
+        "preview",
+        0.93,
+        "preview",
+        Some(&id),
+        Some(&format!("Found {} mod(s) in target pack", new_mods.len())),
+    );
+
+    let persistent_mods = inst_dir.join("persistent-minecraft").join("mods");
+
+    pack::emit_dl_progress(
+        &app,
+        "preview",
+        0.96,
+        "preview",
+        Some(&id),
+        Some("Comparing mod lists and detecting custom mods…"),
+    );
+    let preview = pack::build_update_preview(
+        &old_mods,
+        &new_mods,
+        &persistent_mods,
+        &current,
+        &pack_version,
+    );
+
+    pack::emit_dl_progress(
+        &app,
+        "preview",
+        1.0,
+        "preview",
+        Some(&id),
+        Some(&format!(
+            "Analysis complete: {} custom, {} updated, {} new from pack",
+            preview.custom_mods.len(),
+            preview.updated_pack_mods_count,
+            preview.new_pack_mods_count
+        )),
+    );
+
+    fs::remove_dir_all(&preview_dir).ok();
+    Ok(preview)
+}
+
+#[tauri::command]
+async fn update_instance(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+    pack_version: String,
+    java_type: String,
+    overwrite_pack_configs: bool,
+    keep_mod_identities: Vec<String>,
+) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    {
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        if guard.running_processes.contains_key(&id) {
+            return Err("cannot update while instance is running".into());
+        }
+    }
+    let known_ids = list_instance_ids()?;
+    if !known_ids.contains(&id) {
+        return Err("instance not found".into());
+    }
+
+    let inst_dir = instance_dir(&id);
+    let mut settings = load_settings(&id).ok_or("no settings")?;
+    let client = state.lock().map_err(|e| e.to_string())?.http.clone();
+    drop(state);
+
+    let keep_set: std::collections::HashSet<String> = keep_mod_identities.into_iter().collect();
+    let preserve_dir = inst_dir.join(".update-preserve");
+    let work_dir = inst_dir.join(".update-work");
+
+    if preserve_dir.exists() {
+        fs::remove_dir_all(&preserve_dir).map_err(|e| e.to_string())?;
+    }
+    if work_dir.exists() {
+        fs::remove_dir_all(&work_dir).map_err(|e| e.to_string())?;
+    }
+
+    pack::emit_dl_progress(
+        &app,
+        "updating",
+        0.02,
+        "update",
+        Some(&id),
+        Some(&format!("Starting update to {pack_version}")),
+    );
+
+    pack::emit_dl_progress(
+        &app,
+        "updating",
+        0.05,
+        "update",
+        Some(&id),
+        Some("Backing up saves, settings, and overlays"),
+    );
+    pack::backup_paths_for_update(&inst_dir, &preserve_dir)?;
+
+    let inst_mods = inst_dir.join(".minecraft").join("mods");
+    let persistent_mods = pack::persistent_custom_mods_dir(&inst_dir);
+    let removed_custom = pack::remove_custom_mods_except(&persistent_mods, &keep_set)?;
+    if removed_custom > 0 {
+        pack::emit_dl_progress(
+            &app,
+            "updating",
+            0.08,
+            "update",
+            Some(&id),
+            Some(&format!(
+                "Removed {removed_custom} custom mod(s) not selected to keep"
+            )),
+        );
+    }
+
+    let staging = pack::download_and_extract_to_staging(
+        &app,
+        &client,
+        &pack_version,
+        &java_type,
+        &work_dir,
+        "update",
+        Some(&id),
+    )
+    .await?;
+
+    let new_mod_count =
+        pack::list_mods_in_dir(&pack::resolve_mods_dir(&staging))?.len() as u32;
+
+    let result = (|| {
+        pack::emit_dl_progress(
+            &app,
+            "updating",
+            0.65,
+            "update",
+            Some(&id),
+            Some(&format!(
+                "Applying pack files and installing {new_mod_count} mod(s)"
+            )),
+        );
+        pack::apply_pack_tree_from_staging(&staging, &inst_dir)?;
+
+        let restored = pack::restore_persistent_custom_mods(&persistent_mods, &inst_mods)?;
+        if restored > 0 {
+            pack::emit_dl_progress(
+                &app,
+                "updating",
+                0.75,
+                "update",
+                Some(&id),
+                Some(&format!("Restored {restored} custom mod(s)")),
+            );
+        }
+
+        pack::emit_dl_progress(
+            &app,
+            "updating",
+            0.82,
+            "update",
+            Some(&id),
+            Some("Restoring saves and player data"),
+        );
+        pack::restore_paths_from_update_backup(&inst_dir, &preserve_dir)?;
+
+        let config_msg = if overwrite_pack_configs {
+            "Seeding pack configs (overwriting existing)"
+        } else {
+            "Seeding missing pack configs only"
+        };
+        pack::emit_dl_progress(
+            &app,
+            "updating",
+            0.9,
+            "update",
+            Some(&id),
+            Some(config_msg),
+        );
+        prepare_instance_configs(&inst_dir, overwrite_pack_configs)?;
+        pack::emit_dl_progress(
+            &app,
+            "updating",
+            0.95,
+            "update",
+            Some(&id),
+            Some("Applying persistent file overrides"),
+        );
+        minecraft_files::apply_persistent_minecraft(&inst_dir)?;
+        Ok::<(), String>(())
+    })();
+
+    if result.is_err() {
+        pack::emit_dl_progress(
+            &app,
+            "updating",
+            0.0,
+            "update",
+            Some(&id),
+            Some("Update failed — restoring backup"),
+        );
+        let _ = pack::restore_paths_from_update_backup(&inst_dir, &preserve_dir);
+    }
+    result?;
+
+    pack::emit_dl_progress(
+        &app,
+        "updating",
+        0.98,
+        "update",
+        Some(&id),
+        Some("Saving instance settings"),
+    );
+    settings.pack_version = pack_version;
+    settings.pack_java_type = java_type;
+    save_settings_file(&id, &settings)?;
+
+    pack::emit_dl_progress(
+        &app,
+        "updating",
+        0.99,
+        "update",
+        Some(&id),
+        Some("Cleaning up temporary files"),
+    );
+    fs::remove_dir_all(&work_dir).ok();
+    fs::remove_dir_all(&preserve_dir).ok();
+
+    pack::emit_dl_progress(
+        &app,
+        "done",
+        1.0,
+        "update",
+        Some(&id),
+        Some("Update complete"),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn list_minecraft_entries(id: String, subpath: Option<String>) -> Result<Vec<minecraft_files::MinecraftDirEntry>, String> {
+    let id = sanitize_name(id.trim());
+    let inst_dir = instance_dir(&id);
+    minecraft_files::list_minecraft_entries(&inst_dir, subpath.as_deref().unwrap_or(""))
+}
+
+#[tauri::command]
+fn read_minecraft_file(id: String, rel_path: String) -> Result<String, String> {
+    let id = sanitize_name(id.trim());
+    minecraft_files::read_minecraft_file(&instance_dir(&id), &rel_path)
+}
+
+#[tauri::command]
+fn write_minecraft_file(
+    id: String,
+    rel_path: String,
+    content: String,
+    persist: bool,
+) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    minecraft_files::write_minecraft_file(&instance_dir(&id), &rel_path, &content, persist)
+}
+
+#[tauri::command]
+fn delete_persistent_file(id: String, rel_path: String) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    minecraft_files::delete_persistent_file(&instance_dir(&id), &rel_path)
+}
+
+#[tauri::command]
+fn list_persistent_files(id: String) -> Result<Vec<String>, String> {
+    let id = sanitize_name(id.trim());
+    minecraft_files::list_persistent_files(&instance_dir(&id))
+}
+
+#[tauri::command]
+fn list_custom_mods(id: String) -> Result<Vec<pack::ModEntry>, String> {
+    let id = sanitize_name(id.trim());
+    pack::list_custom_mods(&instance_dir(&id))
+}
+
+#[tauri::command]
+fn browse_custom_mod() -> Result<Option<String>, String> {
+    Ok(rfd::FileDialog::new()
+        .add_filter("Minecraft mods", &["jar", "zip"])
+        .pick_file()
+        .map(|path| path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn add_custom_mod(id: String, source_path: String) -> Result<pack::ModEntry, String> {
+    let id = sanitize_name(id.trim());
+    let source = PathBuf::from(source_path.trim());
+    if !source.is_file() {
+        return Err("mod file not found".into());
+    }
+    pack::add_custom_mod(&instance_dir(&id), &source)
+}
+
+#[tauri::command]
+fn remove_custom_mod(id: String, identity: String) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    pack::remove_custom_mod(&instance_dir(&id), &identity)
+}
+
+pub(crate) fn emit<T: Serialize + Clone>(app: &tauri::AppHandle, event: &str, payload: &T) {
     let _ = app.emit(event, payload);
 }
 
@@ -1808,13 +2241,13 @@ fn apply_gtnh_config_patches(inst_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn prepare_instance_configs(inst_dir: &Path, overwrite_pack_configs: bool) -> Result<(), String> {
+pub(crate) fn prepare_instance_configs(inst_dir: &Path, overwrite_pack_configs: bool) -> Result<(), String> {
     seed_pack_configs(inst_dir, overwrite_pack_configs)?;
     apply_gtnh_config_patches(inst_dir)?;
     Ok(())
 }
 
-fn flatten_nested_pack(inst_dir: &Path) -> Result<(), String> {
+pub(crate) fn flatten_nested_pack(inst_dir: &Path) -> Result<(), String> {
     let Some(nested) = nested_pack_dir(inst_dir) else {
         return Ok(());
     };
@@ -1839,6 +2272,12 @@ fn mmc_pack_dir(inst_dir: &Path) -> PathBuf {
         return inst_dir.to_path_buf();
     }
     nested_pack_dir(inst_dir).unwrap_or_else(|| inst_dir.to_path_buf())
+}
+
+/// Minecraft `--gameDir` for GTNH instances. Several mods (e.g. BetterQuesting) resolve
+/// `config/...` relative to the process working directory, so launch CWD must match gameDir.
+fn minecraft_working_dir(pack_dir: &Path) -> PathBuf {
+    pack_dir.join(".minecraft")
 }
 
 struct LoadedPatch {
@@ -2026,6 +2465,7 @@ async fn launch_instance(
     }
     flatten_nested_pack(&inst_dir)?;
     prepare_instance_configs(&inst_dir, false)?;
+    pack::apply_persistent_custom_mods(&inst_dir)?;
 
     let settings = load_settings(&id).ok_or("no settings")?;
     let java = resolve_java(&settings)?;
@@ -2094,12 +2534,21 @@ async fn launch_instance(
         }
     }
 
-    // Auth: Microsoft when linked, otherwise offline (no sign-in required at launch)
     let accounts = load_accounts();
-    let use_microsoft = should_use_microsoft(&settings, &accounts);
-    let (username, access_token, uuid, user_type) = if use_microsoft {
-        let acc = pick_microsoft_account(&settings, &accounts)
-            .ok_or("No Microsoft account configured. Add one in Accounts.")?;
+    let launcher_settings = load_launcher_settings();
+    let acc = pick_launch_account(
+        &settings,
+        &accounts,
+        launcher_settings.default_account_id.as_deref(),
+    )?;
+    let (username, access_token, uuid, user_type) = if acc.is_offline() {
+        let username = acc.profile_name();
+        let uuid = acc.profile_id();
+        if username.is_empty() || uuid.is_empty() {
+            return Err("Offline account is missing a username.".into());
+        }
+        (username, "0".into(), uuid, "legacy".to_string())
+    } else {
         if let Some(ent) = &acc.minecraft_entitlement {
             if !ent.can_play_minecraft {
                 return Err("This Microsoft account does not own Minecraft Java Edition.".into());
@@ -2114,9 +2563,6 @@ async fn launch_instance(
             );
         }
         (username, token, uuid, "msa".to_string())
-    } else {
-        let (username, token, uuid) = resolve_offline_identity(&settings)?;
-        (username, token, uuid, "legacy".to_string())
     };
 
     if let Some(template) = &config.minecraft_arguments_template {
@@ -2210,7 +2656,9 @@ async fn launch_instance(
     };
 
     let mut cmd = std::process::Command::new(&cmd_executable);
-    cmd.current_dir(&pack_dir)
+    let game_work_dir = minecraft_working_dir(&pack_dir);
+    fs::create_dir_all(&game_work_dir).map_err(|e| e.to_string())?;
+    cmd.current_dir(&game_work_dir)
         .args(&cmd_args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -2304,17 +2752,15 @@ fn kill_instance(state: State<'_, Mutex<AppState>>, id: String) -> Result<(), St
 
 #[tauri::command]
 async fn get_accounts() -> Result<Vec<AccountInfo>, String> {
-    let accounts = load_accounts();
-    Ok(accounts
+    Ok(load_accounts()
         .into_iter()
-        .map(|a| AccountInfo {
-            id: a.id.clone(),
-            username: a.profile_name(),
-            uuid: a.profile_id(),
-            skin_png_base64: a.skin_png_base64,
-            owns_minecraft: a.minecraft_entitlement.as_ref().map(|e| e.owns_minecraft),
-        })
+        .map(|a| auth::account_to_info(&a))
         .collect())
+}
+
+#[tauri::command]
+fn add_offline_account(username: String) -> Result<AccountInfo, String> {
+    auth::create_offline_account(&data_dir(), &username)
 }
 
 #[tauri::command]
@@ -2376,23 +2822,14 @@ mod tests {
     }
 
     #[test]
-    fn offline_player_uuid_matches_minecraft_convention() {
-        assert_eq!(
-            offline_player_uuid("Steve"),
-            "5627dd98-e6be-3c21-b8a8-e92344183641"
-        );
+    fn validate_instance_id_sanitizes_spaces() {
+        assert_eq!(validate_instance_id("GTNH 2.8.0").unwrap(), "GTNH_2.8.0");
+        assert_eq!(validate_instance_id("GTNH-2.8.0").unwrap(), "GTNH-2.8.0");
     }
 
     #[test]
-    fn resolve_offline_identity_defaults_empty_username() {
-        let settings = InstanceSettings {
-            username: "  ".into(),
-            ..Default::default()
-        };
-        let (name, token, uuid) = resolve_offline_identity(&settings).unwrap();
-        assert_eq!(name, "Player");
-        assert_eq!(token, "0");
-        assert_eq!(uuid, offline_player_uuid("Player"));
+    fn sanitize_name_replaces_whitespace() {
+        assert_eq!(sanitize_name("foo bar"), "foo_bar");
     }
 
     #[test]
@@ -2675,6 +3112,8 @@ pub fn run() {
         .setup(|app| {
             use tauri_plugin_deep_link::DeepLinkExt;
 
+            migrate_legacy_instance_usernames();
+
             #[cfg(any(windows, target_os = "linux"))]
             {
                 app.deep_link().register_all()?;
@@ -2693,6 +3132,7 @@ pub fn run() {
         .manage(Mutex::new(AppState {
             http: reqwest::Client::new(),
             running_processes: HashMap::new(),
+            delete_cancel: HashMap::new(),
         }))
         .invoke_handler(tauri::generate_handler![
             get_versions,
@@ -2703,10 +3143,22 @@ pub fn run() {
             delete_group,
             set_group_collapsed,
             delete_instance,
+            cancel_delete_instance,
             open_instance_folder,
             save_settings,
             get_settings,
             download_install,
+            preview_update_mods,
+            update_instance,
+            list_minecraft_entries,
+            read_minecraft_file,
+            write_minecraft_file,
+            delete_persistent_file,
+            list_persistent_files,
+            list_custom_mods,
+            browse_custom_mod,
+            add_custom_mod,
+            remove_custom_mod,
             detect_java,
             launch_instance,
             browse_java_executable,
@@ -2716,6 +3168,7 @@ pub fn run() {
             get_instance_console_log,
             clear_instance_console_log,
             get_accounts,
+            add_offline_account,
             remove_account,
             start_microsoft_login,
             get_launcher_settings,

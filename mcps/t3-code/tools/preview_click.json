@@ -1,0 +1,82 @@
+{
+  "name": "preview_click",
+  "description": "Click exactly one page target. Prefer locator with a Playwright selector such as role=button[name='Send']; selector accepts legacy CSS; x and y are viewport CSS pixels and must be supplied together. Call preview_snapshot first when the target is unknown.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "selector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Legacy CSS selector such as button[type='submit']. Prefer locator for resilient role/text targeting."
+      },
+      "locator": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Playwright selector, preferably role/text based, for example role=button[name='Send'] or text=Continue. Use snapshot first to inspect the page."
+      },
+      "x": {
+        "anyOf": [
+          {
+            "type": "number",
+            "allOf": [
+              {
+                "description": "Viewport-relative X coordinate in CSS pixels. Must be paired with y."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "y": {
+        "anyOf": [
+          {
+            "type": "number",
+            "allOf": [
+              {
+                "description": "Viewport-relative Y coordinate in CSS pixels. Must be paired with x."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "timeoutMs": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "allOf": [
+              {
+                "exclusiveMinimum": 0
+              },
+              {
+                "maximum": 60000,
+                "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+      }
+    },
+    "additionalProperties": false
+  }
+}

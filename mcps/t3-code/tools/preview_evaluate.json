@@ -1,0 +1,54 @@
+{
+  "name": "preview_evaluate",
+  "description": "Evaluate a JavaScript expression in the page's main frame and return a serializable result up to 64 KB. Prefer preview_snapshot and semantic click/type/wait tools; use this for inspection or interactions those tools cannot express. The expression may mutate page state.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "expression": {
+        "type": "string",
+        "allOf": [
+          {
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+          },
+          {
+            "minLength": 1,
+            "description": "JavaScript expression evaluated in the page's main frame, for example document.title or (() => ({href: location.href}))()."
+          },
+          {
+            "maxLength": 64000
+          },
+          {
+            "description": "JavaScript expression evaluated in the page's main frame, for example document.title or (() => ({href: location.href}))()."
+          }
+        ]
+      },
+      "awaitPromise": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Await a returned Promise. Defaults to true."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "returnByValue": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Serialize and return the value instead of a remote object reference. Defaults to true."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "expression"
+    ],
+    "additionalProperties": false,
+    "description": "Evaluates JavaScript in the page. Prefer snapshot and semantic actions; use evaluate for inspection or unsupported interactions."
+  }
+}

@@ -6,6 +6,7 @@ import { hasLowContrast, validateHexColor, validateRadius } from "../lib/theme";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 const TOKEN_FIELDS: {
   key: keyof ThemeOverrides;
@@ -88,10 +89,10 @@ export function ThemeEditor() {
             const displayColor = value || presetDefault || "#0a0a0a";
             return (
               <div key={key} className="flex items-center gap-3">
-                <label className="text-sm w-32 shrink-0">{label}</label>
+                <Label className="w-32 shrink-0">{label}</Label>
                 {type === "color" ? (
                   <>
-                    <input
+                    <Input
                       type="color"
                       value={
                         displayColor.startsWith("#") && displayColor.length >= 7
@@ -99,7 +100,7 @@ export function ThemeEditor() {
                           : "#0a0a0a"
                       }
                       onChange={(e) => updateField(key, e.target.value)}
-                      className="h-8 w-10 rounded border border-input bg-transparent cursor-pointer"
+                      className="h-8 w-10 shrink-0 cursor-pointer p-1"
                     />
                     <Input
                       value={value}

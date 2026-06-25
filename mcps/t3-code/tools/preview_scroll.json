@@ -1,0 +1,62 @@
+{
+  "name": "preview_scroll",
+  "description": "Scroll by CSS pixels. Positive deltaY scrolls down and positive deltaX scrolls right. Without locator/selector it scrolls the viewport; otherwise it scrolls that container. At least one delta is required.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "deltaX": {
+        "anyOf": [
+          {
+            "type": "number",
+            "allOf": [
+              {
+                "description": "Horizontal scroll delta in CSS pixels. Positive scrolls right. Defaults to 0."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "deltaY": {
+        "anyOf": [
+          {
+            "type": "number",
+            "allOf": [
+              {
+                "description": "Vertical scroll delta in CSS pixels. Positive scrolls down. Defaults to 0."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "selector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Legacy CSS selector for a scrollable container. Omit to scroll the viewport."
+      },
+      "locator": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Playwright selector for a scrollable container. Omit to scroll the viewport."
+      }
+    },
+    "additionalProperties": false
+  }
+}

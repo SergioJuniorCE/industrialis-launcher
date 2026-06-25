@@ -92,6 +92,12 @@ pub struct LauncherSettings {
     pub theme_overrides: ThemeOverrides,
     #[serde(default)]
     pub custom_theme_presets: Vec<CustomThemePreset>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "active_account_id"
+    )]
+    pub default_account_id: Option<String>,
 }
 
 impl Default for LauncherSettings {
@@ -101,6 +107,7 @@ impl Default for LauncherSettings {
             theme_preset: default_theme_preset(),
             theme_overrides: ThemeOverrides::default(),
             custom_theme_presets: Vec::new(),
+            default_account_id: None,
         }
     }
 }
@@ -226,6 +233,28 @@ mod tests {
         assert!(matches!(settings.theme_mode, ThemeMode::Dark));
         assert_eq!(settings.theme_preset, "industrialis");
         assert!(settings.custom_theme_presets.is_empty());
+    }
+
+    #[test]
+    fn deserialize_theme_mode_light_and_dark() {
+        let dark: LauncherSettings =
+            serde_json::from_str(r#"{ "theme_mode": "dark" }"#).expect("dark theme_mode");
+        assert!(matches!(dark.theme_mode, ThemeMode::Dark));
+
+        let light: LauncherSettings =
+            serde_json::from_str(r#"{ "theme_mode": "light" }"#).expect("light theme_mode");
+        assert!(matches!(light.theme_mode, ThemeMode::Light));
+    }
+
+    #[test]
+    fn deserialize_legacy_active_account_id_as_default() {
+        let json = r#"{ "active_account_id": "offline-steve" }"#;
+        let settings: LauncherSettings =
+            serde_json::from_str(json).expect("legacy active account id should parse");
+        assert_eq!(
+            settings.default_account_id.as_deref(),
+            Some("offline-steve")
+        );
     }
 
     #[test]

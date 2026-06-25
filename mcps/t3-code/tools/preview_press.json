@@ -1,0 +1,49 @@
+{
+  "name": "preview_press",
+  "description": "Press one keyboard key in the active page, for example {key:'Enter'}, {key:'Escape'}, or {key:'a',modifiers:['Meta']}. This targets the page's current focus.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string",
+        "allOf": [
+          {
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+          },
+          {
+            "minLength": 1,
+            "description": "Keyboard key name such as Enter, Escape, Tab, ArrowDown, Backspace, or a single character."
+          },
+          {
+            "description": "Keyboard key name such as Enter, Escape, Tab, ArrowDown, Backspace, or a single character."
+          }
+        ]
+      },
+      "modifiers": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Alt",
+                "Control",
+                "Meta",
+                "Shift"
+              ]
+            },
+            "description": "Modifier keys held while pressing key."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "key"
+    ],
+    "additionalProperties": false,
+    "description": "Presses one keyboard key in the active browser tab."
+  }
+}

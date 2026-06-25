@@ -31,7 +31,10 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
   font-family: "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
   margin: 0;
+  -webkit-font-smoothing: antialiased;
 }
 
 [data-theme-effect="grid"] body {
@@ -43,7 +46,8 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: var(--color-background);

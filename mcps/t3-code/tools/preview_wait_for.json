@@ -1,0 +1,74 @@
+{
+  "name": "preview_wait_for",
+  "description": "Wait until all supplied conditions match: a Playwright locator, legacy CSS selector, visible-text substring, and/or URL substring. Provide at least one condition. Defaults to 15 seconds, maximum 60 seconds.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "selector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Legacy CSS selector that must match an element. Prefer locator."
+      },
+      "locator": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Playwright selector that must match an element, for example role=button[name='Send']."
+      },
+      "text": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Case-sensitive substring that must appear in visible document text."
+      },
+      "urlIncludes": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Substring that must appear in the current absolute URL."
+      },
+      "timeoutMs": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "allOf": [
+              {
+                "exclusiveMinimum": 0
+              },
+              {
+                "maximum": 60000,
+                "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+      }
+    },
+    "additionalProperties": false
+  }
+}

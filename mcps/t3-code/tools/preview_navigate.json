@@ -1,0 +1,171 @@
+{
+  "name": "preview_navigate",
+  "description": "Navigate the active collaborative browser tab. Pass {url:'https://t3.chat'} for a website, or {target:{kind:'environment-port',port:5173}} for a dev server in the current environment. Exactly one of url or target is required. Defaults to waiting for page loading to stop.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "anyOf": [
+          {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+              },
+              {
+                "minLength": 1,
+                "description": "Absolute http(s) URL or a schemeless host such as t3.chat or localhost:5173. Schemeless public hosts use https; loopback hosts use http."
+              },
+              {
+                "maxLength": 2048
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Website URL, for example https://t3.chat. Use this for public pages and directly reachable URLs."
+      },
+      "target": {
+        "anyOf": [
+          {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "url"
+                    ],
+                    "description": "Selects direct URL navigation."
+                  },
+                  "url": {
+                    "type": "string",
+                    "allOf": [
+                      {
+                        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+                      },
+                      {
+                        "minLength": 1,
+                        "description": "Absolute http(s) URL or a schemeless host such as t3.chat or localhost:5173. Schemeless public hosts use https; loopback hosts use http."
+                      },
+                      {
+                        "maxLength": 2048,
+                        "description": "Direct website URL."
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "url"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "environment-port"
+                    ],
+                    "description": "Selects a dev-server port relative to the current execution environment."
+                  },
+                  "port": {
+                    "type": "integer",
+                    "allOf": [
+                      {
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "exclusiveMaximum": 65536,
+                        "description": "Dev-server TCP port inside the current environment."
+                      }
+                    ]
+                  },
+                  "protocol": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "http",
+                          "https"
+                        ],
+                        "description": "Dev-server protocol. Defaults to http."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "path": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "Optional path, query, and fragment, for example /settings?tab=account."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "port"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "description": "Environment-relative target. Prefer {kind:'environment-port',port:5173} for a dev server in the current environment."
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Environment-relative target. Prefer {kind:'environment-port',port:5173} for a dev server in the current environment."
+      },
+      "readiness": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "load",
+              "domContentLoaded",
+              "none"
+            ],
+            "description": "Readiness milestone before returning. 'load' waits for loading to stop (default), 'domContentLoaded' waits for an interactive document, and 'none' returns immediately."
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Readiness milestone before returning. 'load' is the default; use 'none' only when a later wait call will verify the page."
+      },
+      "timeoutMs": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "allOf": [
+              {
+                "exclusiveMinimum": 0
+              },
+              {
+                "maximum": 60000,
+                "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+      }
+    },
+    "additionalProperties": false
+  }
+}

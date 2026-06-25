@@ -1,0 +1,70 @@
+{
+  "name": "preview_type",
+  "description": "Insert literal text into one input. Prefer locator with a Playwright role/text selector; selector accepts legacy CSS. If neither is supplied, types into the currently focused element. Set clear=true to replace existing text.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "Literal text to insert."
+      },
+      "selector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Legacy CSS selector for the input. Prefer locator."
+      },
+      "locator": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Playwright selector for the input, for example role=textbox[name='Message'] or textarea[placeholder*='Message']."
+      },
+      "clear": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Clear the existing input value before inserting text. Defaults to false."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "timeoutMs": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "allOf": [
+              {
+                "exclusiveMinimum": 0
+              },
+              {
+                "maximum": 60000,
+                "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+      }
+    },
+    "required": [
+      "text"
+    ],
+    "additionalProperties": false
+  }
+}

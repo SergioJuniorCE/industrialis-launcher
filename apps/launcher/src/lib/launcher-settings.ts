@@ -23,6 +23,16 @@ export interface LauncherSettingsData {
   theme_preset: ThemePresetId;
   theme_overrides: ThemeOverrides;
   custom_theme_presets: SavedThemePreset[];
+  /** Account used for every launch unless an instance overrides it. */
+  default_account_id?: string | null;
+  /** @deprecated Renamed to default_account_id */
+  active_account_id?: string | null;
+}
+
+export function resolveDefaultAccountId(
+  settings: Partial<LauncherSettingsData>,
+): string | null {
+  return settings.default_account_id ?? settings.active_account_id ?? null;
 }
 
 export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
@@ -30,4 +40,5 @@ export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
   theme_preset: DEFAULT_THEME_PRESET_ID,
   theme_overrides: {},
   custom_theme_presets: [],
+  default_account_id: null,
 };

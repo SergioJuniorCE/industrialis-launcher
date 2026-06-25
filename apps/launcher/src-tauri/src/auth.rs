@@ -102,6 +102,10 @@ fn default_account_type() -> String {
 }
 
 impl AccountData {
+    pub fn is_offline(&self) -> bool {
+        self.account_type == "offline"
+    }
+
     pub fn access_token(&self) -> String {
         self.yggdrasil_token
             .as_ref()
@@ -162,6 +166,7 @@ pub struct AccountInfo {
     pub id: String,
     pub username: String,
     pub uuid: String,
+    pub account_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skin_png_base64: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -344,17 +349,95 @@ fn upsert_account(data_dir: &PathBuf, account: &mut AccountData) -> Result<(), S
     save_accounts(data_dir, &accounts)
 }
 
-fn account_to_info(account: &AccountData) -> AccountInfo {
+pub fn account_to_info(account: &AccountData) -> AccountInfo {
     AccountInfo {
         id: account.id.clone(),
         username: account.profile_name(),
         uuid: account.profile_id(),
+        account_type: account.account_type.clone(),
         skin_png_base64: account.skin_png_base64.clone(),
         owns_minecraft: account
             .minecraft_entitlement
             .as_ref()
             .map(|e| e.owns_minecraft),
     }
+}
+
+pub fn validate_offline_username(username: &str) -> Result<String, String> {
+    let trimmed = username.trim();
+    if trimmed.is_empty() {
+        return Err("username cannot be empty".into());
+    }
+    if trimmed.len() > 16 {
+        return Err("username must be 16 characters or fewer".into());
+    }
+    if !trimmed
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(
+            "username may only contain letters, numbers, and underscores".into(),
+        );
+    }
+    Ok(trimmed.to_string())
+}
+
+pub fn offline_player_uuid(username: &str) -> String {
+    let digest = md5::compute(format!("OfflinePlayer:{username}"));
+    let mut bytes = digest.0;
+    bytes[6] = (bytes[6] & 0x0f) | 0x30;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    uuid::Uuid::from_bytes(bytes).hyphenated().to_string()
+}
+
+pub fn find_offline_account_by_username(
+    data_dir: &PathBuf,
+    username: &str,
+) -> Result<Option<AccountInfo>, String> {
+    let username = validate_offline_username(username)?;
+    Ok(load_accounts(data_dir)
+        .into_iter()
+        .find(|a| a.is_offline() && a.profile_name().eq_ignore_ascii_case(&username))
+        .map(|a| account_to_info(&a)))
+}
+
+pub fn find_or_create_offline_account(
+    data_dir: &PathBuf,
+    username: &str,
+) -> Result<AccountInfo, String> {
+    if let Some(existing) = find_offline_account_by_username(data_dir, username)? {
+        return Ok(existing);
+    }
+    create_offline_account(data_dir, username)
+}
+
+pub fn create_offline_account(data_dir: &PathBuf, username: &str) -> Result<AccountInfo, String> {
+    let username = validate_offline_username(username)?;
+    let accounts = load_accounts(data_dir);
+    if accounts.iter().any(|a| {
+        a.is_offline() && a.profile_name().eq_ignore_ascii_case(&username)
+    }) {
+        return Err("an offline account with this username already exists".into());
+    }
+
+    let mut account = AccountData {
+        format_version: 3,
+        account_type: "offline".into(),
+        id: uuid::Uuid::new_v4().to_string(),
+        msa_token: None,
+        user_token: None,
+        mojangservices_token: None,
+        yggdrasil_token: None,
+        minecraft_profile: Some(MinecraftProfile {
+            id: offline_player_uuid(&username),
+            name: username,
+            skins: None,
+        }),
+        minecraft_entitlement: None,
+        skin_png_base64: None,
+    };
+    upsert_account(data_dir, &mut account)?;
+    Ok(account_to_info(&account))
 }
 
 // ── Step 1: Microsoft OAuth ──
@@ -1171,5 +1254,15 @@ mod tests {
             .collect();
         assert_eq!(accounts[0].profile_name(), "Steve");
         assert_eq!(accounts[0].access_token(), "tok");
+    }
+
+    #[test]
+    fn find_or_create_offline_account_reuses_existing() {
+        let dir = std::env::temp_dir().join(format!("il-auth-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let first = create_offline_account(&dir, "Steve").unwrap();
+        let second = find_or_create_offline_account(&dir, "Steve").unwrap();
+        assert_eq!(first.id, second.id);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
