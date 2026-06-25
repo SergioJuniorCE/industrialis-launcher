@@ -6,26 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Industrialis</title>
     <script>
-      // KEEP IN SYNC with THEME_OVERRIDE_CSS_VARS in src/lib/theme.ts
+      // KEEP IN SYNC with src/lib/theme.ts — applies cached vars before React boots.
       (function () {
-        var MAP = {
-          background: "--theme-background",
-          foreground: "--theme-foreground",
-          primary: "--theme-primary",
-          card: "--theme-card",
-          border: "--theme-border",
-          muted: "--theme-muted",
-          muted_foreground: "--theme-muted-foreground",
-          radius: "--theme-radius"
-        };
         try {
           var c = JSON.parse(localStorage.getItem("industrialis-theme-cache") || "{}");
           var mode = c.mode === "light" ? "light" : "dark";
-          document.documentElement.setAttribute("data-theme", mode);
-          if (c.overrides && typeof c.overrides === "object") {
-            Object.keys(MAP).forEach(function (key) {
-              var val = c.overrides[key];
-              if (val) document.documentElement.style.setProperty(MAP[key], val);
+          var preset = typeof c.preset === "string" && c.preset ? c.preset : "industrialis";
+          var root = document.documentElement;
+          root.setAttribute("data-theme", mode);
+          root.setAttribute("data-theme-preset", preset);
+          root.style.colorScheme = mode;
+          if (c.vars && typeof c.vars === "object") {
+            Object.keys(c.vars).forEach(function (cssVar) {
+              var val = c.vars[cssVar];
+              if (val) root.style.setProperty(cssVar, val);
             });
           }
         } catch (_) {}

@@ -12,6 +12,7 @@ import { Select } from "./components/ui/select";
 import { ScrollArea } from "./components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import { ThemeEditor } from "./components/ThemeEditor";
+import { ThemePresetPicker } from "./components/ThemePresetPicker";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import "./App.css";
 
@@ -998,6 +999,7 @@ function InstanceSettingsPanel({ version, javaOptions, onSave }: {
 function SettingsTab({ javaOptions }: { javaOptions: JavaInfo[] }) {
   return (
     <div className="space-y-6 max-w-lg">
+      <ThemePresetPicker />
       <ThemeEditor />
 
       <Card>

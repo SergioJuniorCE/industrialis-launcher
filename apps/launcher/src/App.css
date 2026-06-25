@@ -37,14 +37,14 @@
   --theme-secondary-foreground: #fafafa;
   --theme-muted: #1a1a1a;
   --theme-muted-foreground: #a3a3a3;
-  --theme-accent: #262626;
-  --theme-accent-foreground: #fafafa;
+  --theme-accent: #c9a227;
+  --theme-accent-foreground: #0a0a0a;
   --theme-destructive: #991b1b;
   --theme-destructive-foreground: #fafafa;
   --theme-border: #2a2a2a;
   --theme-input: #2a2a2a;
-  --theme-ring: #d4d4d4;
-  --theme-radius: 0.375rem;
+  --theme-ring: #c9a227;
+  --theme-radius: 0.5rem;
   color-scheme: dark;
 }
 
@@ -81,6 +81,14 @@ body {
   color: var(--color-foreground);
   font-family: "Inter", system-ui, sans-serif;
   margin: 0;
+}
+
+[data-theme-preset="industrialis"] body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgb(201 162 39 / 0.08), transparent),
+    linear-gradient(rgb(255 255 255 / 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.02) 1px, transparent 1px);
+  background-size: auto, 64px 64px, 64px 64px;
 }
 
 ::-webkit-scrollbar {

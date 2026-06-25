@@ -1,6 +1,8 @@
 import { useLauncherSettings } from "../context/LauncherSettingsContext";
 import type { ThemeOverrides } from "../lib/launcher-settings";
+import { resolveThemePreset } from "../lib/theme-presets";
 import {
+  effectiveOverrideValue,
   hasLowContrast,
   validateHexColor,
   validateRadius,
@@ -16,17 +18,20 @@ const TOKEN_FIELDS: {
 }[] = [
   { key: "background", label: "Background", type: "color" },
   { key: "foreground", label: "Text", type: "color" },
-  { key: "primary", label: "Accent / Primary", type: "color" },
+  { key: "primary", label: "Primary", type: "color" },
+  { key: "accent", label: "Accent", type: "color" },
   { key: "card", label: "Cards", type: "color" },
   { key: "border", label: "Borders", type: "color" },
   { key: "muted", label: "Muted surface", type: "color" },
   { key: "muted_foreground", label: "Muted text", type: "color" },
+  { key: "accent_foreground", label: "Accent text", type: "color" },
   { key: "radius", label: "Corner radius", type: "radius" },
 ];
 
 export function ThemeEditor() {
-  const { settings, setThemeOverrides, resetThemeOverrides } = useLauncherSettings();
+  const { settings, customPresets, setThemeOverrides, resetThemeOverrides } = useLauncherSettings();
   const overrides = settings.theme_overrides;
+  const preset = resolveThemePreset(settings.theme_preset, customPresets);
 
   const updateField = (key: keyof ThemeOverrides, raw: string) => {
     const field = TOKEN_FIELDS.find((f) => f.key === key);
@@ -43,15 +48,30 @@ export function ThemeEditor() {
     setThemeOverrides(next);
   };
 
-  const lowContrast = hasLowContrast(overrides.foreground, overrides.background);
+  const effectiveForeground = effectiveOverrideValue(
+    "foreground",
+    settings.theme_mode,
+    settings.theme_preset,
+    overrides,
+    customPresets
+  );
+  const effectiveBackground = effectiveOverrideValue(
+    "background",
+    settings.theme_mode,
+    settings.theme_preset,
+    overrides,
+    customPresets
+  );
+  const lowContrast = hasLowContrast(effectiveForeground, effectiveBackground);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Theme Editor</CardTitle>
         <CardDescription>
-          Base: {settings.theme_mode === "dark" ? "Dark" : "Light"} monochrome preset.
-          Secondary, accent, destructive, ring, and input tokens follow the preset.
+          Base: {preset.name} ({settings.theme_mode === "dark" ? "dark" : "light"}). Leave a field
+          empty to use the preset default. Secondary, destructive, ring, and input tokens follow the
+          preset.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -63,6 +83,13 @@ export function ThemeEditor() {
         <div className="grid gap-3">
           {TOKEN_FIELDS.map(({ key, label, type }) => {
             const value = overrides[key] ?? "";
+            const presetDefault = effectiveOverrideValue(
+              key,
+              settings.theme_mode,
+              settings.theme_preset,
+              {},
+              customPresets
+            );
             return (
               <div key={key} className="flex items-center gap-3">
                 <label className="text-sm w-32 shrink-0">{label}</label>
@@ -70,13 +97,18 @@ export function ThemeEditor() {
                   <>
                     <input
                       type="color"
-                      value={value.startsWith("#") && value.length >= 7 ? value.slice(0, 7) : "#0a0a0a"}
+                      value={
+                        (value || presetDefault || "#0a0a0a").startsWith("#") &&
+                        (value || presetDefault || "#0a0a0a").length >= 7
+                          ? (value || presetDefault || "#0a0a0a").slice(0, 7)
+                          : "#0a0a0a"
+                      }
                       onChange={(e) => updateField(key, e.target.value)}
                       className="h-8 w-10 rounded border border-input bg-transparent cursor-pointer"
                     />
                     <Input
                       value={value}
-                      placeholder="Preset default"
+                      placeholder={presetDefault ?? "Preset default"}
                       onChange={(e) => updateField(key, e.target.value)}
                       className="font-mono text-xs"
                     />
@@ -84,7 +116,7 @@ export function ThemeEditor() {
                 ) : (
                   <Input
                     value={value}
-                    placeholder="0.375rem"
+                    placeholder={presetDefault ?? "0.375rem"}
                     onChange={(e) => updateField(key, e.target.value)}
                     className="font-mono text-xs"
                   />

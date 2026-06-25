@@ -18,6 +18,9 @@ out
 .turbo
 *.local
 
+# Cursor agent background shell logs (not part of the project)
+terminals/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -2,6 +2,12 @@
 
 [cmd]: https://commandcode.ai/
 
+# dev
+- User keeps the dev server running. Do not start, restart, or kill it unless explicitly asked. Assume hot reload is active. Confidence: 0.95
+
+# workspace
+- After background shell/agent work, delete the project-root `terminals/` folder if it was created. It is Cursor agent output, not part of the repo. Confidence: 0.95
+
 # frontend
 - Use shadcn/ui for React component library. Confidence: 0.65
 - Show only installed instances, not all possible Minecraft versions. Provide a "create instance" button that lets users select and install a specific version. Confidence: 0.75

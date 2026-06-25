@@ -125,13 +125,23 @@ pub struct ThemeOverrides {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub muted_foreground: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_foreground: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub radius: Option<String>,
+}
+
+fn default_theme_preset() -> String {
+    "industrialis".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LauncherSettings {
     #[serde(default)]
     pub theme_mode: ThemeMode,
+    #[serde(default = "default_theme_preset")]
+    pub theme_preset: String,
     #[serde(default)]
     pub theme_overrides: ThemeOverrides,
 }
@@ -140,6 +150,7 @@ impl Default for LauncherSettings {
     fn default() -> Self {
         Self {
             theme_mode: ThemeMode::Dark,
+            theme_preset: default_theme_preset(),
             theme_overrides: ThemeOverrides::default(),
         }
     }
@@ -153,6 +164,9 @@ fn validate_theme_override_value(value: &str) -> Result<(), String> {
 }
 
 fn validate_launcher_settings(settings: &LauncherSettings) -> Result<(), String> {
+    if settings.theme_preset.is_empty() || settings.theme_preset.len() > 64 {
+        return Err("invalid theme preset id".into());
+    }
     for value in [
         settings.theme_overrides.background.as_deref(),
         settings.theme_overrides.foreground.as_deref(),
@@ -161,6 +175,8 @@ fn validate_launcher_settings(settings: &LauncherSettings) -> Result<(), String>
         settings.theme_overrides.border.as_deref(),
         settings.theme_overrides.muted.as_deref(),
         settings.theme_overrides.muted_foreground.as_deref(),
+        settings.theme_overrides.accent.as_deref(),
+        settings.theme_overrides.accent_foreground.as_deref(),
         settings.theme_overrides.radius.as_deref(),
     ]
     .into_iter()
@@ -1645,6 +1661,7 @@ mod tests {
         let settings: LauncherSettings =
             serde_json::from_str(json).expect("legacy launcher settings should parse");
         assert!(matches!(settings.theme_mode, ThemeMode::Dark));
+        assert_eq!(settings.theme_preset, "industrialis");
         assert!(settings.theme_overrides.background.is_none());
     }
 
@@ -1667,6 +1684,7 @@ mod tests {
     fn reject_oversized_override() {
         let settings = LauncherSettings {
             theme_mode: ThemeMode::Dark,
+            theme_preset: "industrialis".to_string(),
             theme_overrides: ThemeOverrides {
                 background: Some("x".repeat(33)),
                 ..ThemeOverrides::default()
