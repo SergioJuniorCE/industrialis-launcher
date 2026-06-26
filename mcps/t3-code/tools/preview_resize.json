@@ -1,0 +1,125 @@
+{
+  "name": "preview_resize",
+  "description": "Set the active collaborative browser tab to fill-panel sizing, an independently resizable freeform size, or a Chrome-standard device preset. Use {mode:'fill'}, {mode:'freeform',width:1024,height:768}, or {mode:'preset',preset:'iphone-12-pro',orientation:'portrait'}. This changes CSS layout breakpoints without changing the desktop browser user agent.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "fill",
+          "freeform",
+          "preset"
+        ],
+        "description": "Viewport mode: fill follows the preview panel, freeform uses exact independently resizable dimensions, and preset uses a named device size."
+      },
+      "preset": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "iphone-se",
+              "iphone-xr",
+              "iphone-12-pro",
+              "iphone-14-pro-max",
+              "pixel-7",
+              "samsung-galaxy-s8-plus",
+              "samsung-galaxy-s20-ultra",
+              "ipad-mini",
+              "ipad-air",
+              "ipad-pro",
+              "surface-pro-7",
+              "surface-duo",
+              "galaxy-z-fold-5",
+              "asus-zenbook-fold",
+              "samsung-galaxy-a51-71",
+              "nest-hub",
+              "nest-hub-max"
+            ],
+            "description": "Named viewport from Chrome DevTools' standard device catalog."
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Named device size. Required only when mode is preset."
+      },
+      "width": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "allOf": [
+              {
+                "minimum": 240,
+                "maximum": 3840,
+                "description": "Freeform viewport width in CSS pixels. Required only in freeform mode."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Freeform viewport width in CSS pixels. Required only in freeform mode."
+      },
+      "height": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "allOf": [
+              {
+                "minimum": 240,
+                "maximum": 3840,
+                "description": "Freeform viewport height in CSS pixels. Required only in freeform mode."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Freeform viewport height in CSS pixels. Required only in freeform mode."
+      },
+      "orientation": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "portrait",
+              "landscape"
+            ],
+            "description": "Orientation for a fixed device preset. Defaults to the preset's native orientation."
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Orientation for a named device preset. It is not accepted in fill or freeform mode."
+      },
+      "timeoutMs": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "allOf": [
+              {
+                "exclusiveMinimum": 0
+              },
+              {
+                "maximum": 60000,
+                "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+      }
+    },
+    "required": [
+      "mode"
+    ],
+    "additionalProperties": false
+  }
+}

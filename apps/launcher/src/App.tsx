@@ -795,7 +795,7 @@ export default function App() {
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">
+              <div className="flex-1 flex items-center justify-center text-foreground/60 text-sm">
                 Select an instance
               </div>
             )}
@@ -1333,7 +1333,7 @@ function InstanceRow({
         <div
           className={`group/row flex flex-col border-b border-border/40 transition-colors ${
             deleting ? "opacity-80" : ""
-          } ${selected ? "bg-muted" : "hover:bg-muted/50"}`}
+          } ${selected ? "bg-accent border-l-2 border-l-primary" : "hover:bg-accent/60"}`}
         >
           <div className="flex items-center gap-1">
             <Button

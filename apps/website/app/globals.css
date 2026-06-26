@@ -8,10 +8,10 @@
   --color-muted: #1a1a1a;
   --color-muted-foreground: #a3a3a3;
   --color-border: #2a2a2a;
-  --color-primary: #fafafa;
+  --color-primary: #c9a227;
   --color-primary-foreground: #0a0a0a;
-  --color-accent: #c9a227;
-  --color-accent-foreground: #0a0a0a;
+  --color-accent: #1a1610;
+  --color-accent-foreground: #f0ebe0;
   --color-ring: #d4d4d4;
   --font-sans: var(--font-sans-family);
   --font-mono: var(--font-mono-family);

@@ -5,7 +5,7 @@ export function LauncherPreview() {
     <div className="relative mx-auto w-full max-w-2xl">
       <div
         aria-hidden
-        className="pointer-events-none absolute -inset-4 rounded-2xl bg-accent/10 blur-3xl"
+        className="pointer-events-none absolute -inset-4 rounded-2xl bg-primary/10 blur-3xl"
       />
       <div className="relative overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/40">
         <div className="flex items-center gap-2 border-b border-border bg-muted/50 px-3 py-2">
@@ -43,7 +43,7 @@ export function LauncherPreview() {
               Installed
             </p>
             <div className="space-y-1">
-              <div className="rounded border border-accent/40 bg-background px-2 py-1.5">
+              <div className="rounded border border-primary/40 bg-background px-2 py-1.5">
                 <p className="font-medium">GTNH 2.7.4</p>
                 <p className="text-muted-foreground">Java 17 · 6.2 GB</p>
               </div>

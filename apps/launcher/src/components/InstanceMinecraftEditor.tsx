@@ -5,6 +5,11 @@ import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Textarea } from "./ui/textarea";
 import { Badge } from "./ui/badge";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "./ui/resizable";
 import { useLauncherSettings } from "../context/LauncherSettingsContext";
 import { cn } from "../lib/utils";
 
@@ -128,9 +133,13 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
         Edit <span className="font-mono">.minecraft/</span> files. Saves persist across pack updates.
       </p>
 
-      <div className="flex flex-1 min-h-0 gap-0 overflow-hidden rounded-md border border-border bg-card">
-        <div className="flex w-[38%] min-w-[120px] flex-col border-r border-border bg-card">
-          <div className="px-2 py-1.5 border-b border-border text-xs flex items-center gap-1 flex-wrap">
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="flex-1 min-h-0 overflow-hidden rounded-md border border-border bg-card"
+      >
+        <ResizablePanel defaultSize="38%" minSize="15%" maxSize="60%">
+          <div className="flex h-full flex-col bg-card">
+            <div className="px-2 py-1.5 border-b border-border text-xs flex items-center gap-1 flex-wrap">
             <Button
               type="button"
               variant="link"
@@ -155,81 +164,86 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
                 </span>
               );
             })}
-          </div>
-          <ScrollArea className="flex-1">
-            <div className="p-1">
-              {cwd && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-auto w-full justify-start gap-1.5 px-2 py-1 text-xs font-normal"
-                  onClick={() => {
-                    const parent = cwd.includes("/") ? cwd.replace(/\/[^/]+$/, "") : "";
-                    void loadDir(parent);
-                  }}
-                >
-                  <Folder className="size-3.5 shrink-0" />
-                  ..
-                </Button>
-              )}
-              {entries.map((entry) => (
-                <Button
-                  key={entry.rel_path}
-                  type="button"
-                  variant="ghost"
-                  className={cn(
-                    "h-auto w-full justify-start gap-1.5 px-2 py-1 text-xs font-normal",
-                    selectedPath === entry.rel_path && "bg-accent/40",
-                  )}
-                  onClick={() => void openFile(entry)}
-                >
-                  {entry.is_dir ? (
-                    <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className="truncate flex-1">{entry.name}</span>
-                  {entry.has_persistent_override && (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">
-                      saved
-                    </Badge>
-                  )}
-                </Button>
-              ))}
             </div>
-          </ScrollArea>
-        </div>
-
-        <div className="flex min-w-0 flex-1 flex-col bg-card">
-          <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border shrink-0">
-            <span className="text-xs font-mono truncate flex-1 text-muted-foreground">
-              {selectedPath ?? "Select a file"}
-            </span>
-            <Button size="sm" variant="ghost" disabled={!selectedPath || loading} onClick={() => void revertOverride()}>
-              <Undo2 className="size-3.5" />
-              Revert override
-            </Button>
-            <Button size="sm" disabled={!selectedPath || !dirty || loading} onClick={() => void save()}>
-              <Save className="size-3.5" />
-              {saved ? "Saved" : "Save"}
-            </Button>
+            <ScrollArea className="flex-1">
+              <div className="p-1">
+                {cwd && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-auto w-full justify-start gap-1.5 px-2 py-1 text-xs font-normal"
+                    onClick={() => {
+                      const parent = cwd.includes("/") ? cwd.replace(/\/[^/]+$/, "") : "";
+                      void loadDir(parent);
+                    }}
+                  >
+                    <Folder className="size-3.5 shrink-0" />
+                    ..
+                  </Button>
+                )}
+                {entries.map((entry) => (
+                  <Button
+                    key={entry.rel_path}
+                    type="button"
+                    variant="ghost"
+                    className={cn(
+                      "h-auto w-full justify-start gap-1.5 px-2 py-1 text-xs font-normal",
+                      selectedPath === entry.rel_path && "bg-primary/15 text-foreground",
+                    )}
+                    onClick={() => void openFile(entry)}
+                  >
+                    {entry.is_dir ? (
+                      <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="truncate flex-1">{entry.name}</span>
+                    {entry.has_persistent_override && (
+                      <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">
+                        saved
+                      </Badge>
+                    )}
+                  </Button>
+                ))}
+              </div>
+            </ScrollArea>
           </div>
-          {error && <p className="text-xs text-destructive px-2 py-1">{error}</p>}
-          <Textarea
-            className={cn(
-              "min-h-[160px] flex-1 resize-none rounded-none border-0 font-mono text-[11px] leading-relaxed shadow-none focus-visible:ring-0 disabled:opacity-100 disabled:cursor-default",
-              isDark ? "bg-black/40" : "bg-card",
-            )}
-            value={content}
-            disabled={!selectedPath || loading}
-            onChange={(e) => {
-              setContent(e.target.value);
-              setDirty(true);
-            }}
-            spellCheck={false}
-          />
-        </div>
-      </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel defaultSize="62%" minSize="30%">
+          <div className="flex h-full min-w-0 flex-col bg-card">
+            <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border shrink-0">
+              <span className="text-xs font-mono truncate flex-1 text-muted-foreground">
+                {selectedPath ?? "Select a file"}
+              </span>
+              <Button size="sm" variant="ghost" disabled={!selectedPath || loading} onClick={() => void revertOverride()}>
+                <Undo2 className="size-3.5" />
+                Revert override
+              </Button>
+              <Button size="sm" disabled={!selectedPath || !dirty || loading} onClick={() => void save()}>
+                <Save className="size-3.5" />
+                {saved ? "Saved" : "Save"}
+              </Button>
+            </div>
+            {error && <p className="text-xs text-destructive px-2 py-1">{error}</p>}
+            <Textarea
+              className={cn(
+                "min-h-[160px] flex-1 resize-none rounded-none border-0 font-mono text-[11px] leading-relaxed shadow-none focus-visible:ring-0 disabled:opacity-100 disabled:cursor-default",
+                isDark ? "bg-black/40" : "bg-card",
+              )}
+              value={content}
+              disabled={!selectedPath || loading}
+              onChange={(e) => {
+                setContent(e.target.value);
+                setDirty(true);
+              }}
+              spellCheck={false}
+            />
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

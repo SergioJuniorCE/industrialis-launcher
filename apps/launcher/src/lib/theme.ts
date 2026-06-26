@@ -12,8 +12,10 @@ import { THEME_TOKEN_CSS_VARS, tokensToCssVars, validateHexColor } from "./theme
 export { THEME_TOKEN_CSS_VARS, validateHexColor, validateRadius } from "./theme-utils";
 
 export const THEME_CACHE_KEY = "industrialis-theme-cache";
+export const THEME_CACHE_VERSION = 2;
 
 export interface ThemeCache {
+  version: number;
   mode: ThemeMode;
   preset: ThemePresetId;
   effect: ThemeBackgroundEffect;
@@ -74,13 +76,12 @@ export function readThemeCache(): ThemeCache | null {
         : DEFAULT_THEME_PRESET_ID;
     const overrides =
       parsed.overrides && typeof parsed.overrides === "object" ? parsed.overrides : {};
-    const vars =
-      parsed.vars && typeof parsed.vars === "object"
-        ? parsed.vars
-        : computeThemeCssVars(mode, preset, overrides);
+    const version = typeof parsed.version === "number" ? parsed.version : 0;
+    const vars = computeThemeCssVars(mode, preset, overrides);
     const effect: ThemeBackgroundEffect =
       parsed.effect === "grid" ? "grid" : preset === "industrialis" ? "grid" : "none";
-    return { mode, preset, effect, overrides, vars };
+    if (version !== THEME_CACHE_VERSION) return null;
+    return { version, mode, preset, effect, overrides, vars };
   } catch {
     return null;
   }
@@ -95,6 +96,7 @@ export function writeThemeCache(
   const preset = resolveThemePresetOrDefault(presetId, customPresets);
   const vars = tokensToCssVars(tokensForPreset(preset, mode), overrides);
   const payload: ThemeCache = {
+    version: THEME_CACHE_VERSION,
     mode,
     preset: presetId,
     effect: preset.background_effect,

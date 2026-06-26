@@ -8,14 +8,14 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dial
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
-function PresetSwatch({ accent, background }: { accent: string; background: string }) {
+function PresetSwatch({ primary, background }: { primary: string; background: string }) {
   return (
     <span
       className="inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-md border border-border"
       aria-hidden
     >
       <span className="flex-1" style={{ backgroundColor: background }} />
-      <span className="w-2.5" style={{ backgroundColor: accent }} />
+      <span className="w-2.5" style={{ backgroundColor: primary }} />
     </span>
   );
 }
@@ -48,7 +48,7 @@ export function ThemePresetPicker() {
     id: string,
     name: string,
     description: string,
-    accent: string,
+    primary: string,
     background: string,
     builtin: boolean
   ) => {
@@ -60,14 +60,14 @@ export function ThemePresetPicker() {
         variant={selected ? "secondary" : "outline"}
         onClick={() => setThemePreset(id)}
         className={`h-auto w-full items-start gap-3 p-3 text-left font-normal ${
-          selected ? "border-accent bg-accent/10" : ""
+          selected ? "border-primary bg-primary/10" : ""
         }`}
       >
-        <PresetSwatch accent={accent} background={background} />
+        <PresetSwatch primary={primary} background={background} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2 text-sm font-medium">
             {name}
-            {selected && <Check className="size-3.5 text-accent" />}
+            {selected && <Check className="size-3.5 text-primary" />}
           </span>
           <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
           {!builtin && (
@@ -100,7 +100,7 @@ export function ThemePresetPicker() {
               preset.id,
               preset.name,
               preset.description,
-              tokens.accent,
+              tokens.primary,
               tokens.background,
               true
             );
@@ -122,7 +122,7 @@ export function ThemePresetPicker() {
                         preset.id,
                         preset.name,
                         preset.description,
-                        tokens.accent,
+                        tokens.primary,
                         tokens.background,
                         false
                       )}

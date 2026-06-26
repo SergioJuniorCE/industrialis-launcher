@@ -44,27 +44,43 @@ describe("theme helpers", () => {
     expect(document.documentElement.getAttribute("data-theme-preset")).toBe("industrialis");
     expect(document.documentElement.getAttribute("data-theme-effect")).toBe("grid");
     expect(document.documentElement.style.getPropertyValue("--theme-background")).toBe("#ffffff");
-    expect(document.documentElement.style.getPropertyValue("--theme-accent")).toBe("#b8921f");
+    expect(document.documentElement.style.getPropertyValue("--theme-accent")).toBe("#ebe4d4");
     applyTheme("dark", "monochrome", {});
     expect(document.documentElement.getAttribute("data-theme-effect")).toBe("none");
     expect(document.documentElement.style.getPropertyValue("--theme-accent")).toBe("#262626");
   });
 
-  it("computeThemeCssVars uses industrialis bronze accent", () => {
+  it("computeThemeCssVars uses industrialis bronze as primary", () => {
     const vars = computeThemeCssVars("dark", "industrialis");
-    expect(vars["--theme-accent"]).toBe("#c9a227");
+    expect(vars["--theme-primary"]).toBe("#c9a227");
+    expect(vars["--theme-accent"]).toBe("#1a1610");
     expect(vars["--theme-ring"]).toBe("#c9a227");
   });
 
   it("reads and writes theme cache with preset, effect, and vars", () => {
     writeThemeCache("dark", "midnight", { muted_foreground: "#b0b0b0" });
     const cache = readThemeCache();
+    expect(cache?.version).toBe(2);
     expect(cache?.mode).toBe("dark");
     expect(cache?.preset).toBe("midnight");
     expect(cache?.effect).toBe("none");
     expect(cache?.overrides.muted_foreground).toBe("#b0b0b0");
     expect(cache?.vars["--theme-muted-foreground"]).toBe("#b0b0b0");
     expect(localStorage.getItem(THEME_CACHE_KEY)).toContain("midnight");
+  });
+
+  it("ignores stale theme cache without version", () => {
+    localStorage.setItem(
+      THEME_CACHE_KEY,
+      JSON.stringify({
+        mode: "dark",
+        preset: "industrialis",
+        effect: "grid",
+        overrides: {},
+        vars: { "--theme-accent": "#c9a227" },
+      })
+    );
+    expect(readThemeCache()).toBeNull();
   });
 
   it("mergeThemeCacheIntoSettings hydrates defaults", () => {

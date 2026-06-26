@@ -21,7 +21,7 @@ root.setAttribute("data-theme",mode);
 root.setAttribute("data-theme-preset",preset);
 root.setAttribute("data-theme-effect",effect);
 root.style.colorScheme=mode;
-var vars=c.vars&&typeof c.vars==="object"?c.vars:d.vars;
+var vars=c.version===2&&c.vars&&typeof c.vars==="object"?c.vars:d.vars;
 Object.keys(vars).forEach(function(k){var v=vars[k];if(v)root.style.setProperty(k,v);});
 }catch(e){}})();`;
 }
