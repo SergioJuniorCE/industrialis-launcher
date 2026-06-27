@@ -44,7 +44,7 @@ describe("theme helpers", () => {
     expect(document.documentElement.getAttribute("data-theme-preset")).toBe("industrialis");
     expect(document.documentElement.getAttribute("data-theme-effect")).toBe("grid");
     expect(document.documentElement.style.getPropertyValue("--theme-background")).toBe("#ffffff");
-    expect(document.documentElement.style.getPropertyValue("--theme-accent")).toBe("#ebe4d4");
+    expect(document.documentElement.style.getPropertyValue("--theme-accent")).toBe("#decb91");
     applyTheme("dark", "monochrome", {});
     expect(document.documentElement.getAttribute("data-theme-effect")).toBe("none");
     expect(document.documentElement.style.getPropertyValue("--theme-accent")).toBe("#262626");
@@ -52,9 +52,9 @@ describe("theme helpers", () => {
 
   it("computeThemeCssVars uses industrialis bronze as primary", () => {
     const vars = computeThemeCssVars("dark", "industrialis");
-    expect(vars["--theme-primary"]).toBe("#c9a227");
-    expect(vars["--theme-accent"]).toBe("#1a1610");
-    expect(vars["--theme-ring"]).toBe("#c9a227");
+    expect(vars["--theme-primary"]).toBe("#e0b638");
+    expect(vars["--theme-accent"]).toBe("#332713");
+    expect(vars["--theme-ring"]).toBe("#e0b638");
   });
 
   it("reads and writes theme cache with preset, effect, and vars", () => {

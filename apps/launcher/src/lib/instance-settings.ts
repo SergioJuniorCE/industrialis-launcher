@@ -46,6 +46,8 @@ export interface InstanceSettings {
 
   override_env: boolean;
   env_vars: Record<string, string>;
+
+  custom_icon?: string | null;
 }
 
 export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {

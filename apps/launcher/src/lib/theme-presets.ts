@@ -90,21 +90,30 @@ const MONOCHROME_LIGHT: ThemeTokens = {
 
 /** Matches apps/website — dark neutral base with bronze highlights. */
 const INDUSTRIALIS_DARK = deriveTokens(MONOCHROME_DARK, {
-  primary: "#c9a227",
+  primary: "#e0b638",
   primary_foreground: "#0a0a0a",
-  muted_foreground: "#b8b8b8",
-  accent: "#1a1610",
-  accent_foreground: "#f0ebe0",
-  ring: "#c9a227",
+  secondary: "#241d10",
+  muted: "#18140d",
+  muted_foreground: "#c9c1ad",
+  accent: "#332713",
+  accent_foreground: "#fff1c7",
+  border: "#3b321f",
+  input: "#4a3b1d",
+  ring: "#e0b638",
   radius: "0.5rem",
 });
 
 const INDUSTRIALIS_LIGHT = deriveTokens(MONOCHROME_LIGHT, {
-  primary: "#a67c00",
+  primary: "#9b6f00",
   primary_foreground: "#fafafa",
-  accent: "#ebe4d4",
+  secondary: "#efe5c7",
+  muted: "#f1ead8",
+  muted_foreground: "#5f533b",
+  accent: "#decb91",
   accent_foreground: "#1a1510",
-  ring: "#a67c00",
+  border: "#d7c78c",
+  input: "#cdbb7f",
+  ring: "#9b6f00",
   radius: "0.5rem",
 });
 

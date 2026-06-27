@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Dialog, DialogContent } from "./ui/dialog";
@@ -10,6 +11,7 @@ import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
 import { Progress } from "./ui/progress";
 import { formatDownloadProgress, formatDownloadSpeed, type DlProgressEvent } from "../lib/background-processes";
+import { compareVersionsByReleaseDate } from "../lib/pack-version-status";
 
 interface GtnhVersion {
   title: string;
@@ -36,22 +38,6 @@ interface UpdateModPreview {
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function compareVersionsByReleaseDate(
-  leftKey: string,
-  rightKey: string,
-  versions: Record<string, GtnhVersion>,
-): number {
-  const parse = (value: string) => {
-    const parts = value.trim().split(/[/-]/).map((p) => Number.parseInt(p, 10));
-    if (parts.length !== 3 || parts.some((p) => Number.isNaN(p))) return 0;
-    return Date.UTC(parts[0], parts[1] - 1, parts[2]);
-  };
-  const leftDate = parse(versions[leftKey]?.releaseDate ?? "");
-  const rightDate = parse(versions[rightKey]?.releaseDate ?? "");
-  if (leftDate !== rightDate) return rightDate - leftDate;
-  return rightKey.localeCompare(leftKey, undefined, { numeric: true });
 }
 
 type Step = "version" | "mods" | "options" | "confirm";
@@ -93,10 +79,18 @@ export function UpdatePackDialog({
   const [previewTotalMb, setPreviewTotalMb] = useState<number | undefined>();
   const previewLogRef = useRef<HTMLDivElement>(null);
   const [keepMods, setKeepMods] = useState<Record<string, boolean>>({});
+  const [handoff, setHandoff] = useState(false);
+
+  const dialogLocked = previewLoading || handoff;
 
   const sorted = versions
     ? Object.entries(versions).sort(([a], [b]) => compareVersionsByReleaseDate(a, b, versions))
     : [];
+
+  const requestClose = () => {
+    if (dialogLocked) return;
+    onClose();
+  };
 
   useEffect(() => {
     if (!preview) return;
@@ -205,18 +199,26 @@ export function UpdatePackDialog({
     void loadPreview(targetVersion);
   };
 
+  const confirmUpdate = () => {
+    if (!targetVersion) return;
+    setHandoff(true);
+    onUpdate(targetVersion, javaType, overwriteConfigs, keepIdentities);
+  };
+
   const keepIdentities = Object.entries(keepMods)
     .filter(([, v]) => v)
     .map(([k]) => k);
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open) requestClose(); }}>
       <DialogContent className="flex max-h-[85vh] max-w-lg flex-col overflow-hidden p-0">
       <Card className="flex max-h-[85vh] flex-col overflow-hidden border-0 shadow-none">
         <CardHeader className="shrink-0 pb-2">
           <div className="flex items-center justify-between">
             <CardTitle>Update Pack</CardTitle>
-            <Button variant="ghost" size="sm" onClick={onClose}>✕</Button>
+            <Button variant="ghost" size="sm" onClick={requestClose} disabled={dialogLocked}>
+              ✕
+            </Button>
           </div>
           <CardDescription>
             {instanceName} · {currentPackVersion}
@@ -225,6 +227,19 @@ export function UpdatePackDialog({
         </CardHeader>
 
         <CardContent className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden pb-6">
+          {dialogLocked && (
+            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-muted-foreground">
+              {handoff ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Starting background update…
+                </span>
+              ) : (
+                "Analyzing the target pack. Keep this dialog open until analysis finishes."
+              )}
+            </div>
+          )}
+
           {step === "version" && (
             <>
               <Select value={javaType} onChange={(e) => setJavaType(e.target.value)}>
@@ -241,6 +256,7 @@ export function UpdatePackDialog({
                       variant={targetVersion === key ? "secondary" : "outline"}
                       className="h-auto w-full justify-between p-3 text-left font-normal"
                       onClick={() => setTargetVersion(key)}
+                      disabled={previewLoading}
                     >
                       <div>
                         <div className="font-medium">{key}</div>
@@ -361,6 +377,10 @@ export function UpdatePackDialog({
                   <span className="font-mono">{targetVersion}</span>?
                 </p>
                 <p className="text-muted-foreground text-xs">
+                  The update runs in the background. You can keep using the launcher while it progresses in
+                  Processes.
+                </p>
+                <p className="text-muted-foreground text-xs">
                   Worlds in saves/ are kept. Major version jumps can still break existing worlds — back up your
                   instance folder if unsure.
                 </p>
@@ -371,18 +391,18 @@ export function UpdatePackDialog({
                 )}
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setStep("options")}>
+                <Button variant="outline" className="flex-1" onClick={() => setStep("options")} disabled={handoff}>
                   Back
                 </Button>
-                <Button
-                  className="flex-1"
-                  disabled={!targetVersion}
-                  onClick={() =>
-                    targetVersion &&
-                    onUpdate(targetVersion, javaType, overwriteConfigs, keepIdentities)
-                  }
-                >
-                  Update
+                <Button className="flex-1" disabled={!targetVersion || handoff} onClick={confirmUpdate}>
+                  {handoff ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Starting…
+                    </>
+                  ) : (
+                    "Update in background"
+                  )}
                 </Button>
               </div>
             </>

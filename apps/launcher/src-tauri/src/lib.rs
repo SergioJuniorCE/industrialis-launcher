@@ -1,7 +1,9 @@
 mod auth;
 mod groups;
+mod migration;
 mod minecraft_files;
 mod pack;
+mod pack_cache;
 mod settings;
 
 use futures::StreamExt;
@@ -53,6 +55,8 @@ pub struct InstanceInfo {
     pub size_bytes: u64,
     pub settings: InstanceSettings,
     pub group: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,6 +140,14 @@ pub struct InstanceSettings {
     pub override_env: bool,
     #[serde(default)]
     pub env_vars: HashMap<String, String>,
+
+    /// Cached on disk so instance lists load without walking the full pack tree.
+    #[serde(default)]
+    pub cached_size_bytes: u64,
+
+    /// Filename of a custom icon stored in the instance directory (e.g. `instance-icon.png`).
+    #[serde(default)]
+    pub custom_icon: Option<String>,
 }
 
 fn default_perm_gen_mb() -> u32 {
@@ -200,6 +212,8 @@ impl Default for InstanceSettings {
             post_exit_command: String::new(),
             override_env: false,
             env_vars: HashMap::new(),
+            cached_size_bytes: 0,
+            custom_icon: None,
         }
     }
 }
@@ -774,6 +788,8 @@ struct AppState {
     http: reqwest::Client,
     running_processes: HashMap<String, Arc<Mutex<Child>>>,
     delete_cancel: HashMap<String, Arc<AtomicBool>>,
+    update_in_progress: HashSet<String>,
+    reinstall_in_progress: HashSet<String>,
 }
 
 struct RunningInstanceGuard<'a> {
@@ -881,6 +897,78 @@ fn pick_launch_account<'a>(
 
 fn settings_path(id: &str) -> PathBuf {
     instance_dir(id).join("instance.json")
+}
+
+const INSTANCE_ICON_BASENAME: &str = "instance-icon";
+const MAX_INSTANCE_ICON_BYTES: u64 = 4 * 1024 * 1024;
+
+fn allowed_icon_extensions() -> &'static [&'static str] {
+    &["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico"]
+}
+
+fn resolve_instance_icon_path(id: &str, settings: &InstanceSettings) -> Option<String> {
+    let dir = instance_dir(id);
+    if let Some(filename) = settings.custom_icon.as_ref().filter(|name| !name.is_empty()) {
+        let path = dir.join(filename);
+        if path.is_file() {
+            return Some(path.to_string_lossy().to_string());
+        }
+    }
+    if !dir.exists() {
+        return None;
+    }
+    let entries = fs::read_dir(&dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.starts_with(INSTANCE_ICON_BASENAME) {
+            continue;
+        }
+        let ext = Path::new(&name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())?;
+        if allowed_icon_extensions().contains(&ext.as_str()) {
+            return Some(entry.path().to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+fn validate_icon_source(path: &Path) -> Result<String, String> {
+    if !path.is_file() {
+        return Err("image file not found".into());
+    }
+    let meta = fs::metadata(path).map_err(|e| e.to_string())?;
+    if meta.len() > MAX_INSTANCE_ICON_BYTES {
+        return Err(format!(
+            "image must be under {} MB",
+            MAX_INSTANCE_ICON_BYTES / 1024 / 1024
+        ));
+    }
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .ok_or("image must have a file extension")?;
+    if !allowed_icon_extensions().contains(&ext.as_str()) {
+        return Err(format!(
+            "unsupported image type (.{ext}); use PNG, JPG, WebP, GIF, BMP, or ICO"
+        ));
+    }
+    Ok(ext)
+}
+
+fn clear_instance_icon_files(id: &str) {
+    let dir = instance_dir(id);
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with(INSTANCE_ICON_BASENAME) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
 }
 
 fn console_log_path(id: &str) -> PathBuf {
@@ -1115,23 +1203,57 @@ async fn get_instances() -> Result<Vec<InstanceInfo>, String> {
     entries.sort_by_key(|e| e.file_name());
     for entry in entries {
         let id = entry.file_name().to_string_lossy().to_string();
-        let inst_dir = entry.path();
         if !known_ids.contains(&id) {
             continue;
         }
-        let _ = flatten_nested_pack(&inst_dir);
-        let size = dir_size(&inst_dir);
         let settings = load_settings(&id).unwrap_or_default();
         let group = groups::get_instance_group(&dir, &id, &known_ids);
+        let icon_path = resolve_instance_icon_path(&id, &settings);
         instances.push(InstanceInfo {
             id,
             installed: true,
-            size_bytes: size,
+            size_bytes: settings.cached_size_bytes,
             settings,
             group,
+            icon_path,
         });
     }
     Ok(instances)
+}
+
+fn refresh_cached_size(id: &str) -> Result<u64, String> {
+    let inst_dir = instance_dir(id);
+    if !inst_dir.exists() {
+        return Ok(0);
+    }
+    let size = dir_size(&inst_dir);
+    if let Some(mut settings) = load_settings(id) {
+        settings.cached_size_bytes = size;
+        save_settings_file(id, &settings)?;
+    }
+    Ok(size)
+}
+
+#[tauri::command]
+async fn refresh_instance_sizes(ids: Option<Vec<String>>) -> Result<HashMap<String, u64>, String> {
+    let target_ids: Vec<String> = match ids {
+        Some(list) => list
+            .into_iter()
+            .map(|id| sanitize_name(id.trim()))
+            .collect(),
+        None => list_instance_ids()?.into_iter().collect(),
+    };
+    tokio::task::spawn_blocking(move || {
+        let mut sizes = HashMap::new();
+        for id in target_ids {
+            if let Ok(size) = refresh_cached_size(&id) {
+                sizes.insert(id, size);
+            }
+        }
+        sizes
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1477,6 +1599,7 @@ async fn download_install(
         ..Default::default()
     };
     save_settings_file(&id, &settings)?;
+    let _ = refresh_cached_size(&id);
 
     if let Some(group) = group {
         let instances_root = instances_dir();
@@ -1615,23 +1738,15 @@ async fn preview_update_mods(
     Ok(preview)
 }
 
-#[tauri::command]
-async fn update_instance(
+async fn run_update_instance(
     app: tauri::AppHandle,
-    state: State<'_, Mutex<AppState>>,
+    client: reqwest::Client,
     id: String,
     pack_version: String,
     java_type: String,
     overwrite_pack_configs: bool,
     keep_mod_identities: Vec<String>,
 ) -> Result<(), String> {
-    let id = sanitize_name(id.trim());
-    {
-        let guard = state.lock().map_err(|e| e.to_string())?;
-        if guard.running_processes.contains_key(&id) {
-            return Err("cannot update while instance is running".into());
-        }
-    }
     let known_ids = list_instance_ids()?;
     if !known_ids.contains(&id) {
         return Err("instance not found".into());
@@ -1639,8 +1754,6 @@ async fn update_instance(
 
     let inst_dir = instance_dir(&id);
     let mut settings = load_settings(&id).ok_or("no settings")?;
-    let client = state.lock().map_err(|e| e.to_string())?.http.clone();
-    drop(state);
 
     let keep_set: std::collections::HashSet<String> = keep_mod_identities.into_iter().collect();
     let preserve_dir = inst_dir.join(".update-preserve");
@@ -1657,16 +1770,16 @@ async fn update_instance(
         &app,
         "updating",
         0.02,
-        "update",
+        "update-pack",
         Some(&id),
-        Some(&format!("Starting update to {pack_version}")),
+        Some(&format!("Starting pack update to {pack_version}")),
     );
 
     pack::emit_dl_progress(
         &app,
         "updating",
         0.05,
-        "update",
+        "update-pack",
         Some(&id),
         Some("Backing up saves, settings, and overlays"),
     );
@@ -1680,7 +1793,7 @@ async fn update_instance(
             &app,
             "updating",
             0.08,
-            "update",
+            "update-pack",
             Some(&id),
             Some(&format!(
                 "Removed {removed_custom} custom mod(s) not selected to keep"
@@ -1694,7 +1807,7 @@ async fn update_instance(
         &pack_version,
         &java_type,
         &work_dir,
-        "update",
+        "update-pack",
         Some(&id),
     )
     .await?;
@@ -1707,7 +1820,7 @@ async fn update_instance(
             &app,
             "updating",
             0.65,
-            "update",
+            "update-pack",
             Some(&id),
             Some(&format!(
                 "Applying pack files and installing {new_mod_count} mod(s)"
@@ -1721,7 +1834,7 @@ async fn update_instance(
                 &app,
                 "updating",
                 0.75,
-                "update",
+                "update-pack",
                 Some(&id),
                 Some(&format!("Restored {restored} custom mod(s)")),
             );
@@ -1731,7 +1844,7 @@ async fn update_instance(
             &app,
             "updating",
             0.82,
-            "update",
+            "update-pack",
             Some(&id),
             Some("Restoring saves and player data"),
         );
@@ -1746,7 +1859,7 @@ async fn update_instance(
             &app,
             "updating",
             0.9,
-            "update",
+            "update-pack",
             Some(&id),
             Some(config_msg),
         );
@@ -1755,7 +1868,7 @@ async fn update_instance(
             &app,
             "updating",
             0.95,
-            "update",
+            "update-pack",
             Some(&id),
             Some("Applying persistent file overrides"),
         );
@@ -1768,7 +1881,7 @@ async fn update_instance(
             &app,
             "updating",
             0.0,
-            "update",
+            "update-pack",
             Some(&id),
             Some("Update failed — restoring backup"),
         );
@@ -1780,19 +1893,20 @@ async fn update_instance(
         &app,
         "updating",
         0.98,
-        "update",
+        "update-pack",
         Some(&id),
-        Some("Saving instance settings"),
+        Some("Recording new pack version"),
     );
     settings.pack_version = pack_version;
     settings.pack_java_type = java_type;
     save_settings_file(&id, &settings)?;
+    let _ = refresh_cached_size(&id);
 
     pack::emit_dl_progress(
         &app,
         "updating",
         0.99,
-        "update",
+        "update-pack",
         Some(&id),
         Some("Cleaning up temporary files"),
     );
@@ -1803,10 +1917,247 @@ async fn update_instance(
         &app,
         "done",
         1.0,
-        "update",
+        "update-pack",
         Some(&id),
         Some("Update complete"),
     );
+    Ok(())
+}
+
+async fn run_reinstall_instance(
+    app: tauri::AppHandle,
+    client: reqwest::Client,
+    id: String,
+    pack_version: String,
+    java_type: String,
+) -> Result<(), String> {
+    let known_ids = list_instance_ids()?;
+    if !known_ids.contains(&id) {
+        return Err("instance not found".into());
+    }
+
+    let inst_dir = instance_dir(&id);
+    let preserve_dir = inst_dir.join(migration::preserve_dir_name());
+
+    pack::emit_dl_progress(
+        &app,
+        "reinstalling",
+        0.05,
+        "reinstall",
+        Some(&id),
+        Some("Backing up saves, JourneyMap, and player settings"),
+    );
+    migration::backup_player_data(&inst_dir, &preserve_dir)?;
+
+    pack::emit_dl_progress(
+        &app,
+        "reinstalling",
+        0.1,
+        "reinstall",
+        Some(&id),
+        Some("Removing old pack files"),
+    );
+    migration::wipe_instance_for_reinstall(&inst_dir, &preserve_dir)?;
+    fs::create_dir_all(&inst_dir).map_err(|e| e.to_string())?;
+
+    let staging = pack::download_and_extract_to_staging(
+        &app,
+        &client,
+        &pack_version,
+        &java_type,
+        &inst_dir,
+        "reinstall",
+        Some(&id),
+    )
+    .await?;
+
+    pack::emit_dl_progress(
+        &app,
+        "reinstalling",
+        0.75,
+        "reinstall",
+        Some(&id),
+        Some("Installing fresh pack files"),
+    );
+    for entry in fs::read_dir(&staging).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let dest = inst_dir.join(entry.file_name());
+        if dest.exists() {
+            if dest.is_dir() {
+                fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
+            } else {
+                fs::remove_file(&dest).map_err(|e| e.to_string())?;
+            }
+        }
+        if entry.path().is_dir() {
+            pack::copy_tree_merge(&entry.path(), &dest)?;
+        } else {
+            pack::copy_file_create_parent(&entry.path(), &dest)?;
+        }
+    }
+    fs::remove_dir_all(&staging).map_err(|e| e.to_string())?;
+
+    flatten_nested_pack(&inst_dir)?;
+    prepare_instance_configs(&inst_dir, true)?;
+
+    pack::emit_dl_progress(
+        &app,
+        "reinstalling",
+        0.88,
+        "reinstall",
+        Some(&id),
+        Some("Restoring saves and player data"),
+    );
+    migration::restore_player_data(&inst_dir, &preserve_dir)?;
+
+    if let Some(mut settings) = load_settings(&id) {
+        settings.pack_version = pack_version;
+        settings.pack_java_type = java_type;
+        save_settings_file(&id, &settings)?;
+    }
+
+    pack::apply_persistent_custom_mods(&inst_dir)?;
+    minecraft_files::apply_persistent_minecraft(&inst_dir)?;
+    let _ = refresh_cached_size(&id);
+
+    fs::remove_dir_all(&preserve_dir).ok();
+
+    pack::emit_dl_progress(
+        &app,
+        "done",
+        1.0,
+        "reinstall",
+        Some(&id),
+        Some("Clean reinstall complete"),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+async fn update_instance(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+    pack_version: String,
+    java_type: String,
+    overwrite_pack_configs: bool,
+    keep_mod_identities: Vec<String>,
+) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    let client = {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        if guard.running_processes.contains_key(&id) {
+            return Err("cannot update while instance is running".into());
+        }
+        if guard.update_in_progress.contains(&id) {
+            return Err("update already in progress for this instance".into());
+        }
+        if guard.reinstall_in_progress.contains(&id) {
+            return Err("reinstall already in progress for this instance".into());
+        }
+        guard.update_in_progress.insert(id.clone());
+        guard.http.clone()
+    };
+
+    let known_ids = list_instance_ids()?;
+    if !known_ids.contains(&id) {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        guard.update_in_progress.remove(&id);
+        return Err("instance not found".into());
+    }
+
+    let app_bg = app.clone();
+    let id_bg = id.clone();
+    tokio::spawn(async move {
+        let result = run_update_instance(
+            app_bg.clone(),
+            client,
+            id_bg.clone(),
+            pack_version,
+            java_type,
+            overwrite_pack_configs,
+            keep_mod_identities,
+        )
+        .await;
+
+        if let Ok(mut guard) = app_bg.state::<Mutex<AppState>>().lock() {
+            guard.update_in_progress.remove(&id_bg);
+        }
+
+        if let Err(e) = result {
+            pack::emit_dl_progress(
+                &app_bg,
+                "failed",
+                0.0,
+                "update-pack",
+                Some(&id_bg),
+                Some(&format!("Error: {e}")),
+            );
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn reinstall_instance(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+    pack_version: String,
+    java_type: String,
+) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    let client = {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        if guard.running_processes.contains_key(&id) {
+            return Err("cannot reinstall while instance is running".into());
+        }
+        if guard.update_in_progress.contains(&id) {
+            return Err("pack update already in progress for this instance".into());
+        }
+        if guard.reinstall_in_progress.contains(&id) {
+            return Err("clean reinstall already in progress for this instance".into());
+        }
+        guard.reinstall_in_progress.insert(id.clone());
+        guard.http.clone()
+    };
+
+    let known_ids = list_instance_ids()?;
+    if !known_ids.contains(&id) {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        guard.reinstall_in_progress.remove(&id);
+        return Err("instance not found".into());
+    }
+
+    let app_bg = app.clone();
+    let id_bg = id.clone();
+    tokio::spawn(async move {
+        let result = run_reinstall_instance(
+            app_bg.clone(),
+            client,
+            id_bg.clone(),
+            pack_version,
+            java_type,
+        )
+        .await;
+
+        if let Ok(mut guard) = app_bg.state::<Mutex<AppState>>().lock() {
+            guard.reinstall_in_progress.remove(&id_bg);
+        }
+
+        if let Err(e) = result {
+            pack::emit_dl_progress(
+                &app_bg,
+                "failed",
+                0.0,
+                "reinstall",
+                Some(&id_bg),
+                Some(&format!("Error: {e}")),
+            );
+        }
+    });
+
     Ok(())
 }
 
@@ -1858,6 +2209,43 @@ fn browse_custom_mod() -> Result<Option<String>, String> {
         .add_filter("Minecraft mods", &["jar", "zip"])
         .pick_file()
         .map(|path| path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn browse_instance_icon_file() -> Result<Option<String>, String> {
+    Ok(rfd::FileDialog::new()
+        .add_filter(
+            "Images",
+            &["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico"],
+        )
+        .pick_file()
+        .map(|path| path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn set_instance_icon(id: String, source_path: String) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    let source = PathBuf::from(source_path.trim());
+    let ext = validate_icon_source(&source)?;
+    let dest_name = format!("{INSTANCE_ICON_BASENAME}.{ext}");
+    let dest = instance_dir(&id).join(&dest_name);
+    fs::create_dir_all(instance_dir(&id)).map_err(|e| e.to_string())?;
+    clear_instance_icon_files(&id);
+    fs::copy(&source, &dest).map_err(|e| format!("failed to copy icon: {e}"))?;
+    let mut settings = load_settings(&id).unwrap_or_default();
+    settings.custom_icon = Some(dest_name);
+    save_settings_file(&id, &settings)
+}
+
+#[tauri::command]
+fn clear_instance_icon(id: String) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    clear_instance_icon_files(&id);
+    if let Some(mut settings) = load_settings(&id) {
+        settings.custom_icon = None;
+        save_settings_file(&id, &settings)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -2456,6 +2844,12 @@ async fn launch_instance(
         if guard.running_processes.contains_key(&id) {
             return Err("Instance is already running".into());
         }
+        if guard.update_in_progress.contains(&id) {
+            return Err("pack update in progress for this instance".into());
+        }
+        if guard.reinstall_in_progress.contains(&id) {
+            return Err("clean reinstall in progress for this instance".into());
+        }
         guard.http.clone()
     };
 
@@ -2686,7 +3080,7 @@ async fn launch_instance(
             .running_processes
             .insert(id.clone(), child_handle.clone());
     }
-    let _running_guard = RunningInstanceGuard {
+    let running_guard = RunningInstanceGuard {
         state: &state,
         id: id.clone(),
     };
@@ -2701,6 +3095,15 @@ async fn launch_instance(
 
     record_play_time(&id, play_start.elapsed().as_secs());
 
+    // Release the running slot as soon as the game process exits so Stop/relaunch
+    // work immediately, even while post-exit shell commands are still running.
+    drop(running_guard);
+    emit(
+        &app,
+        "instance-stopped",
+        &serde_json::json!({ "id": id, "exit_code": exit_code }),
+    );
+
     if settings.override_commands {
         let post = substitute_command_vars(settings.post_exit_command.trim(), &command_vars);
         if !post.is_empty() {
@@ -2713,12 +3116,6 @@ async fn launch_instance(
             emit_launch_log(&app, &id, "system", "Post-exit command finished");
         }
     }
-
-    emit(
-        &app,
-        "instance-stopped",
-        &serde_json::json!({ "id": id, "exit_code": exit_code }),
-    );
 
     if exit_code != 0 {
         return Err(format!("game exited with code {exit_code}"));
@@ -2735,15 +3132,17 @@ fn exit_launcher(app: tauri::AppHandle) {
 fn kill_instance(state: State<'_, Mutex<AppState>>, id: String) -> Result<(), String> {
     let child_arc = {
         let guard = state.lock().map_err(|e| e.to_string())?;
-        guard
-            .running_processes
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| "Instance is not running".to_string())?
+        guard.running_processes.get(&id).cloned()
+    };
+    let Some(child_arc) = child_arc else {
+        return Ok(());
     };
     let mut child = child_arc
         .lock()
         .map_err(|e| format!("process lock failed: {e}"))?;
+    if child.try_wait().ok().flatten().is_some() {
+        return Ok(());
+    }
     child
         .kill()
         .map_err(|e| format!("failed to stop process: {e}"))?;
@@ -3113,6 +3512,7 @@ pub fn run() {
             use tauri_plugin_deep_link::DeepLinkExt;
 
             migrate_legacy_instance_usernames();
+            let _ = pack_cache::evict_expired_pack_cache();
 
             #[cfg(any(windows, target_os = "linux"))]
             {
@@ -3133,10 +3533,13 @@ pub fn run() {
             http: reqwest::Client::new(),
             running_processes: HashMap::new(),
             delete_cancel: HashMap::new(),
+            update_in_progress: HashSet::new(),
+            reinstall_in_progress: HashSet::new(),
         }))
         .invoke_handler(tauri::generate_handler![
             get_versions,
             get_instances,
+            refresh_instance_sizes,
             get_instance_groups,
             set_instance_group,
             rename_group,
@@ -3150,6 +3553,7 @@ pub fn run() {
             download_install,
             preview_update_mods,
             update_instance,
+            reinstall_instance,
             list_minecraft_entries,
             read_minecraft_file,
             write_minecraft_file,
@@ -3157,6 +3561,9 @@ pub fn run() {
             list_persistent_files,
             list_custom_mods,
             browse_custom_mod,
+            browse_instance_icon_file,
+            set_instance_icon,
+            clear_instance_icon,
             add_custom_mod,
             remove_custom_mod,
             detect_java,

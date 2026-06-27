@@ -239,7 +239,7 @@ pub async fn download_pack_to_file(
     id: Option<&str>,
 ) -> Result<(), String> {
     let log = match operation {
-        "update" => Some("Downloading pack archive…"),
+        "update-pack" => Some("Downloading pack archive…"),
         "preview" => Some("Downloading target pack for mod comparison…"),
         "install" => Some("Downloading pack archive…"),
         _ => None,
@@ -348,7 +348,7 @@ pub fn extract_pack_zip(
     id: Option<&str>,
 ) -> Result<(), String> {
     let log = match operation {
-        "update" => Some("Extracting pack archive…"),
+        "update-pack" => Some("Extracting pack archive…"),
         "preview" => Some("Extracting pack archive…"),
         _ => None,
     };
@@ -416,9 +416,16 @@ pub async fn download_and_extract_staging_silent(
     let dl_url = resolve_pack_download_url(v, java_type);
 
     fs::create_dir_all(staging_parent).map_err(|e| e.to_string())?;
-    let zip_path = staging_parent.join("pack.zip");
     let staging = staging_parent.join("staging");
 
+    if let Some(cache_pack) =
+        crate::pack_cache::lookup_pack_cache(pack_version, java_type, &dl_url)?
+    {
+        crate::pack_cache::copy_cached_pack_to_staging(&cache_pack, &staging)?;
+        return Ok(staging);
+    }
+
+    let zip_path = staging_parent.join("pack.zip");
     if staging.exists() {
         fs::remove_dir_all(&staging).map_err(|e| e.to_string())?;
     }
@@ -446,6 +453,7 @@ pub async fn download_and_extract_staging_silent(
 
     flatten_nested_pack(&staging)?;
     fs::remove_file(&zip_path).ok();
+    crate::pack_cache::store_pack_cache(pack_version, java_type, &dl_url, &staging)?;
     Ok(staging)
 }
 
@@ -465,9 +473,46 @@ pub async fn download_and_extract_to_staging(
     let dl_url = resolve_pack_download_url(v, java_type);
 
     fs::create_dir_all(staging_parent).map_err(|e| e.to_string())?;
-    let zip_path = staging_parent.join("pack.zip");
     let staging = staging_parent.join("staging");
 
+    if let Some(cache_pack) =
+        crate::pack_cache::lookup_pack_cache(pack_version, java_type, &dl_url)?
+    {
+        let cache_log = format!(
+            "Using cached pack {pack_version} ({java_type}) — skipping download"
+        );
+        emit_dl_progress(app, "cached", 1.0, operation, id, Some(&cache_log));
+        emit_dl_progress(
+            app,
+            "extracting",
+            0.0,
+            operation,
+            id,
+            Some("Copying cached pack files…"),
+        );
+        crate::pack_cache::copy_cached_pack_to_staging(&cache_pack, &staging)?;
+        emit_dl_progress(
+            app,
+            "extracting",
+            1.0,
+            operation,
+            id,
+            Some("Cached pack ready"),
+        );
+        if operation == "update-pack" {
+            emit_dl_progress(
+                app,
+                "updating",
+                0.55,
+                operation,
+                id,
+                Some("Pack ready from cache"),
+            );
+        }
+        return Ok(staging);
+    }
+
+    let zip_path = staging_parent.join("pack.zip");
     if staging.exists() {
         fs::remove_dir_all(&staging).map_err(|e| e.to_string())?;
     }
@@ -476,7 +521,8 @@ pub async fn download_and_extract_to_staging(
     download_pack_to_file(app, client, &dl_url, &zip_path, operation, id).await?;
     extract_pack_zip(app, &zip_path, &staging, operation, id)?;
     flatten_nested_pack(&staging)?;
-    if operation == "update" {
+    crate::pack_cache::store_pack_cache(pack_version, java_type, &dl_url, &staging)?;
+    if operation == "update-pack" {
         emit_dl_progress(
             app,
             "updating",

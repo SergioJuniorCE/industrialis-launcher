@@ -112,7 +112,13 @@ export function ProcessCard({
   );
 }
 
-function ProcessLogPanel({ proc }: { proc: BackgroundProcess }) {
+function ProcessLogPanel({
+  proc,
+  onViewInstance,
+}: {
+  proc: BackgroundProcess;
+  onViewInstance?: (instanceId: string) => void;
+}) {
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -150,6 +156,17 @@ function ProcessLogPanel({ proc }: { proc: BackgroundProcess }) {
             <p className="text-xs text-muted-foreground">{formatDownloadProgress(proc)}</p>
           </div>
         )}
+        {proc.status === "done" &&
+          (proc.operation === "update-pack" || proc.operation === "reinstall") &&
+          onViewInstance && (
+          <Button
+            size="sm"
+            className="h-7"
+            onClick={() => onViewInstance(proc.id)}
+          >
+            View instance
+          </Button>
+        )}
       </div>
 
       <div
@@ -179,12 +196,14 @@ export function ProcessesTab({
   onSelect,
   onDismiss,
   onCancelDelete,
+  onViewInstance,
 }: {
   processes: Map<string, BackgroundProcess>;
   selectedKey: string | null;
   onSelect: (key: string) => void;
   onDismiss: (key: string) => void;
   onCancelDelete?: (id: string) => void;
+  onViewInstance?: (instanceId: string) => void;
 }) {
   const items = sortedProcesses(processes);
   const running = runningProcessCount(processes);
@@ -207,7 +226,7 @@ export function ProcessesTab({
           <div className="border-b border-border">
             {items.length === 0 ? (
               <p className="text-xs text-muted-foreground p-3">
-                Install, update, or delete an instance to see progress here.
+                Install a pack, update a pack, or delete an instance to see progress here.
               </p>
             ) : (
               items.map((proc) => (
@@ -227,7 +246,7 @@ export function ProcessesTab({
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {selected ? (
-          <ProcessLogPanel proc={selected} />
+          <ProcessLogPanel proc={selected} onViewInstance={onViewInstance} />
         ) : (
           <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground p-4">
             {items.length > 0

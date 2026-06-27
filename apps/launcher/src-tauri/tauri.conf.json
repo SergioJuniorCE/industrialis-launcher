@@ -20,7 +20,14 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/industrialis-launcher/instances/**/*",
+          "$DATA/industrialis-launcher/instances/**/*"
+        ]
+      }
     }
   },
   "bundle": {

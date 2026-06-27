@@ -1,6 +1,13 @@
-export type ProcessOperation = "install" | "update" | "delete";
+export type ProcessOperation = "install" | "update-pack" | "delete" | "reinstall";
 
 export type ProcessStatus = "running" | "done" | "failed";
+
+export const BACKGROUND_PROCESS_OPERATIONS: readonly ProcessOperation[] = [
+  "install",
+  "update-pack",
+  "delete",
+  "reinstall",
+] as const;
 
 export interface BackgroundProcess {
   key: string;
@@ -22,11 +29,25 @@ export interface DlProgressEvent {
   pct: number;
   id?: string;
   name?: string;
-  operation?: ProcessOperation | "preview";
+  operation?: ProcessOperation | "preview" | "update";
   log_line?: string;
   speed_mbps?: number;
   downloaded_mb?: number;
   total_mb?: number;
+}
+
+export function isBackgroundProcessOperation(
+  operation: string | undefined,
+): operation is ProcessOperation {
+  return BACKGROUND_PROCESS_OPERATIONS.includes(operation as ProcessOperation);
+}
+
+export function normalizeProcessOperation(
+  operation: string | undefined,
+): ProcessOperation | null {
+  if (operation === "install" || operation === "delete" || operation === "reinstall") return operation;
+  if (operation === "update-pack" || operation === "update") return "update-pack";
+  return null;
 }
 
 export function formatDownloadSpeed(mbps?: number): string | null {
@@ -63,23 +84,26 @@ export function getInstanceProcess(
 }
 
 export function inferOperation(event: DlProgressEvent): ProcessOperation | null {
-  if (event.operation === "install" || event.operation === "update" || event.operation === "delete") {
-    return event.operation;
-  }
-  if (event.stage === "deleting") return "delete";
-  if (event.stage === "updating") return "update";
   if (event.operation === "preview") return null;
-  return "install";
+  const normalized = normalizeProcessOperation(event.operation);
+  if (normalized) return normalized;
+  if (event.stage === "deleting") return "delete";
+  if (event.stage === "updating") return "update-pack";
+  if (event.stage === "reinstalling") return "reinstall";
+  if (event.stage === "failed") return "update-pack";
+  return null;
 }
 
 export function operationLabel(operation: ProcessOperation): string {
   switch (operation) {
     case "install":
       return "Installing";
-    case "update":
-      return "Updating";
+    case "update-pack":
+      return "Updating pack";
     case "delete":
       return "Deleting";
+    case "reinstall":
+      return "Clean reinstall";
   }
 }
 
@@ -87,14 +111,20 @@ export function stageLabel(stage: string): string {
   switch (stage) {
     case "downloading":
       return "Downloading";
+    case "cached":
+      return "Using cache";
     case "extracting":
       return "Extracting";
     case "updating":
-      return "Updating";
+      return "Updating pack";
     case "deleting":
       return "Deleting";
+    case "reinstalling":
+      return "Reinstalling";
     case "done":
       return "Complete";
+    case "failed":
+      return "Failed";
     default:
       return stage;
   }
@@ -111,7 +141,14 @@ export function createProcess(
     id,
     name,
     operation,
-    stage: operation === "delete" ? "deleting" : operation === "update" ? "updating" : "downloading",
+    stage:
+      operation === "delete"
+        ? "deleting"
+        : operation === "update-pack"
+          ? "updating"
+          : operation === "reinstall"
+            ? "reinstalling"
+            : "downloading",
     pct: 0,
     logs: initialLog ? [initialLog] : [],
     status: "running",
@@ -140,7 +177,7 @@ export function applyDlProgressEvent(
 ): Map<string, BackgroundProcess> {
   const id = event.id;
   const operation = resolveOperation(processes, event);
-  if (!operation || !id) return processes;
+  if (!operation || !id || !isBackgroundProcessOperation(operation)) return processes;
 
   const key = processKey(operation, id);
   const next = new Map(processes);
@@ -153,6 +190,19 @@ export function applyDlProgressEvent(
       stage: "done",
       pct: 1,
       status: "done",
+    });
+    return next;
+  }
+
+  if (event.stage === "failed") {
+    const logs = event.log_line ? [...current.logs, event.log_line] : current.logs;
+    next.set(key, {
+      ...current,
+      name: event.name ?? current.name,
+      stage: "failed",
+      pct: current.pct,
+      logs,
+      status: "failed",
     });
     return next;
   }
@@ -210,7 +260,13 @@ export function dismissProcess(
 
 export function isInstanceBusy(processes: Map<string, BackgroundProcess>, id: string): boolean {
   for (const proc of processes.values()) {
-    if (proc.id === id && proc.status === "running") return true;
+    if (
+      proc.id === id &&
+      proc.status === "running" &&
+      isBackgroundProcessOperation(proc.operation)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -218,16 +274,20 @@ export function isInstanceBusy(processes: Map<string, BackgroundProcess>, id: st
 export function runningProcessCount(processes: Map<string, BackgroundProcess>): number {
   let count = 0;
   for (const proc of processes.values()) {
-    if (proc.status === "running") count += 1;
+    if (proc.status === "running" && isBackgroundProcessOperation(proc.operation)) {
+      count += 1;
+    }
   }
   return count;
 }
 
 export function sortedProcesses(processes: Map<string, BackgroundProcess>): BackgroundProcess[] {
-  return [...processes.values()].sort((a, b) => {
-    const statusOrder = (s: ProcessStatus) => (s === "running" ? 0 : 1);
-    const diff = statusOrder(a.status) - statusOrder(b.status);
-    if (diff !== 0) return diff;
-    return b.startedAt - a.startedAt;
-  });
+  return [...processes.values()]
+    .filter((proc) => isBackgroundProcessOperation(proc.operation))
+    .sort((a, b) => {
+      const statusOrder = (s: ProcessStatus) => (s === "running" ? 0 : 1);
+      const diff = statusOrder(a.status) - statusOrder(b.status);
+      if (diff !== 0) return diff;
+      return b.startedAt - a.startedAt;
+    });
 }
