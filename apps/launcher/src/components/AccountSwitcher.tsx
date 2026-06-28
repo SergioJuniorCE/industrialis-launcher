@@ -10,6 +10,7 @@ export interface LauncherAccount {
   account_type: string;
   skin_png_base64?: string;
   owns_minecraft?: boolean;
+  can_play_minecraft?: boolean;
 }
 
 function accountLabel(account: LauncherAccount): string {
