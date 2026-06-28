@@ -171,6 +171,8 @@ pub struct AccountInfo {
     pub skin_png_base64: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owns_minecraft: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub can_play_minecraft: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -360,6 +362,10 @@ pub fn account_to_info(account: &AccountData) -> AccountInfo {
             .minecraft_entitlement
             .as_ref()
             .map(|e| e.owns_minecraft),
+        can_play_minecraft: account
+            .minecraft_entitlement
+            .as_ref()
+            .map(|e| e.can_play_minecraft),
     }
 }
 
@@ -1079,6 +1085,31 @@ async fn minecraft_launcher_login(
     Err(format_minecraft_login_error(&launcher))
 }
 
+/// Parses entitlement items from the Mojang API license check.
+/// See https://minecraft.wiki/w/Mojang_API#Check_if_the_account_owns_Minecraft
+fn parse_entitlement_items(items: &[serde_json::Value]) -> MinecraftEntitlement {
+    let mut owns = false;
+    let mut can_play = false;
+
+    for item in items {
+        let name = item["name"].as_str().unwrap_or("");
+        if name == "product_minecraft" || name == "game_minecraft" {
+            owns = true;
+        }
+        if name == "product_minecraft"
+            || name == "game_minecraft"
+            || name == "product_game_pass_pc"
+        {
+            can_play = true;
+        }
+    }
+
+    MinecraftEntitlement {
+        owns_minecraft: owns,
+        can_play_minecraft: can_play,
+    }
+}
+
 async fn check_entitlements(
     client: &Client,
     mc_token: &str,
@@ -1090,34 +1121,18 @@ async fn check_entitlements(
         .await
         .map_err(|e| e.to_string())?;
 
+    if !resp.status().is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("entitlements check failed: {body}"));
+    }
+
     let body: serde_json::Value = resp
         .json()
         .await
         .map_err(|e| format!("entitlements: {e}"))?;
 
-    let items = body["items"].as_array();
-    let mut owns = false;
-    let mut can_play = false;
-
-    if let Some(items) = items {
-        for item in items {
-            let name = item["name"].as_str().unwrap_or("");
-            if name == "product_minecraft" || name == "game_minecraft" {
-                owns = true;
-            }
-            if name == "product_minecraft"
-                || name == "game_minecraft"
-                || name == "product_game_pass_pc"
-            {
-                can_play = true;
-            }
-        }
-    }
-
-    Ok(MinecraftEntitlement {
-        owns_minecraft: owns,
-        can_play_minecraft: can_play,
-    })
+    let items = body["items"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+    Ok(parse_entitlement_items(items))
 }
 
 async fn fetch_profile(
@@ -1254,6 +1269,40 @@ mod tests {
             .collect();
         assert_eq!(accounts[0].profile_name(), "Steve");
         assert_eq!(accounts[0].access_token(), "tok");
+    }
+
+    #[test]
+    fn parse_entitlement_items_detects_ownership() {
+        let items = vec![
+            serde_json::json!({ "name": "product_minecraft" }),
+            serde_json::json!({ "name": "other_product" }),
+        ];
+        let ent = parse_entitlement_items(&items);
+        assert!(ent.owns_minecraft);
+        assert!(ent.can_play_minecraft);
+    }
+
+    #[test]
+    fn parse_entitlement_items_detects_game_pass_without_ownership() {
+        let items = vec![serde_json::json!({ "name": "product_game_pass_pc" })];
+        let ent = parse_entitlement_items(&items);
+        assert!(!ent.owns_minecraft);
+        assert!(ent.can_play_minecraft);
+    }
+
+    #[test]
+    fn parse_entitlement_items_empty_means_no_license() {
+        let ent = parse_entitlement_items(&[]);
+        assert!(!ent.owns_minecraft);
+        assert!(!ent.can_play_minecraft);
+    }
+
+    #[test]
+    fn parse_entitlement_items_game_minecraft_counts_as_owned() {
+        let items = vec![serde_json::json!({ "name": "game_minecraft" })];
+        let ent = parse_entitlement_items(&items);
+        assert!(ent.owns_minecraft);
+        assert!(ent.can_play_minecraft);
     }
 
     #[test]
