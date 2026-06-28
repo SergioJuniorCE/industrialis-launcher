@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { ImagePlus, ImageOff, Loader2 } from "lucide-react";
+import { FolderOpen, ImagePlus, ImageOff, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "./ui/context-menu";
 
@@ -24,6 +25,7 @@ export function InstanceAvatar({
   loading = false,
   onIconChanged,
   onError,
+  onOpenFolder,
   className,
 }: {
   instanceId: string;
@@ -33,6 +35,7 @@ export function InstanceAvatar({
   loading?: boolean;
   onIconChanged?: () => void;
   onError?: (message: string) => void;
+  onOpenFolder?: () => void;
   className?: string;
 }) {
   const [busy, setBusy] = useState(false);
@@ -86,6 +89,15 @@ export function InstanceAvatar({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
+        {onOpenFolder ? (
+          <>
+            <ContextMenuItem onSelect={onOpenFolder}>
+              <FolderOpen />
+              Open folder
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
         <ContextMenuItem onSelect={() => void uploadIcon()} disabled={showSpinner}>
           <ImagePlus />
           Upload custom icon

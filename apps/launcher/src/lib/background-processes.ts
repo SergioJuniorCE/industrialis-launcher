@@ -1,4 +1,4 @@
-export type ProcessOperation = "install" | "update-pack" | "delete" | "reinstall";
+export type ProcessOperation = "install" | "update-pack" | "delete" | "reinstall" | "copy";
 
 export type ProcessStatus = "running" | "done" | "failed";
 
@@ -7,6 +7,7 @@ export const BACKGROUND_PROCESS_OPERATIONS: readonly ProcessOperation[] = [
   "update-pack",
   "delete",
   "reinstall",
+  "copy",
 ] as const;
 
 export interface BackgroundProcess {
@@ -45,7 +46,9 @@ export function isBackgroundProcessOperation(
 export function normalizeProcessOperation(
   operation: string | undefined,
 ): ProcessOperation | null {
-  if (operation === "install" || operation === "delete" || operation === "reinstall") return operation;
+  if (operation === "install" || operation === "delete" || operation === "reinstall" || operation === "copy") {
+    return operation;
+  }
   if (operation === "update-pack" || operation === "update") return "update-pack";
   return null;
 }
@@ -90,6 +93,7 @@ export function inferOperation(event: DlProgressEvent): ProcessOperation | null 
   if (event.stage === "deleting") return "delete";
   if (event.stage === "updating") return "update-pack";
   if (event.stage === "reinstalling") return "reinstall";
+  if (event.stage === "copying") return "copy";
   if (event.stage === "failed") return "update-pack";
   return null;
 }
@@ -104,6 +108,8 @@ export function operationLabel(operation: ProcessOperation): string {
       return "Deleting";
     case "reinstall":
       return "Clean reinstall";
+    case "copy":
+      return "Copying instance";
   }
 }
 
@@ -121,6 +127,8 @@ export function stageLabel(stage: string): string {
       return "Deleting";
     case "reinstalling":
       return "Reinstalling";
+    case "copying":
+      return "Copying";
     case "done":
       return "Complete";
     case "failed":
@@ -148,7 +156,9 @@ export function createProcess(
           ? "updating"
           : operation === "reinstall"
             ? "reinstalling"
-            : "downloading",
+            : operation === "copy"
+              ? "copying"
+              : "downloading",
     pct: 0,
     logs: initialLog ? [initialLog] : [],
     status: "running",

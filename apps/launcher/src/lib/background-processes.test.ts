@@ -82,6 +82,23 @@ describe("background process operations", () => {
     expect(isInstanceBusy(withReinstall, "inst-1")).toBe(true);
   });
 
+  it("tracks instance copies as background processes", () => {
+    const withCopy = applyDlProgressEvent(new Map(), {
+      stage: "copying",
+      pct: 0.4,
+      operation: "copy",
+      id: "inst-copy",
+      name: "GTNH Copy",
+    });
+
+    expect(operationLabel("copy")).toBe("Copying instance");
+    expect(inferOperation({ stage: "copying", pct: 0.4, operation: "copy", id: "inst-copy" })).toBe(
+      "copy",
+    );
+    expect(runningProcessCount(withCopy)).toBe(1);
+    expect(isInstanceBusy(withCopy, "inst-copy")).toBe(true);
+  });
+
   it("does not create a background process from unrelated progress events", () => {
     const processes = new Map();
 

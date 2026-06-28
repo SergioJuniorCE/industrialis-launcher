@@ -790,6 +790,7 @@ struct AppState {
     delete_cancel: HashMap<String, Arc<AtomicBool>>,
     update_in_progress: HashSet<String>,
     reinstall_in_progress: HashSet<String>,
+    copy_in_progress: HashSet<String>,
 }
 
 struct RunningInstanceGuard<'a> {
@@ -1520,6 +1521,175 @@ fn cancel_delete_instance(state: State<'_, Mutex<AppState>>, id: String) -> Resu
     Ok(())
 }
 
+fn collect_copy_files(base: &Path, path: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    if path.is_dir() {
+        for entry in fs::read_dir(path).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            collect_copy_files(base, &entry.path(), out)?;
+        }
+    } else {
+        out.push(
+            path.strip_prefix(base)
+                .map_err(|_| "failed to resolve copy path".to_string())?
+                .to_path_buf(),
+        );
+    }
+    Ok(())
+}
+
+fn emit_copy_progress(app: &tauri::AppHandle, id: &str, name: &str, pct: f64) {
+    emit(
+        app,
+        "dl-progress",
+        &serde_json::json!({
+            "stage": "copying",
+            "operation": "copy",
+            "pct": pct,
+            "id": id,
+            "name": name,
+        }),
+    );
+}
+
+fn run_copy_instance(
+    app: &tauri::AppHandle,
+    source_id: &str,
+    new_id: &str,
+    new_name: &str,
+) -> Result<(), String> {
+    let src_dir = instance_dir(source_id);
+    if !is_valid_instance_dir(&src_dir) {
+        return Err("source instance not found".into());
+    }
+
+    let dest_dir = instance_dir(new_id);
+    if dest_dir.exists() {
+        return Err("an instance with that id already exists".into());
+    }
+
+    let mut files = Vec::new();
+    collect_copy_files(&src_dir, &src_dir, &mut files)?;
+
+    let total = files.len().max(1);
+    let mut last_emitted_pct = -1i32;
+    emit_copy_progress(app, new_id, new_name, 0.0);
+
+    fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+
+    for (i, rel) in files.iter().enumerate() {
+        let src = src_dir.join(rel);
+        let dest = dest_dir.join(rel);
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        fs::copy(&src, &dest).map_err(|e| {
+            format!(
+                "failed to copy {} -> {}: {e}",
+                src.display(),
+                dest.display()
+            )
+        })?;
+
+        let pct = (i + 1) as f64 / total as f64;
+        let pct_ui = (pct * 100.0) as i32;
+        if i + 1 == total || pct_ui / 5 > last_emitted_pct / 5 {
+            emit_copy_progress(app, new_id, new_name, pct);
+            last_emitted_pct = pct_ui;
+        }
+    }
+
+    let mut settings = load_settings(new_id).ok_or("copied instance settings missing")?;
+    settings.name = new_name.to_string();
+    settings.cached_size_bytes = dir_size(&dest_dir);
+    save_settings_file(new_id, &settings)?;
+
+    let instances_root = instances_dir();
+    let known_ids = list_instance_ids()?;
+    let source_group = groups::get_instance_group(&instances_root, source_id, &known_ids);
+    if !source_group.is_empty() {
+        groups::set_instance_group(&instances_root, new_id, &source_group, &known_ids)?;
+    }
+
+    emit(
+        app,
+        "dl-progress",
+        &serde_json::json!({
+            "stage": "done",
+            "operation": "copy",
+            "pct": 1.0,
+            "id": new_id,
+            "name": new_name,
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+async fn copy_instance(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    source_id: String,
+    new_id: String,
+    new_name: String,
+) -> Result<(), String> {
+    let source_id = sanitize_name(source_id.trim());
+    let new_id = validate_instance_id(&new_id)?;
+    let new_name = new_name.trim().to_string();
+    if new_name.is_empty() {
+        return Err("instance name cannot be empty".into());
+    }
+    if source_id == new_id {
+        return Err("new instance id must differ from the source".into());
+    }
+
+    {
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        if guard.running_processes.contains_key(&source_id) {
+            return Err("cannot copy while instance is running".into());
+        }
+        if guard.copy_in_progress.contains(&source_id) {
+            return Err("copy already in progress for this instance".into());
+        }
+    }
+
+    let known_ids = list_instance_ids()?;
+    if !known_ids.contains(&source_id) {
+        return Err("source instance not found".into());
+    }
+    if known_ids.contains(&new_id) {
+        return Err("an instance with that id already exists".into());
+    }
+
+    {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        guard.copy_in_progress.insert(source_id.clone());
+    }
+
+    let app_bg = app.clone();
+    let source_bg = source_id.clone();
+    let new_id_bg = new_id.clone();
+    let new_name_bg = new_name.clone();
+    let copy_result = tokio::task::spawn_blocking(move || {
+        run_copy_instance(&app_bg, &source_bg, &new_id_bg, &new_name_bg)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        guard.copy_in_progress.remove(&source_id);
+    }
+
+    if copy_result.is_err() {
+        let partial = instance_dir(&new_id);
+        if partial.exists() {
+            let _ = fs::remove_dir_all(&partial);
+        }
+    }
+
+    copy_result
+}
+
 #[tauri::command]
 fn open_instance_folder(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let inst_dir = instance_dir(&id);
@@ -1744,7 +1914,6 @@ async fn run_update_instance(
     id: String,
     pack_version: String,
     java_type: String,
-    overwrite_pack_configs: bool,
     keep_mod_identities: Vec<String>,
 ) -> Result<(), String> {
     let known_ids = list_instance_ids()?;
@@ -1753,18 +1922,8 @@ async fn run_update_instance(
     }
 
     let inst_dir = instance_dir(&id);
-    let mut settings = load_settings(&id).ok_or("no settings")?;
-
-    let keep_set: std::collections::HashSet<String> = keep_mod_identities.into_iter().collect();
-    let preserve_dir = inst_dir.join(".update-preserve");
-    let work_dir = inst_dir.join(".update-work");
-
-    if preserve_dir.exists() {
-        fs::remove_dir_all(&preserve_dir).map_err(|e| e.to_string())?;
-    }
-    if work_dir.exists() {
-        fs::remove_dir_all(&work_dir).map_err(|e| e.to_string())?;
-    }
+    let preserve_dir = inst_dir.join(migration::preserve_dir_name());
+    let keep_set: HashSet<String> = keep_mod_identities.into_iter().collect();
 
     pack::emit_dl_progress(
         &app,
@@ -1775,24 +1934,13 @@ async fn run_update_instance(
         Some(&format!("Starting pack update to {pack_version}")),
     );
 
-    pack::emit_dl_progress(
-        &app,
-        "updating",
-        0.05,
-        "update-pack",
-        Some(&id),
-        Some("Backing up saves, settings, and overlays"),
-    );
-    pack::backup_paths_for_update(&inst_dir, &preserve_dir)?;
-
-    let inst_mods = inst_dir.join(".minecraft").join("mods");
     let persistent_mods = pack::persistent_custom_mods_dir(&inst_dir);
     let removed_custom = pack::remove_custom_mods_except(&persistent_mods, &keep_set)?;
     if removed_custom > 0 {
         pack::emit_dl_progress(
             &app,
             "updating",
-            0.08,
+            0.05,
             "update-pack",
             Some(&id),
             Some(&format!(
@@ -1801,116 +1949,72 @@ async fn run_update_instance(
         );
     }
 
+    pack::emit_dl_progress(
+        &app,
+        "updating",
+        0.08,
+        "update-pack",
+        Some(&id),
+        Some("Backing up saves, JourneyMap, and player settings"),
+    );
+    migration::backup_player_data(&inst_dir, &preserve_dir)?;
+
+    pack::emit_dl_progress(
+        &app,
+        "updating",
+        0.12,
+        "update-pack",
+        Some(&id),
+        Some("Removing old pack files"),
+    );
+    migration::wipe_instance_for_reinstall(&inst_dir, &preserve_dir)?;
+    fs::create_dir_all(&inst_dir).map_err(|e| e.to_string())?;
+
     let staging = pack::download_and_extract_to_staging(
         &app,
         &client,
         &pack_version,
         &java_type,
-        &work_dir,
+        &inst_dir,
         "update-pack",
         Some(&id),
     )
     .await?;
 
-    let new_mod_count =
-        pack::list_mods_in_dir(&pack::resolve_mods_dir(&staging))?.len() as u32;
+    pack::emit_dl_progress(
+        &app,
+        "updating",
+        0.75,
+        "update-pack",
+        Some(&id),
+        Some("Installing fresh pack files"),
+    );
+    pack::install_staging_contents(&staging, &inst_dir)?;
+    fs::remove_dir_all(&staging).map_err(|e| e.to_string())?;
 
-    let result = (|| {
-        pack::emit_dl_progress(
-            &app,
-            "updating",
-            0.65,
-            "update-pack",
-            Some(&id),
-            Some(&format!(
-                "Applying pack files and installing {new_mod_count} mod(s)"
-            )),
-        );
-        pack::apply_pack_tree_from_staging(&staging, &inst_dir)?;
-
-        let restored = pack::restore_persistent_custom_mods(&persistent_mods, &inst_mods)?;
-        if restored > 0 {
-            pack::emit_dl_progress(
-                &app,
-                "updating",
-                0.75,
-                "update-pack",
-                Some(&id),
-                Some(&format!("Restored {restored} custom mod(s)")),
-            );
-        }
-
-        pack::emit_dl_progress(
-            &app,
-            "updating",
-            0.82,
-            "update-pack",
-            Some(&id),
-            Some("Restoring saves and player data"),
-        );
-        pack::restore_paths_from_update_backup(&inst_dir, &preserve_dir)?;
-
-        let config_msg = if overwrite_pack_configs {
-            "Seeding pack configs (overwriting existing)"
-        } else {
-            "Seeding missing pack configs only"
-        };
-        pack::emit_dl_progress(
-            &app,
-            "updating",
-            0.9,
-            "update-pack",
-            Some(&id),
-            Some(config_msg),
-        );
-        prepare_instance_configs(&inst_dir, overwrite_pack_configs)?;
-        pack::emit_dl_progress(
-            &app,
-            "updating",
-            0.95,
-            "update-pack",
-            Some(&id),
-            Some("Applying persistent file overrides"),
-        );
-        minecraft_files::apply_persistent_minecraft(&inst_dir)?;
-        Ok::<(), String>(())
-    })();
-
-    if result.is_err() {
-        pack::emit_dl_progress(
-            &app,
-            "updating",
-            0.0,
-            "update-pack",
-            Some(&id),
-            Some("Update failed — restoring backup"),
-        );
-        let _ = pack::restore_paths_from_update_backup(&inst_dir, &preserve_dir);
-    }
-    result?;
+    flatten_nested_pack(&inst_dir)?;
+    prepare_instance_configs(&inst_dir, true)?;
 
     pack::emit_dl_progress(
         &app,
         "updating",
-        0.98,
+        0.88,
         "update-pack",
         Some(&id),
-        Some("Recording new pack version"),
+        Some("Restoring saves and player data"),
     );
-    settings.pack_version = pack_version;
-    settings.pack_java_type = java_type;
-    save_settings_file(&id, &settings)?;
+    migration::restore_player_data(&inst_dir, &preserve_dir)?;
+
+    if let Some(mut settings) = load_settings(&id) {
+        settings.pack_version = pack_version;
+        settings.pack_java_type = java_type;
+        save_settings_file(&id, &settings)?;
+    }
+
+    pack::apply_persistent_custom_mods(&inst_dir)?;
+    minecraft_files::apply_persistent_minecraft(&inst_dir)?;
     let _ = refresh_cached_size(&id);
 
-    pack::emit_dl_progress(
-        &app,
-        "updating",
-        0.99,
-        "update-pack",
-        Some(&id),
-        Some("Cleaning up temporary files"),
-    );
-    fs::remove_dir_all(&work_dir).ok();
     fs::remove_dir_all(&preserve_dir).ok();
 
     pack::emit_dl_progress(
@@ -1979,22 +2083,7 @@ async fn run_reinstall_instance(
         Some(&id),
         Some("Installing fresh pack files"),
     );
-    for entry in fs::read_dir(&staging).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let dest = inst_dir.join(entry.file_name());
-        if dest.exists() {
-            if dest.is_dir() {
-                fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
-            } else {
-                fs::remove_file(&dest).map_err(|e| e.to_string())?;
-            }
-        }
-        if entry.path().is_dir() {
-            pack::copy_tree_merge(&entry.path(), &dest)?;
-        } else {
-            pack::copy_file_create_parent(&entry.path(), &dest)?;
-        }
-    }
+    pack::install_staging_contents(&staging, &inst_dir)?;
     fs::remove_dir_all(&staging).map_err(|e| e.to_string())?;
 
     flatten_nested_pack(&inst_dir)?;
@@ -2040,7 +2129,6 @@ async fn update_instance(
     id: String,
     pack_version: String,
     java_type: String,
-    overwrite_pack_configs: bool,
     keep_mod_identities: Vec<String>,
 ) -> Result<(), String> {
     let id = sanitize_name(id.trim());
@@ -2075,7 +2163,6 @@ async fn update_instance(
             id_bg.clone(),
             pack_version,
             java_type,
-            overwrite_pack_configs,
             keep_mod_identities,
         )
         .await;
@@ -3535,6 +3622,7 @@ pub fn run() {
             delete_cancel: HashMap::new(),
             update_in_progress: HashSet::new(),
             reinstall_in_progress: HashSet::new(),
+            copy_in_progress: HashSet::new(),
         }))
         .invoke_handler(tauri::generate_handler![
             get_versions,
@@ -3547,6 +3635,7 @@ pub fn run() {
             set_group_collapsed,
             delete_instance,
             cancel_delete_instance,
+            copy_instance,
             open_instance_folder,
             save_settings,
             get_settings,

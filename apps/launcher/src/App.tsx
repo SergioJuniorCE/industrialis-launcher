@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, FolderOpen, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, FolderOpen, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy, Pencil } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./components/ui/card";
 import { Input } from "./components/ui/input";
@@ -210,8 +210,10 @@ export default function App() {
   const [showNewInstance, setShowNewInstance] = useState(false);
   const [updatePackInstanceId, setUpdatePackInstanceId] = useState<string | null>(null);
   const [reinstallInstanceId, setReinstallInstanceId] = useState<string | null>(null);
+  const [copyInstanceId, setCopyInstanceId] = useState<string | null>(null);
   const [groupsState, setGroupsState] = useState<InstanceGroupsState>({ collapsed: {}, groups: [] });
   const [changeGroupInstanceId, setChangeGroupInstanceId] = useState<string | null>(null);
+  const [renameInstanceId, setRenameInstanceId] = useState<string | null>(null);
   const [lastUsedGroup, setLastUsedGroup] = useState("");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [gtnhVersions, setGtnhVersions] = useState<Record<string, GtnhVersion> | null>(null);
@@ -313,7 +315,6 @@ export default function App() {
       name: string,
       packVersion: string,
       javaType: string,
-      overwritePackConfigs: boolean,
       keepModIdentities: string[],
     ) => {
       const key = processKey("update-pack", id);
@@ -333,7 +334,6 @@ export default function App() {
         id,
         packVersion,
         javaType,
-        overwritePackConfigs,
         keepModIdentities,
       }).catch((e) => handleProcessFailed("update-pack", id, e));
     },
@@ -440,7 +440,7 @@ export default function App() {
           } else if (operation === "install") {
             setSelectedInstanceId(p.id);
             setShowNewInstance(false);
-          } else if (operation === "update-pack" || operation === "reinstall") {
+          } else if (operation === "update-pack" || operation === "reinstall" || operation === "copy") {
             setSelectedInstanceId(p.id);
             setTab("instances");
             setSelectedProcessKey(null);
@@ -672,12 +672,43 @@ export default function App() {
     });
   };
 
+  const handleCopyInstance = (sourceId: string, newId: string, newName: string) => {
+    setError(null);
+    setCopyInstanceId(null);
+    registerProcess("copy", newId, newName);
+    void invoke("copy_instance", {
+      sourceId,
+      newId,
+      newName,
+    }).catch((e) => handleProcessFailed("copy", newId, e));
+  };
+
   const handleSaveSettings = async (id: string, settings: InstanceSettings) => {
     try {
       await invoke("save_settings", { id, settings });
       loadInstances();
     } catch (e) {
       setError(`Save failed: ${e}`);
+    }
+  };
+
+  const handleRenameInstance = async (id: string, newName: string) => {
+    const inst = instances.find((i) => i.id === id);
+    if (!inst) return;
+    const trimmed = newName.trim();
+    if (trimmed === (inst.settings.name ?? "")) {
+      setRenameInstanceId(null);
+      return;
+    }
+    try {
+      await invoke("save_settings", {
+        id,
+        settings: { ...mergeInstanceSettings(inst.settings), name: trimmed },
+      });
+      loadInstances();
+      setRenameInstanceId(null);
+    } catch (e) {
+      setError(`Rename failed: ${e}`);
     }
   };
 
@@ -791,6 +822,8 @@ export default function App() {
                 versions={gtnhVersions}
                 onUpdatePack={setUpdatePackInstanceId}
                 onReinstall={setReinstallInstanceId}
+                onCopy={setCopyInstanceId}
+                onRename={setRenameInstanceId}
                 onIconChanged={loadInstances}
                 onIconError={(message) => setError(`Icon update failed: ${message}`)}
               />
@@ -811,6 +844,7 @@ export default function App() {
                       loading={isDeletingSelected || isUpdatingSelected || isReinstallingSelected}
                       onIconChanged={loadInstances}
                       onError={(message) => setError(`Icon update failed: ${message}`)}
+                      onOpenFolder={() => handleOpenInstanceFolder(sel.id)}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-base font-semibold truncate leading-tight">{instanceDisplayName(sel)}</div>
@@ -1025,6 +1059,15 @@ export default function App() {
                       <Button
                         variant="outline"
                         size="icon"
+                        title="Copy instance"
+                        disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
+                        onClick={() => setCopyInstanceId(selectedInstanceId)}
+                      >
+                        <Copy />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
                         title="Delete"
                         disabled={instanceBusy(selectedInstanceId!)}
                         onClick={() => handleDelete(selectedInstanceId!)}
@@ -1052,6 +1095,15 @@ export default function App() {
                       </Button>
                       <Button variant="outline" size="icon" title="Change group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
                         <FolderInput />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        title="Copy instance"
+                        disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
+                        onClick={() => setCopyInstanceId(selectedInstanceId)}
+                      >
+                        <Copy />
                       </Button>
                       <Button
                         variant="outline"
@@ -1139,13 +1191,12 @@ export default function App() {
             defaultJavaType={inst.settings.pack_java_type || "java17+"}
             versions={gtnhVersions}
             onClose={() => setUpdatePackInstanceId(null)}
-            onUpdate={(packVersion, javaType, overwritePackConfigs, keepModIdentities) => {
+            onUpdate={(packVersion, javaType, keepModIdentities) => {
               startPackUpdate(
                 updatePackInstanceId,
                 instanceDisplayName(inst),
                 packVersion,
                 javaType,
-                overwritePackConfigs,
                 keepModIdentities,
               );
             }}
@@ -1197,6 +1248,31 @@ export default function App() {
           versions={gtnhVersions}
         />
       )}
+
+      {copyInstanceId && (() => {
+        const source = instances.find((i) => i.id === copyInstanceId);
+        if (!source) return null;
+        return (
+          <CopyInstanceDialog
+            source={source}
+            existingInstanceIds={new Set(instances.map((i) => i.id))}
+            onClose={() => setCopyInstanceId(null)}
+            onCopy={(newId, newName) => handleCopyInstance(copyInstanceId, newId, newName)}
+          />
+        );
+      })()}
+
+      {renameInstanceId && (() => {
+        const inst = instances.find((i) => i.id === renameInstanceId);
+        if (!inst) return null;
+        return (
+          <RenameInstanceDialog
+            instance={inst}
+            onClose={() => setRenameInstanceId(null)}
+            onSave={(newName) => handleRenameInstance(renameInstanceId, newName)}
+          />
+        );
+      })()}
 
       {changeGroupInstanceId && (
         <ChangeGroupDialog
@@ -1323,6 +1399,8 @@ function InstanceGroupList({
   versions,
   onUpdatePack,
   onReinstall,
+  onCopy,
+  onRename,
   onIconChanged,
   onIconError,
 }: {
@@ -1347,6 +1425,8 @@ function InstanceGroupList({
   versions: Record<string, GtnhVersion> | null;
   onUpdatePack: (id: string) => void;
   onReinstall: (id: string) => void;
+  onCopy: (id: string) => void;
+  onRename: (id: string) => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
 }) {
@@ -1383,6 +1463,8 @@ function InstanceGroupList({
           versions={versions}
           onUpdatePack={onUpdatePack}
           onReinstall={onReinstall}
+          onCopy={onCopy}
+          onRename={onRename}
           onIconChanged={onIconChanged}
           onIconError={onIconError}
         />
@@ -1413,6 +1495,8 @@ function InstanceGroupSection({
   versions,
   onUpdatePack,
   onReinstall,
+  onCopy,
+  onRename,
   onIconChanged,
   onIconError,
 }: {
@@ -1437,6 +1521,8 @@ function InstanceGroupSection({
   versions: Record<string, GtnhVersion> | null;
   onUpdatePack: (id: string) => void;
   onReinstall: (id: string) => void;
+  onCopy: (id: string) => void;
+  onRename: (id: string) => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
 }) {
@@ -1551,11 +1637,151 @@ function InstanceGroupSection({
           versions={versions}
           onUpdatePack={() => onUpdatePack(inst.id)}
           onReinstall={() => onReinstall(inst.id)}
+          onCopy={() => onCopy(inst.id)}
+          onRename={() => onRename(inst.id)}
           onIconChanged={onIconChanged}
           onIconError={onIconError}
         />
       ))}
     </section>
+  );
+}
+
+function RenameInstanceDialog({
+  instance,
+  onClose,
+  onSave,
+}: {
+  instance: InstanceInfo;
+  onClose: () => void;
+  onSave: (newName: string) => void;
+}) {
+  const packVersion = instancePackVersion(instance);
+  const placeholder = `GTNH ${packVersion}`;
+  const [name, setName] = useState(instance.settings.name);
+  const trimmed = name.trim();
+  const unchanged = trimmed === (instance.settings.name ?? "");
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-sm p-0">
+        <Card className="border-0 shadow-none">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Rename Instance</CardTitle>
+              <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="Close">
+                <X className="size-3.5" />
+              </Button>
+            </div>
+            <CardDescription>
+              Change the display name shown in the launcher. The instance folder id stays the same.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rename-instance-name">Display name</Label>
+              <Input
+                id="rename-instance-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={placeholder}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !unchanged) onSave(name);
+                }}
+                autoFocus
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Folder: <span className="font-mono">{instance.id}</span>
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" disabled={unchanged} onClick={() => onSave(name)}>
+                Save
+              </Button>
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CopyInstanceDialog({
+  source,
+  existingInstanceIds,
+  onClose,
+  onCopy,
+}: {
+  source: InstanceInfo;
+  existingInstanceIds: Set<string>;
+  onClose: () => void;
+  onCopy: (newId: string, newName: string) => void;
+}) {
+  const sourceName = instanceDisplayName(source);
+  const packVersion = instancePackVersion(source);
+  const defaultName = `${sourceName} (copy)`;
+  const [instanceName, setInstanceName] = useState(defaultName);
+  const resolvedName = instanceName.trim() || defaultName;
+  const resolvedId = makeInstanceId(resolvedName, packVersion, existingInstanceIds);
+  const idConflict = existingInstanceIds.has(resolvedId);
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-sm p-0">
+        <Card className="border-0 shadow-none">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Copy Instance</CardTitle>
+              <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="Close">
+                <X className="size-3.5" />
+              </Button>
+            </div>
+            <CardDescription>
+              Create a duplicate of {sourceName} with a new name and folder.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="copy-instance-name">Instance name</Label>
+              <Input
+                id="copy-instance-name"
+                value={instanceName}
+                onChange={(e) => setInstanceName(e.target.value)}
+                placeholder={defaultName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !idConflict && resolvedName) {
+                    onCopy(resolvedId, resolvedName);
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">
+                Folder: <span className="font-mono">{resolvedId}</span>
+              </p>
+              {idConflict && (
+                <p className="text-xs text-destructive">An instance with this folder name already exists.</p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              All files, mods, saves, and settings are copied. Only the name and folder id change.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                disabled={idConflict || !resolvedName}
+                onClick={() => onCopy(resolvedId, resolvedName)}
+              >
+                Copy
+              </Button>
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1680,6 +1906,8 @@ function InstanceRow({
   versions,
   onUpdatePack,
   onReinstall,
+  onCopy,
+  onRename,
   onIconChanged,
   onIconError,
 }: {
@@ -1703,6 +1931,8 @@ function InstanceRow({
   versions: Record<string, GtnhVersion> | null;
   onUpdatePack: () => void;
   onReinstall: () => void;
+  onCopy: () => void;
+  onRename: () => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
 }) {
@@ -1727,6 +1957,7 @@ function InstanceRow({
               loading={packBusy}
               onIconChanged={onIconChanged}
               onError={onIconError}
+              onOpenFolder={onOpenFolder}
             />
             <Button
               type="button"
@@ -1753,11 +1984,6 @@ function InstanceRow({
                   className="status-running size-2 rounded-full animate-pulse shrink-0"
                   title="Running"
                 />
-              )}
-              {starting && !running && !packBusy && (
-                <span title="Launching" className="shrink-0">
-                  <Loader2 className="size-2.5 animate-spin text-muted-foreground" />
-                </span>
               )}
               {!packBusy && (
                 <PackVersionStatus
@@ -1862,12 +2088,16 @@ function InstanceRow({
       <ContextMenuContent className="w-52">
         <ContextMenuItem onSelect={onOpenFolder}>
           <FolderOpen />
-          Open in Explorer
+          Open folder
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={onOpenSettings}>
           <SlidersHorizontal />
           Settings
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onRename} disabled={deleting}>
+          <Pencil />
+          Rename…
         </ContextMenuItem>
         {deleting ? (
           <ContextMenuItem onSelect={onCancelDelete} className="text-destructive focus:text-destructive">
@@ -1886,6 +2116,13 @@ function InstanceRow({
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
+        <ContextMenuItem
+          onSelect={onCopy}
+          disabled={running || starting || packBusy || isInstanceBusy(inst.id)}
+        >
+          <Copy />
+          Copy instance…
+        </ContextMenuItem>
         <ContextMenuItem
           onSelect={onReinstall}
           disabled={running || starting || packBusy || isInstanceBusy(inst.id)}

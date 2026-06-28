@@ -536,23 +536,6 @@ pub async fn download_and_extract_to_staging(
     Ok(staging)
 }
 
-pub fn wipe_dir_contents(dir: &Path) -> Result<(), String> {
-    if !dir.exists() {
-        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if path.is_dir() {
-            fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
-        } else {
-            fs::remove_file(&path).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
-}
-
 pub fn copy_file_create_parent(src: &Path, dest: &Path) -> Result<(), String> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -575,40 +558,24 @@ pub fn copy_tree_merge(src: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-const PACK_ROOT_ENTRIES: &[&str] = &[
-    "mmc-pack.json",
-    "patches",
-    "config",
-    "libraries",
-    "natives",
-    "scripts",
-    "servers",
-];
-
-pub fn apply_pack_tree_from_staging(staging: &Path, inst_dir: &Path) -> Result<(), String> {
-    for name in PACK_ROOT_ENTRIES {
-        let src = staging.join(name);
-        if src.exists() {
-            let dest = inst_dir.join(name);
-            if src.is_dir() {
-                if dest.exists() {
-                    fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
-                }
-                copy_tree_merge(&src, &dest)?;
+/// Copies a freshly extracted pack staging tree into an empty instance directory.
+pub fn install_staging_contents(staging: &Path, inst_dir: &Path) -> Result<(), String> {
+    for entry in fs::read_dir(staging).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let dest = inst_dir.join(entry.file_name());
+        if dest.exists() {
+            if dest.is_dir() {
+                fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
             } else {
-                copy_file_create_parent(&src, &dest)?;
+                fs::remove_file(&dest).map_err(|e| e.to_string())?;
             }
         }
+        if entry.path().is_dir() {
+            copy_tree_merge(&entry.path(), &dest)?;
+        } else {
+            copy_file_create_parent(&entry.path(), &dest)?;
+        }
     }
-
-    let staging_mods = resolve_mods_dir(staging);
-    let inst_mods = inst_dir.join(".minecraft").join("mods");
-    fs::create_dir_all(inst_mods.parent().unwrap()).map_err(|e| e.to_string())?;
-    wipe_dir_contents(&inst_mods)?;
-    if staging_mods.is_dir() {
-        copy_tree_merge(&staging_mods, &inst_mods)?;
-    }
-
     Ok(())
 }
 
@@ -753,94 +720,6 @@ pub fn build_update_preview(
         updated_pack_mods_count: classification.updated_count,
         removed_from_pack_count: classification.removed_count,
     }
-}
-
-pub fn backup_paths_for_update(inst_dir: &Path, preserve_dir: &Path) -> Result<(), String> {
-    fs::create_dir_all(preserve_dir).map_err(|e| e.to_string())?;
-
-    let copies: [(&Path, &str); 4] = [
-        (&inst_dir.join("instance.json"), "instance.json"),
-        (&inst_dir.join("console.log"), "console.log"),
-        (&inst_dir.join("persistent-minecraft"), "persistent-minecraft"),
-        (&inst_dir.join(".minecraft").join("saves"), "saves"),
-    ];
-
-    for (src, rel) in copies {
-        if !src.exists() {
-            continue;
-        }
-        let dest = preserve_dir.join(rel);
-        if src.is_dir() {
-            if dest.exists() {
-                fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
-            }
-            copy_tree_merge(src, &dest)?;
-        } else {
-            copy_file_create_parent(src, &dest)?;
-        }
-    }
-
-    let mc = inst_dir.join(".minecraft");
-    if mc.is_dir() {
-        for name in ["options.txt", "optionsof.txt", "optionsshaders.txt"] {
-            let src = mc.join(name);
-            if src.is_file() {
-                copy_file_create_parent(&src, &preserve_dir.join(name))?;
-            }
-        }
-        let shots = mc.join("screenshots");
-        if shots.is_dir() {
-            let dest = preserve_dir.join("screenshots");
-            if dest.exists() {
-                fs::remove_dir_all(&dest).map_err(|e| e.to_string())?;
-            }
-            copy_tree_merge(&shots, &dest)?;
-        }
-    }
-
-    Ok(())
-}
-
-pub fn restore_paths_from_update_backup(inst_dir: &Path, preserve_dir: &Path) -> Result<(), String> {
-    let restores: [(&str, &Path); 4] = [
-        ("instance.json", &inst_dir.join("instance.json")),
-        ("console.log", &inst_dir.join("console.log")),
-        (
-            "persistent-minecraft",
-            &inst_dir.join("persistent-minecraft"),
-        ),
-        ("saves", &inst_dir.join(".minecraft").join("saves")),
-    ];
-
-    for (rel, dest) in restores {
-        let src = preserve_dir.join(rel);
-        if !src.exists() {
-            continue;
-        }
-        if src.is_dir() {
-            if dest.exists() {
-                fs::remove_dir_all(dest).map_err(|e| e.to_string())?;
-            }
-            copy_tree_merge(&src, dest)?;
-        } else {
-            copy_file_create_parent(&src, dest)?;
-        }
-    }
-
-    let mc = inst_dir.join(".minecraft");
-    fs::create_dir_all(&mc).map_err(|e| e.to_string())?;
-    for name in ["options.txt", "optionsof.txt", "optionsshaders.txt"] {
-        let src = preserve_dir.join(name);
-        if src.is_file() {
-            copy_file_create_parent(&src, &mc.join(name))?;
-        }
-    }
-    let shots_src = preserve_dir.join("screenshots");
-    if shots_src.is_dir() {
-        copy_tree_merge(&shots_src, &mc.join("screenshots"))?;
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
