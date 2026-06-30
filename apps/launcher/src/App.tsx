@@ -512,6 +512,15 @@ export default function App() {
     }
   };
 
+  const handleReorderInstances = async (group: string, order: string[]) => {
+    try {
+      await invoke("set_group_instance_order", { group, order });
+      loadGroups();
+    } catch (e) {
+      setError(`Reorder failed: ${e}`);
+    }
+  };
+
   const handleToggleGroupCollapsed = async (group: string, collapsed: boolean) => {
     setGroupsState((prev) => ({
       ...prev,
@@ -852,6 +861,7 @@ export default function App() {
                 onCopy={setCopyInstanceId}
                 onRename={setRenameInstanceId}
                 onMoveInstance={handleMoveInstance}
+                onReorderInstances={handleReorderInstances}
                 onIconChanged={loadInstances}
                 onIconError={(message) => setError(`Icon update failed: ${message}`)}
               />
@@ -1438,6 +1448,7 @@ function InstanceGroupList({
   onCopy,
   onRename,
   onMoveInstance,
+  onReorderInstances,
   onIconChanged,
   onIconError,
 }: {
@@ -1466,6 +1477,7 @@ function InstanceGroupList({
   onCopy: (id: string) => void;
   onRename: (id: string) => void;
   onMoveInstance: (id: string, direction: "up" | "down") => void;
+  onReorderInstances: (group: string, order: string[]) => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
 }) {
@@ -1506,6 +1518,7 @@ function InstanceGroupList({
           onCopy={onCopy}
           onRename={onRename}
           onMoveInstance={onMoveInstance}
+          onReorderInstances={onReorderInstances}
           onIconChanged={onIconChanged}
           onIconError={onIconError}
         />
@@ -1540,6 +1553,7 @@ function InstanceGroupSection({
   onCopy,
   onRename,
   onMoveInstance,
+  onReorderInstances,
   onIconChanged,
   onIconError,
 }: {
@@ -1568,6 +1582,7 @@ function InstanceGroupSection({
   onCopy: (id: string) => void;
   onRename: (id: string) => void;
   onMoveInstance: (id: string, direction: "up" | "down") => void;
+  onReorderInstances: (group: string, order: string[]) => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
 }) {
@@ -1583,6 +1598,20 @@ function InstanceGroupSection({
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [deleteGroupOpen, setDeleteGroupOpen] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  const reorderByDrop = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    const ids = section.items.map((item) => item.id);
+    const fromIndex = ids.indexOf(fromId);
+    const toIndex = ids.indexOf(toId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const next = [...ids];
+    next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, fromId);
+    void onReorderInstances(section.id, next);
+  };
 
   const startRename = () => {
     setRenameDraft(section.label);
@@ -1699,6 +1728,32 @@ function InstanceGroupSection({
               canMoveDown={index < section.items.length - 1}
               onMoveUp={() => onMoveInstance(inst.id, "up")}
               onMoveDown={() => onMoveInstance(inst.id, "down")}
+              isDragOver={dropTargetId === inst.id && draggingId !== inst.id}
+              onDragHandleStart={(event) => {
+                event.dataTransfer.setData("text/plain", inst.id);
+                event.dataTransfer.effectAllowed = "move";
+                setDraggingId(inst.id);
+              }}
+              onDragEnd={() => {
+                setDraggingId(null);
+                setDropTargetId(null);
+              }}
+              onDragOver={(event) => {
+                if (!draggingId || draggingId === inst.id) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropTargetId(inst.id);
+              }}
+              onDragLeave={() => {
+                if (dropTargetId === inst.id) setDropTargetId(null);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const fromId = event.dataTransfer.getData("text/plain") || draggingId;
+                if (fromId) reorderByDrop(fromId, inst.id);
+                setDraggingId(null);
+                setDropTargetId(null);
+              }}
               onIconChanged={onIconChanged}
               onIconError={onIconError}
             />
@@ -2184,7 +2239,8 @@ function SettingsTab({
             <option value="5">5 columns</option>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Right-click an instance and use Move up / Move down to reorder within its group.
+            Drag the grip handle on an instance card, or right-click and use Move up / Move down
+            to reorder within its group.
           </p>
         </CardContent>
       </Card>

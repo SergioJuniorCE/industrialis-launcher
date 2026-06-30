@@ -337,6 +337,57 @@ pub fn move_instance_in_group(
     save_group_data(instances_dir, &data, known_instances)
 }
 
+fn group_member_ids(
+    data: &GroupData,
+    group: &str,
+    known_instances: &HashSet<String>,
+) -> HashSet<String> {
+    known_instances
+        .iter()
+        .filter(|id| {
+            data.instance_index
+                .get(*id)
+                .cloned()
+                .unwrap_or_default()
+                == group
+        })
+        .cloned()
+        .collect()
+}
+
+pub fn set_group_instance_order(
+    instances_dir: &PathBuf,
+    group: &str,
+    order: &[String],
+    known_instances: &HashSet<String>,
+) -> Result<(), String> {
+    let mut data = load_group_data(instances_dir, known_instances);
+    reconcile_group_orders(&mut data, known_instances);
+
+    let members = group_member_ids(&data, group, known_instances);
+    if members.is_empty() {
+        return Ok(());
+    }
+
+    let mut next_order: Vec<String> = order
+        .iter()
+        .filter(|id| members.contains(*id))
+        .cloned()
+        .collect();
+
+    let in_order: HashSet<_> = next_order.iter().cloned().collect();
+    let mut missing: Vec<_> = members
+        .iter()
+        .filter(|id| !in_order.contains(*id))
+        .cloned()
+        .collect();
+    missing.sort();
+    next_order.extend(missing);
+
+    data.group_order.insert(group.to_string(), next_order);
+    save_group_data(instances_dir, &data, known_instances)
+}
+
 pub fn rename_group(
     instances_dir: &PathBuf,
     old_name: &str,
@@ -531,6 +582,42 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn set_group_instance_order_applies_custom_sequence() {
+        let dir = temp_instances_dir();
+        let known = HashSet::from([
+            "inst-a".to_string(),
+            "inst-b".to_string(),
+            "inst-c".to_string(),
+        ]);
+
+        set_instance_group(&dir, "inst-a", "Pack", &known).unwrap();
+        set_instance_group(&dir, "inst-b", "Pack", &known).unwrap();
+        set_instance_group(&dir, "inst-c", "Pack", &known).unwrap();
+
+        set_group_instance_order(
+            &dir,
+            "Pack",
+            &[
+                "inst-c".to_string(),
+                "inst-a".to_string(),
+                "inst-b".to_string(),
+            ],
+            &known,
+        )
+        .unwrap();
+
+        let state = get_groups_state(&dir, &known);
+        assert_eq!(
+            state.instance_order.get("Pack").map(|v| v.as_slice()),
+            Some(
+                ["inst-c".to_string(), "inst-a".to_string(), "inst-b".to_string()].as_slice()
+            )
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

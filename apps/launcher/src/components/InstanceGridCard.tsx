@@ -1,3 +1,4 @@
+import type { DragEvent } from "react";
 import {
   Copy,
   FolderOpen,
@@ -11,6 +12,7 @@ import {
   X,
   ArrowUp,
   ArrowDown,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
@@ -92,6 +94,12 @@ export function InstanceGridCard({
   canMoveDown,
   onMoveUp,
   onMoveDown,
+  isDragOver,
+  onDragHandleStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   inst: InstanceGridCardData;
   selected: boolean;
@@ -121,6 +129,12 @@ export function InstanceGridCard({
   canMoveDown: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  isDragOver?: boolean;
+  onDragHandleStart?: (event: DragEvent<HTMLButtonElement>) => void;
+  onDragEnd?: () => void;
+  onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave?: () => void;
+  onDrop?: (event: DragEvent<HTMLDivElement>) => void;
 }) {
   const name = displayName(inst);
   const deleting = deleteProcess?.status === "running";
@@ -135,11 +149,29 @@ export function InstanceGridCard({
           className={cn(
             "group/card relative flex flex-col rounded-xl border p-2.5 transition-colors",
             packBusy && "opacity-80",
+            isDragOver && "border-primary/60 ring-2 ring-primary/25",
             selected
               ? "instance-row-selected border-primary/50 bg-primary/10 shadow-sm"
               : "border-border/70 bg-card/40 hover:border-primary/35 hover:bg-primary/8",
           )}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
         >
+          {!packBusy && onDragHandleStart && (
+            <button
+              type="button"
+              draggable
+              onDragStart={onDragHandleStart}
+              onDragEnd={onDragEnd}
+              className="absolute left-1.5 top-1.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/card:opacity-100 cursor-grab active:cursor-grabbing"
+              title="Drag to reorder"
+              aria-label={`Drag to reorder ${name}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVertical className="size-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={onSelect}

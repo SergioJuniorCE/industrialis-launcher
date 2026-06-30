@@ -1295,6 +1295,13 @@ async fn move_instance_in_group(id: String, direction: String) -> Result<(), Str
 }
 
 #[tauri::command]
+async fn set_group_instance_order(group: String, order: Vec<String>) -> Result<(), String> {
+    let dir = instances_dir();
+    let known_ids = list_instance_ids()?;
+    groups::set_group_instance_order(&dir, &group, &order, &known_ids)
+}
+
+#[tauri::command]
 async fn set_group_collapsed(group: String, collapsed: bool) -> Result<(), String> {
     let dir = instances_dir();
     let known_ids = list_instance_ids()?;
@@ -3643,6 +3650,7 @@ pub fn run() {
             delete_group,
             set_group_collapsed,
             move_instance_in_group,
+            set_group_instance_order,
             delete_instance,
             cancel_delete_instance,
             copy_instance,
