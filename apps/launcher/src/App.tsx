@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, FolderOpen, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy, Pencil } from "lucide-react";
+import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./components/ui/card";
 import { Input } from "./components/ui/input";
@@ -55,17 +55,12 @@ import { UpdatePackDialog } from "./components/UpdatePackDialog";
 import { ReinstallInstanceDialog } from "./components/ReinstallInstanceDialog";
 import { PackVersionStatus } from "./components/PackVersionStatus";
 import { InstanceAvatar } from "./components/InstanceAvatar";
+import { InstanceGridCard } from "./components/InstanceGridCard";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "./components/ui/context-menu";
+import { cn } from "./lib/utils";
 import "./App.css";
 
 // ── Types ──
@@ -91,6 +86,7 @@ interface InstanceInfo {
 interface InstanceGroupsState {
   collapsed: Record<string, boolean>;
   groups: string[];
+  instance_order: Record<string, string[]>;
 }
 
 interface JavaInfo {
@@ -132,10 +128,26 @@ function instancePackVersion(inst: InstanceInfo): string {
   return inst.settings.pack_version || inst.id;
 }
 
-function sortInstancesByName(items: InstanceInfo[]): InstanceInfo[] {
-  return [...items].sort((a, b) =>
-    instanceDisplayName(a).localeCompare(instanceDisplayName(b), undefined, { sensitivity: "base" }),
-  );
+function orderInstancesInGroup(
+  items: InstanceInfo[],
+  groupKey: string,
+  instanceOrder: Record<string, string[]>,
+): InstanceInfo[] {
+  const order = instanceOrder[groupKey] ?? [];
+  const byId = new Map(items.map((inst) => [inst.id, inst]));
+  const result: InstanceInfo[] = [];
+  const seen = new Set<string>();
+  for (const id of order) {
+    const inst = byId.get(id);
+    if (inst) {
+      result.push(inst);
+      seen.add(id);
+    }
+  }
+  for (const inst of items) {
+    if (!seen.has(inst.id)) result.push(inst);
+  }
+  return result;
 }
 
 function sanitizeInstanceId(value: string): string {
@@ -212,7 +224,11 @@ export default function App() {
   const [updatePackInstanceId, setUpdatePackInstanceId] = useState<string | null>(null);
   const [reinstallInstanceId, setReinstallInstanceId] = useState<string | null>(null);
   const [copyInstanceId, setCopyInstanceId] = useState<string | null>(null);
-  const [groupsState, setGroupsState] = useState<InstanceGroupsState>({ collapsed: {}, groups: [] });
+  const [groupsState, setGroupsState] = useState<InstanceGroupsState>({
+    collapsed: {},
+    groups: [],
+    instance_order: {},
+  });
   const [changeGroupInstanceId, setChangeGroupInstanceId] = useState<string | null>(null);
   const [renameInstanceId, setRenameInstanceId] = useState<string | null>(null);
   const [lastUsedGroup, setLastUsedGroup] = useState("");
@@ -484,6 +500,15 @@ export default function App() {
       loadInstances();
     } catch (e) {
       setError(`Delete group failed: ${e}`);
+    }
+  };
+
+  const handleMoveInstance = async (id: string, direction: "up" | "down") => {
+    try {
+      await invoke("move_instance_in_group", { id, direction });
+      loadGroups();
+    } catch (e) {
+      setError(`Reorder failed: ${e}`);
     }
   };
 
@@ -794,7 +819,7 @@ export default function App() {
       {tab === "instances" ? (
         <div className="flex-1 flex overflow-hidden p-2 gap-2">
           {/* Instance list */}
-          <div className="surface-panel w-[min(320px,35%)] shrink-0 overflow-auto flex flex-col rounded-lg border border-border/80 shadow-sm">
+          <div className="surface-panel flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-auto flex flex-col rounded-lg border border-border/80 shadow-sm">
             {instances.length === 0 ? (
               <div className="m-2 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
                 <div className="font-medium text-foreground">No instances installed</div>
@@ -804,6 +829,7 @@ export default function App() {
               <InstanceGroupList
                 instances={instances}
                 groupsState={groupsState}
+                gridColumns={launcherSettings.instance_grid_columns ?? 3}
                 sizesRefreshing={sizesRefreshing}
                 onToggleCollapsed={handleToggleGroupCollapsed}
                 onRenameGroup={handleRenameGroup}
@@ -825,6 +851,7 @@ export default function App() {
                 onReinstall={setReinstallInstanceId}
                 onCopy={setCopyInstanceId}
                 onRename={setRenameInstanceId}
+                onMoveInstance={handleMoveInstance}
                 onIconChanged={loadInstances}
                 onIconError={(message) => setError(`Icon update failed: ${message}`)}
               />
@@ -1149,7 +1176,13 @@ export default function App() {
         />
       ) : (
         <main className="flex-1 overflow-auto p-4 max-w-2xl">
-          {tab === "settings" && <SettingsTab javaOptions={javaOptions} />}
+          {tab === "settings" && (
+            <SettingsTab
+              javaOptions={javaOptions}
+              gridColumns={launcherSettings.instance_grid_columns ?? 3}
+              onGridColumnsChange={(columns) => updateSettings({ instance_grid_columns: columns })}
+            />
+          )}
           {tab === "accounts" && (
             <AccountsTab
               onAccountsChanged={loadAccounts}
@@ -1331,6 +1364,7 @@ interface GroupSection {
 function buildGroupSections(
   instances: InstanceInfo[],
   groupNames: string[],
+  instanceOrder: Record<string, string[]>,
 ): GroupSection[] {
   const buckets = new Map<string, InstanceInfo[]>();
   for (const inst of instances) {
@@ -1350,7 +1384,7 @@ function buildGroupSections(
       sections.push({
         id: name,
         label: name,
-        items: sortInstancesByName(items),
+        items: orderInstancesInGroup(items, name, instanceOrder),
       });
       buckets.delete(name);
     }
@@ -1361,7 +1395,7 @@ function buildGroupSections(
       sections.push({
         id: key,
         label: key,
-        items: sortInstancesByName(items),
+        items: orderInstancesInGroup(items, key, instanceOrder),
       });
     }
   }
@@ -1371,7 +1405,7 @@ function buildGroupSections(
     sections.push({
       id: "",
       label: "Ungrouped",
-      items: sortInstancesByName(ungrouped),
+      items: orderInstancesInGroup(ungrouped, "", instanceOrder),
     });
   }
 
@@ -1381,6 +1415,7 @@ function buildGroupSections(
 function InstanceGroupList({
   instances,
   groupsState,
+  gridColumns,
   sizesRefreshing,
   onToggleCollapsed,
   onRenameGroup,
@@ -1402,11 +1437,13 @@ function InstanceGroupList({
   onReinstall,
   onCopy,
   onRename,
+  onMoveInstance,
   onIconChanged,
   onIconError,
 }: {
   instances: InstanceInfo[];
   groupsState: InstanceGroupsState;
+  gridColumns: number;
   sizesRefreshing: boolean;
   onToggleCollapsed: (group: string, collapsed: boolean) => void;
   onRenameGroup: (oldName: string, newName: string) => void;
@@ -1428,12 +1465,13 @@ function InstanceGroupList({
   onReinstall: (id: string) => void;
   onCopy: (id: string) => void;
   onRename: (id: string) => void;
+  onMoveInstance: (id: string, direction: "up" | "down") => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
 }) {
   const sections = useMemo(
-    () => buildGroupSections(instances, groupsState.groups),
-    [instances, groupsState.groups],
+    () => buildGroupSections(instances, groupsState.groups, groupsState.instance_order),
+    [instances, groupsState.groups, groupsState.instance_order],
   );
 
   if (sections.length === 0) return null;
@@ -1444,6 +1482,7 @@ function InstanceGroupList({
         <InstanceGroupSection
           key={section.id || "__ungrouped__"}
           section={section}
+          gridColumns={gridColumns}
           collapsed={groupsState.collapsed[section.id] ?? false}
           sizesRefreshing={sizesRefreshing}
           onToggleCollapsed={(collapsed) => onToggleCollapsed(section.id, collapsed)}
@@ -1466,6 +1505,7 @@ function InstanceGroupList({
           onReinstall={onReinstall}
           onCopy={onCopy}
           onRename={onRename}
+          onMoveInstance={onMoveInstance}
           onIconChanged={onIconChanged}
           onIconError={onIconError}
         />
@@ -1476,6 +1516,7 @@ function InstanceGroupList({
 
 function InstanceGroupSection({
   section,
+  gridColumns,
   collapsed,
   sizesRefreshing,
   onToggleCollapsed,
@@ -1498,10 +1539,12 @@ function InstanceGroupSection({
   onReinstall,
   onCopy,
   onRename,
+  onMoveInstance,
   onIconChanged,
   onIconError,
 }: {
   section: GroupSection;
+  gridColumns: number;
   collapsed: boolean;
   sizesRefreshing: boolean;
   onToggleCollapsed: (collapsed: boolean) => void;
@@ -1524,9 +1567,19 @@ function InstanceGroupSection({
   onReinstall: (id: string) => void;
   onCopy: (id: string) => void;
   onRename: (id: string) => void;
+  onMoveInstance: (id: string, direction: "up" | "down") => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
 }) {
+  const gridClass =
+    gridColumns <= 2
+      ? "grid-cols-2"
+      : gridColumns === 4
+        ? "grid-cols-4"
+        : gridColumns >= 5
+          ? "grid-cols-5"
+          : "grid-cols-3";
+
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [deleteGroupOpen, setDeleteGroupOpen] = useState(false);
@@ -1615,35 +1668,43 @@ function InstanceGroupSection({
         destructive
         onConfirm={confirmDeleteGroup}
       />
-      {!collapsed && section.items.map((inst) => (
-        <InstanceRow
-          key={inst.id}
-          inst={inst}
-          selected={selectedInstanceId === inst.id}
-          sizesRefreshing={sizesRefreshing}
-          onSelect={() => onSelect(inst.id)}
-          running={runningInstanceIds.has(inst.id)}
-          starting={launching === inst.id}
-          busy={launching !== null}
-          onLaunch={() => onLaunch(inst.id)}
-          onKill={() => onKill(inst.id)}
-          onOpenSettings={() => onOpenSettings(inst.id)}
-          onOpenFolder={() => onOpenFolder(inst.id)}
-          onDelete={() => onDelete(inst.id)}
-          isInstanceBusy={isInstanceBusy}
-          deleteProcess={getInstanceProcess(processes, "delete", inst.id)}
-          updateProcess={getInstanceProcess(processes, "update-pack", inst.id)}
-          reinstallProcess={getInstanceProcess(processes, "reinstall", inst.id)}
-          onCancelDelete={() => onCancelDelete(inst.id)}
-          versions={versions}
-          onUpdatePack={() => onUpdatePack(inst.id)}
-          onReinstall={() => onReinstall(inst.id)}
-          onCopy={() => onCopy(inst.id)}
-          onRename={() => onRename(inst.id)}
-          onIconChanged={onIconChanged}
-          onIconError={onIconError}
-        />
-      ))}
+      {!collapsed && (
+        <div className={cn("grid gap-2 px-1 pb-1", gridClass)}>
+          {section.items.map((inst, index) => (
+            <InstanceGridCard
+              key={inst.id}
+              inst={inst}
+              selected={selectedInstanceId === inst.id}
+              sizesRefreshing={sizesRefreshing}
+              onSelect={() => onSelect(inst.id)}
+              running={runningInstanceIds.has(inst.id)}
+              starting={launching === inst.id}
+              busy={launching !== null}
+              onLaunch={() => onLaunch(inst.id)}
+              onKill={() => onKill(inst.id)}
+              onOpenSettings={() => onOpenSettings(inst.id)}
+              onOpenFolder={() => onOpenFolder(inst.id)}
+              onDelete={() => onDelete(inst.id)}
+              isInstanceBusy={isInstanceBusy}
+              deleteProcess={getInstanceProcess(processes, "delete", inst.id)}
+              updateProcess={getInstanceProcess(processes, "update-pack", inst.id)}
+              reinstallProcess={getInstanceProcess(processes, "reinstall", inst.id)}
+              onCancelDelete={() => onCancelDelete(inst.id)}
+              versions={versions}
+              onUpdatePack={() => onUpdatePack(inst.id)}
+              onReinstall={() => onReinstall(inst.id)}
+              onCopy={() => onCopy(inst.id)}
+              onRename={() => onRename(inst.id)}
+              canMoveUp={index > 0}
+              canMoveDown={index < section.items.length - 1}
+              onMoveUp={() => onMoveInstance(inst.id, "up")}
+              onMoveDown={() => onMoveInstance(inst.id, "down")}
+              onIconChanged={onIconChanged}
+              onIconError={onIconError}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1879,271 +1940,6 @@ function GroupPicker({
   );
 }
 
-// ── Instance Row ──
-
-function formatRowUpdateProgress(proc: BackgroundProcess): string {
-  const progress = formatDownloadProgress(proc);
-  return `${stageLabel(proc.stage)} · ${progress}`;
-}
-
-function InstanceRow({
-  inst,
-  selected,
-  sizesRefreshing,
-  onSelect,
-  running,
-  starting,
-  busy,
-  onLaunch,
-  onKill,
-  onOpenSettings,
-  onOpenFolder,
-  onDelete,
-  isInstanceBusy,
-  deleteProcess,
-  updateProcess,
-  reinstallProcess,
-  onCancelDelete,
-  versions,
-  onUpdatePack,
-  onReinstall,
-  onCopy,
-  onRename,
-  onIconChanged,
-  onIconError,
-}: {
-  inst: InstanceInfo;
-  selected: boolean;
-  sizesRefreshing: boolean;
-  onSelect: () => void;
-  running: boolean;
-  starting: boolean;
-  busy: boolean;
-  onLaunch: () => void;
-  onKill: () => void;
-  onOpenSettings: () => void;
-  onOpenFolder: () => void;
-  onDelete: () => void;
-  isInstanceBusy: (id: string) => boolean;
-  deleteProcess?: BackgroundProcess;
-  updateProcess?: BackgroundProcess;
-  reinstallProcess?: BackgroundProcess;
-  onCancelDelete: () => void;
-  versions: Record<string, GtnhVersion> | null;
-  onUpdatePack: () => void;
-  onReinstall: () => void;
-  onCopy: () => void;
-  onRename: () => void;
-  onIconChanged: () => void;
-  onIconError: (message: string) => void;
-}) {
-  const name = instanceDisplayName(inst);
-  const deleting = deleteProcess?.status === "running";
-  const updating = updateProcess?.status === "running";
-  const reinstalling = reinstallProcess?.status === "running";
-  const packBusy = deleting || updating || reinstalling;
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          className={`group/row flex flex-col rounded-lg border transition-colors ${
-            packBusy ? "opacity-80" : ""
-          } ${selected ? "instance-row-selected border-primary/40" : "border-transparent bg-card/25 hover:border-primary/30 hover:bg-primary/10"}`}
-        >
-          <div className="flex items-center gap-1 pl-1 pr-1">
-            <InstanceAvatar
-              instanceId={inst.id}
-              name={name}
-              iconPath={inst.icon_path}
-              loading={packBusy}
-              onIconChanged={onIconChanged}
-              onError={onIconError}
-              onOpenFolder={onOpenFolder}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onSelect}
-              className="h-auto min-w-0 flex-1 items-center justify-start gap-2 rounded-lg px-2 py-2 font-normal hover:bg-transparent"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold truncate leading-tight">{name}</div>
-                <div className="text-[11px] text-muted-foreground truncate leading-tight">
-                  {deleting ? (
-                    <>Deleting... {(deleteProcess.pct * 100).toFixed(0)}%</>
-                  ) : updating ? (
-                    <>{formatRowUpdateProgress(updateProcess)}</>
-                  ) : reinstalling ? (
-                    <>{formatRowUpdateProgress(reinstallProcess!)}</>
-                  ) : (
-                    <>{instancePackVersion(inst)} / {formatInstanceSize(inst.size_bytes, sizesRefreshing)}</>
-                  )}
-                </div>
-              </div>
-              {running && !packBusy && (
-                <span
-                  className="status-running size-2 rounded-full animate-pulse shrink-0"
-                  title="Running"
-                />
-              )}
-              {!packBusy && (
-                <PackVersionStatus
-                  currentVersion={instancePackVersion(inst)}
-                  versions={versions}
-                  onUpdate={onUpdatePack}
-                  disabled={busy || running || starting || isInstanceBusy(inst.id)}
-                  compact
-                />
-              )}
-            </Button>
-            <div className="flex items-center gap-0 pr-1 shrink-0">
-              {deleting ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 text-destructive hover:text-destructive"
-                  title="Cancel deletion"
-                  aria-label={`Cancel deletion of ${name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCancelDelete();
-                  }}
-                >
-                  <X className="size-3.5" />
-                </Button>
-              ) : running ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 text-destructive hover:text-destructive"
-                  title="Stop"
-                  aria-label={`Stop ${name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onKill();
-                  }}
-                >
-                  <Square className="size-3.5 fill-current" />
-                </Button>
-              ) : starting ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  title="Launching"
-                  aria-label={`Launching ${name}`}
-                  disabled
-                >
-                  <Loader2 className="size-3.5 animate-spin" />
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  title={busy ? "Another instance is launching" : "Launch"}
-                  aria-label={`Launch ${name}`}
-                  disabled={busy || isInstanceBusy(inst.id)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onLaunch();
-                  }}
-                >
-                  <Play className="size-3.5" />
-                </Button>
-              )}
-              {!deleting && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  title="Instance settings"
-                  aria-label={`Settings for ${name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenSettings();
-                  }}
-                >
-                  <SlidersHorizontal className="size-3.5" />
-                </Button>
-              )}
-            </div>
-          </div>
-          {deleting && (
-            <div className="px-2 pb-1.5">
-              <Progress value={deleteProcess.pct * 100} className="h-1" />
-            </div>
-          )}
-          {updating && (
-            <div className="px-2 pb-1.5">
-              <Progress value={updateProcess.pct * 100} className="h-1" />
-            </div>
-          )}
-          {reinstalling && (
-            <div className="px-2 pb-1.5">
-              <Progress value={reinstallProcess!.pct * 100} className="h-1" />
-            </div>
-          )}
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onSelect={onOpenFolder}>
-          <FolderOpen />
-          Open folder
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={onOpenSettings}>
-          <SlidersHorizontal />
-          Settings
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={onRename} disabled={deleting}>
-          <Pencil />
-          Rename…
-        </ContextMenuItem>
-        {deleting ? (
-          <ContextMenuItem onSelect={onCancelDelete} className="text-destructive focus:text-destructive">
-            <X />
-            Cancel deletion
-          </ContextMenuItem>
-        ) : running ? (
-          <ContextMenuItem onSelect={onKill} className="text-destructive focus:text-destructive">
-            <Square className="fill-current" />
-            Stop
-          </ContextMenuItem>
-        ) : (
-          <ContextMenuItem onSelect={onLaunch} disabled={busy || starting || isInstanceBusy(inst.id)}>
-            <Play />
-            {starting ? "Launching…" : "Launch"}
-          </ContextMenuItem>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          onSelect={onCopy}
-          disabled={running || starting || packBusy || isInstanceBusy(inst.id)}
-        >
-          <Copy />
-          Copy instance…
-        </ContextMenuItem>
-        <ContextMenuItem
-          onSelect={onReinstall}
-          disabled={running || starting || packBusy || isInstanceBusy(inst.id)}
-        >
-          <RefreshCw />
-          Clean reinstall…
-        </ContextMenuItem>
-        <ContextMenuItem
-          onSelect={onDelete}
-          disabled={running || starting || deleting || isInstanceBusy(inst.id)}
-          className="text-destructive focus:text-destructive"
-        >
-          <Trash2 />
-          Delete instance
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-}
-
 // ── Details helpers ──
 
 function InfoGrid({ items }: { items: { label: string; value: string }[] }) {
@@ -2356,11 +2152,42 @@ function NewInstanceDialog({
 
 // ── Settings Tab ──
 
-function SettingsTab({ javaOptions }: { javaOptions: JavaInfo[] }) {
+function SettingsTab({
+  javaOptions,
+  gridColumns,
+  onGridColumnsChange,
+}: {
+  javaOptions: JavaInfo[];
+  gridColumns: number;
+  onGridColumnsChange: (columns: number) => void;
+}) {
   return (
     <div className="space-y-4">
       <ThemePresetPicker />
       <ThemeEditor />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Instance Library</CardTitle>
+          <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="instance-grid-columns">Grid columns</Label>
+          <Select
+            id="instance-grid-columns"
+            value={String(gridColumns)}
+            onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}
+          >
+            <option value="2">2 columns</option>
+            <option value="3">3 columns</option>
+            <option value="4">4 columns</option>
+            <option value="5">5 columns</option>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Right-click an instance and use Move up / Move down to reorder within its group.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>Java Detection</CardTitle></CardHeader>

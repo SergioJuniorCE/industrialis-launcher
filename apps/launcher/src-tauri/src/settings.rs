@@ -98,6 +98,12 @@ pub struct LauncherSettings {
         alias = "active_account_id"
     )]
     pub default_account_id: Option<String>,
+    #[serde(default = "default_instance_grid_columns")]
+    pub instance_grid_columns: u8,
+}
+
+fn default_instance_grid_columns() -> u8 {
+    3
 }
 
 impl Default for LauncherSettings {
@@ -108,6 +114,7 @@ impl Default for LauncherSettings {
             theme_overrides: ThemeOverrides::default(),
             custom_theme_presets: Vec::new(),
             default_account_id: None,
+            instance_grid_columns: default_instance_grid_columns(),
         }
     }
 }
@@ -151,6 +158,9 @@ fn validate_theme_tokens(tokens: &ThemeTokens) -> Result<(), String> {
 pub fn validate_launcher_settings(settings: &LauncherSettings) -> Result<(), String> {
     if settings.theme_preset.is_empty() || settings.theme_preset.len() > 64 {
         return Err("invalid theme preset id".into());
+    }
+    if !(2..=5).contains(&settings.instance_grid_columns) {
+        return Err("instance grid columns must be between 2 and 5".into());
     }
     for value in [
         settings.theme_overrides.background.as_deref(),
