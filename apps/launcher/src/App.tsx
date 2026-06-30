@@ -2239,8 +2239,8 @@ function SettingsTab({
             <option value="5">5 columns</option>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Drag the grip handle on an instance card, or right-click and use Move up / Move down
-            to reorder within its group.
+            Use the arrow buttons on each card, drag a card onto another, or right-click for Move
+            up / down. Order is saved per group.
           </p>
         </CardContent>
       </Card>

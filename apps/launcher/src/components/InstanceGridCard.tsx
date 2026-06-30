@@ -12,6 +12,8 @@ import {
   X,
   ArrowUp,
   ArrowDown,
+  ChevronLeft,
+  ChevronRight,
   GripVertical,
 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -130,7 +132,7 @@ export function InstanceGridCard({
   onMoveUp: () => void;
   onMoveDown: () => void;
   isDragOver?: boolean;
-  onDragHandleStart?: (event: DragEvent<HTMLButtonElement>) => void;
+  onDragHandleStart?: (event: DragEvent<HTMLDivElement>) => void;
   onDragEnd?: () => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDragLeave?: () => void;
@@ -146,36 +148,35 @@ export function InstanceGridCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
+          draggable={!packBusy && Boolean(onDragHandleStart)}
           className={cn(
             "group/card relative flex flex-col rounded-xl border p-2.5 transition-colors",
             packBusy && "opacity-80",
             isDragOver && "border-primary/60 ring-2 ring-primary/25",
+            !packBusy && onDragHandleStart && "cursor-grab active:cursor-grabbing",
             selected
               ? "instance-row-selected border-primary/50 bg-primary/10 shadow-sm"
               : "border-border/70 bg-card/40 hover:border-primary/35 hover:bg-primary/8",
           )}
+          onDragStart={onDragHandleStart}
+          onDragEnd={onDragEnd}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
         >
           {!packBusy && onDragHandleStart && (
-            <button
-              type="button"
-              draggable
-              onDragStart={onDragHandleStart}
-              onDragEnd={onDragEnd}
-              className="absolute left-1.5 top-1.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/card:opacity-100 cursor-grab active:cursor-grabbing"
-              title="Drag to reorder"
-              aria-label={`Drag to reorder ${name}`}
-              onClick={(e) => e.stopPropagation()}
+            <div
+              className="absolute left-1.5 top-1.5 flex items-center gap-0.5 rounded bg-card/80 p-0.5 text-muted-foreground shadow-sm backdrop-blur-sm"
+              title="Drag card to reorder"
             >
-              <GripVertical className="size-3.5" />
-            </button>
+              <GripVertical className="size-3.5 shrink-0" />
+            </div>
           )}
           <button
             type="button"
             onClick={onSelect}
             className="flex min-w-0 flex-1 flex-col items-center gap-2 text-left"
+            draggable={false}
           >
             <InstanceAvatar
               instanceId={inst.id}
@@ -207,6 +208,38 @@ export function InstanceGridCard({
           </button>
 
           <div className="mt-2 flex items-center justify-center gap-0.5">
+            {!packBusy && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  title="Move earlier in group"
+                  disabled={!canMoveUp}
+                  draggable={false}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveUp();
+                  }}
+                >
+                  <ChevronLeft className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  title="Move later in group"
+                  disabled={!canMoveDown}
+                  draggable={false}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveDown();
+                  }}
+                >
+                  <ChevronRight className="size-3.5" />
+                </Button>
+              </>
+            )}
             {deleting ? (
               <Button
                 variant="ghost"
