@@ -21,6 +21,17 @@ function accountLabel(account: LauncherAccount): string {
   return account.account_type === "offline" ? "Offline account" : "Microsoft account";
 }
 
+function microsoftLicenseStatus(account: LauncherAccount): string | null {
+  if (account.account_type === "offline") return null;
+  if (account.can_play_minecraft === false) {
+    return "Does not own Minecraft Java Edition";
+  }
+  if (account.owns_minecraft === false && account.can_play_minecraft) {
+    return "Plays via PC Game Pass";
+  }
+  return null;
+}
+
 export function AccountsTab({
   onAccountsChanged,
   onSetDefaultAccount,
@@ -124,6 +135,7 @@ export function AccountsTab({
         <div className="rounded-md border border-border divide-y">
           {accounts.map((acc) => {
             const isDefault = acc.id === defaultAccountId;
+            const licenseStatus = microsoftLicenseStatus(acc);
             return (
             <div
               key={acc.id}
@@ -155,8 +167,12 @@ export function AccountsTab({
                 {acc.uuid && (
                   <p className="font-mono text-[10px] text-muted-foreground truncate">{acc.uuid}</p>
                 )}
-                {acc.account_type !== "offline" && acc.owns_minecraft === false && (
-                  <p className="text-[10px] text-amber-500">Does not own Minecraft Java Edition</p>
+                {licenseStatus && (
+                  <p className={`text-[10px] ${
+                    acc.can_play_minecraft === false ? "text-amber-500" : "text-muted-foreground"
+                  }`}>
+                    {licenseStatus}
+                  </p>
                 )}
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
@@ -194,9 +210,26 @@ export function AccountsTab({
 
       <div className="rounded-md border border-border p-3 space-y-2">
         <div>
+          <p className="text-xs font-medium">Microsoft account</p>
+          <p className="text-[11px] text-muted-foreground">
+            Sign in with your Microsoft account to play online. Ownership is verified via the Mojang API after login.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          className="w-full"
+          onClick={() => void handleMicrosoftLogin()}
+          disabled={loggingIn}
+        >
+          {loggingIn ? "Logging in…" : "Sign in with Microsoft"}
+        </Button>
+      </div>
+
+      <div className="rounded-md border border-border p-3 space-y-2">
+        <div>
           <p className="text-xs font-medium">Offline account</p>
           <p className="text-[11px] text-muted-foreground">
-            Letters, numbers, underscores (up to 16 characters).
+            Play without signing in. Letters, numbers, underscores (up to 16 characters).
           </p>
         </div>
         <div className="flex gap-2">
@@ -210,21 +243,13 @@ export function AccountsTab({
           />
           <Button
             size="sm"
+            variant="outline"
             disabled={addingOffline || !offlineUsername.trim()}
             onClick={() => void handleAddOffline()}
           >
             {addingOffline ? "Creating…" : "Create"}
           </Button>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full"
-          onClick={() => void handleMicrosoftLogin()}
-          disabled={loggingIn}
-        >
-          {loggingIn ? "Logging in…" : "Add Microsoft account"}
-        </Button>
       </div>
 
       {loggingIn && deviceCode && (
