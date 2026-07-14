@@ -27,6 +27,8 @@ export interface LauncherSettingsData {
   default_account_id?: string | null;
   /** @deprecated Renamed to default_account_id */
   active_account_id?: string | null;
+  /** Number of columns in the instance grid (2–5). */
+  instance_grid_columns?: number;
 }
 
 export function resolveDefaultAccountId(
@@ -41,4 +43,5 @@ export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
   theme_overrides: {},
   custom_theme_presets: [],
   default_account_id: null,
+  instance_grid_columns: 3,
 };

@@ -1,4 +1,5 @@
 mod auth;
+mod config_presets;
 mod groups;
 mod migration;
 mod minecraft_files;
@@ -840,11 +841,11 @@ fn list_instance_ids() -> Result<HashSet<String>, String> {
     Ok(ids)
 }
 
-fn instance_dir(id: &str) -> PathBuf {
+pub(crate) fn instance_dir(id: &str) -> PathBuf {
     instances_dir().join(sanitize_name(id))
 }
 
-fn sanitize_name(s: &str) -> String {
+pub(crate) fn sanitize_name(s: &str) -> String {
     s.chars()
         .map(|c| {
             if c.is_whitespace() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
@@ -1283,6 +1284,21 @@ async fn delete_group(name: String) -> Result<(), String> {
     let dir = instances_dir();
     let known_ids = list_instance_ids()?;
     groups::delete_group(&dir, &name, &known_ids)
+}
+
+#[tauri::command]
+async fn move_instance_in_group(id: String, direction: String) -> Result<(), String> {
+    let id = sanitize_name(id.trim());
+    let dir = instances_dir();
+    let known_ids = list_instance_ids()?;
+    groups::move_instance_in_group(&dir, &id, &direction, &known_ids)
+}
+
+#[tauri::command]
+async fn set_group_instance_order(group: String, order: Vec<String>) -> Result<(), String> {
+    let dir = instances_dir();
+    let known_ids = list_instance_ids()?;
+    groups::set_group_instance_order(&dir, &group, &order, &known_ids)
 }
 
 #[tauri::command]
@@ -3633,6 +3649,8 @@ pub fn run() {
             rename_group,
             delete_group,
             set_group_collapsed,
+            move_instance_in_group,
+            set_group_instance_order,
             delete_instance,
             cancel_delete_instance,
             copy_instance,
@@ -3647,6 +3665,8 @@ pub fn run() {
             read_minecraft_file,
             write_minecraft_file,
             delete_persistent_file,
+            config_presets::apply_config_preset,
+            config_presets::get_config_preset_status,
             list_persistent_files,
             list_custom_mods,
             browse_custom_mod,

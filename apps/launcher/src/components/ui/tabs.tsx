@@ -36,10 +36,11 @@ function TabsList({ className, children, ...props }: React.HTMLAttributes<HTMLDi
   );
 }
 
-function TabsTrigger({ value, className, children, ...props }: {
+function TabsTrigger({ value, className, children, disabled, ...props }: {
   value: string;
   className?: string;
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
   const ctx = React.useContext(TabsContext);
   const isActive = ctx?.value === value;
@@ -48,6 +49,7 @@ function TabsTrigger({ value, className, children, ...props }: {
       type="button"
       variant="ghost"
       size="sm"
+      disabled={disabled}
       onClick={() => ctx?.onValueChange(value)}
       className={cn(
         "h-7 rounded-sm px-2.5 py-0.5 text-xs font-medium shadow-none",
