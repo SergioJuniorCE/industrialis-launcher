@@ -138,6 +138,7 @@ function orderInstancesInGroup(
   const result: InstanceInfo[] = [];
   const seen = new Set<string>();
   for (const id of order) {
+    if (seen.has(id)) continue;
     const inst = byId.get(id);
     if (inst) {
       result.push(inst);
@@ -503,20 +504,16 @@ export default function App() {
     }
   };
 
-  const handleMoveInstance = async (id: string, direction: "up" | "down") => {
-    try {
-      await invoke("move_instance_in_group", { id, direction });
-      loadGroups();
-    } catch (e) {
-      setError(`Reorder failed: ${e}`);
-    }
-  };
-
   const handleReorderInstances = async (group: string, order: string[]) => {
+    setGroupsState((prev) => ({
+      ...prev,
+      instance_order: { ...prev.instance_order, [group]: order },
+    }));
     try {
       await invoke("set_group_instance_order", { group, order });
       loadGroups();
     } catch (e) {
+      loadGroups();
       setError(`Reorder failed: ${e}`);
     }
   };
@@ -860,7 +857,6 @@ export default function App() {
                 onReinstall={setReinstallInstanceId}
                 onCopy={setCopyInstanceId}
                 onRename={setRenameInstanceId}
-                onMoveInstance={handleMoveInstance}
                 onReorderInstances={handleReorderInstances}
                 onIconChanged={loadInstances}
                 onIconError={(message) => setError(`Icon update failed: ${message}`)}
@@ -1447,7 +1443,6 @@ function InstanceGroupList({
   onReinstall,
   onCopy,
   onRename,
-  onMoveInstance,
   onReorderInstances,
   onIconChanged,
   onIconError,
@@ -1476,7 +1471,6 @@ function InstanceGroupList({
   onReinstall: (id: string) => void;
   onCopy: (id: string) => void;
   onRename: (id: string) => void;
-  onMoveInstance: (id: string, direction: "up" | "down") => void;
   onReorderInstances: (group: string, order: string[]) => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
@@ -1517,7 +1511,6 @@ function InstanceGroupList({
           onReinstall={onReinstall}
           onCopy={onCopy}
           onRename={onRename}
-          onMoveInstance={onMoveInstance}
           onReorderInstances={onReorderInstances}
           onIconChanged={onIconChanged}
           onIconError={onIconError}
@@ -1552,7 +1545,6 @@ function InstanceGroupSection({
   onReinstall,
   onCopy,
   onRename,
-  onMoveInstance,
   onReorderInstances,
   onIconChanged,
   onIconError,
@@ -1581,7 +1573,6 @@ function InstanceGroupSection({
   onReinstall: (id: string) => void;
   onCopy: (id: string) => void;
   onRename: (id: string) => void;
-  onMoveInstance: (id: string, direction: "up" | "down") => void;
   onReorderInstances: (group: string, order: string[]) => void;
   onIconChanged: () => void;
   onIconError: (message: string) => void;
@@ -1602,7 +1593,7 @@ function InstanceGroupSection({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   const reorderByDrop = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
+    if (fromId === toId || draggingId !== fromId) return;
     const ids = section.items.map((item) => item.id);
     const fromIndex = ids.indexOf(fromId);
     const toIndex = ids.indexOf(toId);
@@ -1699,7 +1690,7 @@ function InstanceGroupSection({
       />
       {!collapsed && (
         <div className={cn("grid gap-2 px-1 pb-1", gridClass)}>
-          {section.items.map((inst, index) => (
+          {section.items.map((inst) => (
             <InstanceGridCard
               key={inst.id}
               inst={inst}
@@ -1724,10 +1715,7 @@ function InstanceGroupSection({
               onReinstall={() => onReinstall(inst.id)}
               onCopy={() => onCopy(inst.id)}
               onRename={() => onRename(inst.id)}
-              canMoveUp={index > 0}
-              canMoveDown={index < section.items.length - 1}
-              onMoveUp={() => onMoveInstance(inst.id, "up")}
-              onMoveDown={() => onMoveInstance(inst.id, "down")}
+              isDragging={draggingId === inst.id}
               isDragOver={dropTargetId === inst.id && draggingId !== inst.id}
               onDragHandleStart={(event) => {
                 event.dataTransfer.setData("text/plain", inst.id);
@@ -2239,8 +2227,7 @@ function SettingsTab({
             <option value="5">5 columns</option>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Use the arrow buttons on each card, drag a card onto another, or right-click for Move
-            up / down. Order is saved per group.
+            Drag instance cards to reorder them within a group. Order is saved per group.
           </p>
         </CardContent>
       </Card>

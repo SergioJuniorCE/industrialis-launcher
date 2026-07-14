@@ -130,6 +130,14 @@ fn reconcile_group_orders(data: &mut GroupData, known_instances: &HashSet<String
     for (group, member_set) in &members {
         let order = data.group_order.entry(group.clone()).or_default();
         order.retain(|id| member_set.contains(id));
+        let mut deduped: Vec<String> = Vec::with_capacity(order.len());
+        let mut seen: HashSet<String> = HashSet::new();
+        for id in order.drain(..) {
+            if seen.insert(id.clone()) {
+                deduped.push(id);
+            }
+        }
+        order.extend(deduped);
         let in_order: HashSet<_> = order.iter().cloned().collect();
         let mut newcomers: Vec<_> = member_set
             .iter()
@@ -155,12 +163,14 @@ fn save_group_data(
         if group_name.is_empty() {
             continue;
         }
+        let mut seen: HashSet<String> = HashSet::new();
         let filtered: Vec<String> = ids
             .iter()
             .filter(|id| {
                 known_instances.contains(*id)
                     && data.instance_index.get(*id).cloned().unwrap_or_default() == *group_name
             })
+            .filter(|id| seen.insert((*id).clone()))
             .cloned()
             .collect();
         if filtered.is_empty() && !data.collapsed.contains(group_name) {
@@ -175,6 +185,7 @@ fn save_group_data(
         );
     }
 
+    let mut ungrouped_seen: HashSet<String> = HashSet::new();
     let ungrouped_ids: Vec<String> = data
         .group_order
         .get("")
@@ -184,6 +195,7 @@ fn save_group_data(
                     known_instances.contains(*id)
                         && data.instance_index.get(*id).is_none()
                 })
+                .filter(|id| ungrouped_seen.insert((*id).clone()))
                 .cloned()
                 .collect()
         })
@@ -369,11 +381,13 @@ pub fn set_group_instance_order(
         return Ok(());
     }
 
-    let mut next_order: Vec<String> = order
-        .iter()
-        .filter(|id| members.contains(*id))
-        .cloned()
-        .collect();
+    let mut next_order: Vec<String> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for id in order {
+        if members.contains(id) && seen.insert(id.clone()) {
+            next_order.push(id.clone());
+        }
+    }
 
     let in_order: HashSet<_> = next_order.iter().cloned().collect();
     let mut missing: Vec<_> = members
@@ -614,6 +628,44 @@ mod tests {
             state.instance_order.get("Pack").map(|v| v.as_slice()),
             Some(
                 ["inst-c".to_string(), "inst-a".to_string(), "inst-b".to_string()].as_slice()
+            )
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn set_group_instance_order_deduplicates_ids() {
+        let dir = temp_instances_dir();
+        let known = HashSet::from([
+            "inst-a".to_string(),
+            "inst-b".to_string(),
+            "inst-c".to_string(),
+        ]);
+
+        set_instance_group(&dir, "inst-a", "Pack", &known).unwrap();
+        set_instance_group(&dir, "inst-b", "Pack", &known).unwrap();
+        set_instance_group(&dir, "inst-c", "Pack", &known).unwrap();
+
+        set_group_instance_order(
+            &dir,
+            "Pack",
+            &[
+                "inst-b".to_string(),
+                "inst-b".to_string(),
+                "inst-a".to_string(),
+                "inst-c".to_string(),
+                "inst-a".to_string(),
+            ],
+            &known,
+        )
+        .unwrap();
+
+        let state = get_groups_state(&dir, &known);
+        assert_eq!(
+            state.instance_order.get("Pack").map(|v| v.as_slice()),
+            Some(
+                ["inst-b".to_string(), "inst-a".to_string(), "inst-c".to_string()].as_slice()
             )
         );
 
