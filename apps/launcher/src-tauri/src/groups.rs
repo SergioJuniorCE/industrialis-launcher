@@ -85,7 +85,7 @@ fn load_group_data(instances_dir: &PathBuf, known_instances: &HashSet<String>) -
         if entry.hidden {
             collapsed.insert(group_name.clone());
         }
-        let mut ids: Vec<String> = entry
+        let ids: Vec<String> = entry
             .instances
             .into_iter()
             .filter(|id| known_instances.contains(id))

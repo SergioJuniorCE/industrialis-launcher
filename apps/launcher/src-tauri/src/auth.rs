@@ -182,13 +182,6 @@ pub struct DeviceCodeInfo {
     pub message: String,
 }
 
-#[derive(Debug, Clone)]
-pub enum AuthMethod {
-    OAuthCode,
-    DeviceCode,
-    Refresh,
-}
-
 // ── Persistence ──
 
 pub fn accounts_path(data_dir: &PathBuf) -> PathBuf {
@@ -315,7 +308,7 @@ pub async fn login_microsoft_account(
         skin_png_base64: None,
     };
 
-    run_pipeline(client, &mut account, msa, AuthMethod::OAuthCode).await?;
+    run_pipeline(client, &mut account, msa).await?;
     upsert_account(data_dir, &mut account)?;
     Ok(account_to_info(&account))
 }
@@ -335,7 +328,7 @@ pub async fn ensure_fresh_token(
     let refreshed =
         refresh_msa_token(client, embedded_microsoft_client_id()?, &msa.refresh_token).await?;
     let mut updated = account.clone();
-    run_pipeline(client, &mut updated, refreshed, AuthMethod::Refresh).await?;
+    run_pipeline(client, &mut updated, refreshed).await?;
     upsert_account(data_dir, &mut updated)?;
     Ok(updated.access_token())
 }
@@ -775,10 +768,6 @@ async fn refresh_msa_token(
     parse_msa_token_response_with_fallback(&body, Some(refresh_token))
 }
 
-fn parse_msa_token_response(body: &serde_json::Value) -> Result<MsaToken, String> {
-    parse_msa_token_response_with_fallback(body, None)
-}
-
 fn parse_msa_token_response_with_fallback(
     body: &serde_json::Value,
     fallback_refresh: Option<&str>,
@@ -833,7 +822,6 @@ pub async fn run_pipeline(
     client: &Client,
     account: &mut AccountData,
     msa: MsaToken,
-    method: AuthMethod,
 ) -> Result<(), String> {
     account.msa_token = Some(msa.clone());
 
@@ -884,7 +872,6 @@ pub async fn run_pipeline(
     // Step 7: Skin
     account.skin_png_base64 = download_skin(client, account.minecraft_profile.as_ref()).await?;
 
-    let _ = method; // reserved for logging / telemetry
     Ok(())
 }
 

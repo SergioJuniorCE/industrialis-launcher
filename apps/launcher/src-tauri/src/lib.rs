@@ -318,12 +318,10 @@ struct PatchJson {
     plus_args: Option<Vec<String>>,
     #[serde(rename = "+tweakers")]
     plus_tweakers: Option<Vec<String>>,
-    #[serde(rename = "-args")]
-    minus_args: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PatchAssetIndex {
+pub struct PatchAssetIndex {
     id: String,
     sha1: Option<String>,
     size: Option<u64>,

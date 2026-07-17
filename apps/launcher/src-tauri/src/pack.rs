@@ -81,7 +81,6 @@ pub struct UpdateModPreview {
 
 #[derive(Debug, Clone)]
 pub struct ModClassification {
-    pub custom_candidates: Vec<ModEntry>,
     pub updated_count: u32,
     pub new_count: u32,
     pub removed_count: u32,
@@ -183,13 +182,6 @@ pub fn classify_mod_updates(old_mods: &[ModEntry], new_mods: &[ModEntry]) -> Mod
     let new_ids: HashSet<&str> = new_mods.iter().map(|m| m.identity.as_str()).collect();
     let old_ids: HashSet<&str> = old_mods.iter().map(|m| m.identity.as_str()).collect();
 
-    let mut custom_candidates = vec![];
-    for m in old_mods {
-        if !new_ids.contains(m.identity.as_str()) {
-            custom_candidates.push(m.clone());
-        }
-    }
-
     let updated_count = old_mods
         .iter()
         .filter(|m| new_ids.contains(m.identity.as_str()))
@@ -204,7 +196,6 @@ pub fn classify_mod_updates(old_mods: &[ModEntry], new_mods: &[ModEntry]) -> Mod
         .count() as u32;
 
     ModClassification {
-        custom_candidates,
         updated_count,
         new_count,
         removed_count,
@@ -401,60 +392,6 @@ pub fn extract_pack_zip(
         );
     }
     Ok(())
-}
-
-pub async fn download_and_extract_staging_silent(
-    client: &reqwest::Client,
-    pack_version: &str,
-    java_type: &str,
-    staging_parent: &Path,
-) -> Result<PathBuf, String> {
-    let versions = fetch_gtnh_versions(client).await?;
-    let v = versions
-        .get(pack_version)
-        .ok_or_else(|| "pack version not found".to_string())?;
-    let dl_url = resolve_pack_download_url(v, java_type);
-
-    fs::create_dir_all(staging_parent).map_err(|e| e.to_string())?;
-    let staging = staging_parent.join("staging");
-
-    if let Some(cache_pack) =
-        crate::pack_cache::lookup_pack_cache(pack_version, java_type, &dl_url)?
-    {
-        crate::pack_cache::copy_cached_pack_to_staging(&cache_pack, &staging)?;
-        return Ok(staging);
-    }
-
-    let zip_path = staging_parent.join("pack.zip");
-    if staging.exists() {
-        fs::remove_dir_all(&staging).map_err(|e| e.to_string())?;
-    }
-    fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
-
-    let resp = client.get(&dl_url).send().await.map_err(|e| e.to_string())?;
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-    fs::write(&zip_path, &bytes).map_err(|e| e.to_string())?;
-
-    let zip_file = fs::File::open(&zip_path).map_err(|e| e.to_string())?;
-    let mut archive = zip::ZipArchive::new(zip_file).map_err(|e| e.to_string())?;
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-        let out_path = staging.join(entry.name());
-        if entry.name().ends_with('/') {
-            fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
-        } else {
-            if let Some(parent) = out_path.parent() {
-                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-            }
-            let mut outfile = fs::File::create(&out_path).map_err(|e| e.to_string())?;
-            std::io::copy(&mut entry, &mut outfile).map_err(|e| e.to_string())?;
-        }
-    }
-
-    flatten_nested_pack(&staging)?;
-    fs::remove_file(&zip_path).ok();
-    crate::pack_cache::store_pack_cache(pack_version, java_type, &dl_url, &staging)?;
-    Ok(staging)
 }
 
 pub async fn download_and_extract_to_staging(
@@ -755,8 +692,7 @@ mod tests {
             size_bytes: 200,
         }];
         let c = classify_mod_updates(&old, &new);
-        assert_eq!(c.custom_candidates.len(), 1);
-        assert_eq!(c.custom_candidates[0].identity, "mycustom");
+        assert_eq!(c.removed_count, 1);
         assert_eq!(c.new_count, 1);
     }
 
@@ -773,7 +709,7 @@ mod tests {
             size_bytes: 2,
         }];
         let c = classify_mod_updates(&old, &new);
-        assert!(c.custom_candidates.is_empty());
+        assert_eq!(c.removed_count, 0);
         assert_eq!(c.updated_count, 1);
         assert_eq!(c.new_count, 0);
     }
