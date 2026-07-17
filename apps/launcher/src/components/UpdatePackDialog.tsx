@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Dialog, DialogContent } from "./ui/dialog";
@@ -35,14 +35,12 @@ interface UpdateModPreview {
   removed_from_pack_count: number;
 }
 
-const WIKI_URL = "https://wiki.gtnewhorizons.com/wiki/Installing_and_Migrating";
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-type Step = "version" | "mods" | "confirm";
+type Step = "version" | "mods";
 
 export function UpdatePackDialog({
   instanceId,
@@ -185,7 +183,8 @@ export function UpdatePackDialog({
       if (result.custom_mods.length > 0) {
         setStep("mods");
       } else {
-        setStep("confirm");
+        setHandoff(true);
+        onUpdate(packVersion, javaType, []);
       }
     } catch (e) {
       setPreviewError(String(e));
@@ -199,7 +198,7 @@ export function UpdatePackDialog({
     void loadPreview(targetVersion);
   };
 
-  const confirmUpdate = () => {
+  const startUpdate = () => {
     if (!targetVersion) return;
     setHandoff(true);
     onUpdate(targetVersion, javaType, keepIdentities);
@@ -331,68 +330,8 @@ export function UpdatePackDialog({
                 <Button variant="outline" className="flex-1" onClick={() => setStep("version")}>
                   Back
                 </Button>
-                <Button className="flex-1" onClick={() => setStep("confirm")}>
-                  Next
-                </Button>
-              </div>
-            </>
-          )}
-
-          {step === "confirm" && (
-            <>
-              <div className="text-sm space-y-2">
-                <p>
-                  Update <strong>{instanceName}</strong> from{" "}
-                  <span className="font-mono">{currentPackVersion}</span> to{" "}
-                  <span className="font-mono">{targetVersion}</span>?
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  The update runs in the background. You can keep using the launcher while it progresses in
-                  Processes.
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  Installs a fresh copy of the target pack, then restores your saves, JourneyMap, options, and other
-                  player data per the{" "}
-                  <a
-                    href={WIKI_URL}
-                    className="inline-flex items-center gap-0.5 text-primary hover:underline"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      void import("@tauri-apps/plugin-opener").then(({ openUrl }) => openUrl(WIKI_URL));
-                    }}
-                  >
-                    GTNH migration guide
-                    <ExternalLink className="size-3" />
-                  </a>
-                  . Files you saved in the Files tab are re-applied afterward.
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  GTNH recommends updating one major version at a time. Back up your instance folder if unsure.
-                </p>
-                {preview && preview.custom_mods.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Keeping {keepIdentities.length} custom mod{keepIdentities.length === 1 ? "" : "s"}.
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setStep(preview?.custom_mods.length ? "mods" : "version")}
-                  disabled={handoff}
-                >
-                  Back
-                </Button>
-                <Button className="flex-1" disabled={!targetVersion || handoff} onClick={confirmUpdate}>
-                  {handoff ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin" />
-                      Starting…
-                    </>
-                  ) : (
-                    "Update in background"
-                  )}
+                <Button className="flex-1" onClick={startUpdate}>
+                  Update in background
                 </Button>
               </div>
             </>

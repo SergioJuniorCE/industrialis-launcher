@@ -210,6 +210,7 @@ export default function App() {
   const [sizesRefreshing, setSizesRefreshing] = useState(false);
   const [processes, setProcesses] = useState<Map<string, BackgroundProcess>>(() => new Map());
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState("info");
   const [javaOptions, setJavaOptions] = useState<JavaInfo[]>([]);
@@ -234,6 +235,7 @@ export default function App() {
   const [renameInstanceId, setRenameInstanceId] = useState<string | null>(null);
   const [lastUsedGroup, setLastUsedGroup] = useState("");
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [gtnhVersions, setGtnhVersions] = useState<Record<string, GtnhVersion> | null>(null);
   const [accountsLaunchRedirect, setAccountsLaunchRedirect] = useState<{
     instanceId: string;
@@ -249,7 +251,10 @@ export default function App() {
   }, []);
 
   const loadAccounts = useCallback(() => {
-    invoke<AccountInfo[]>("get_accounts").then(setAccounts).catch(() => setAccounts([]));
+    void invoke<AccountInfo[]>("get_accounts")
+      .then(setAccounts)
+      .catch(() => setAccounts([]))
+      .finally(() => setAccountsLoaded(true));
   }, []);
 
   const loadInstanceSizes = useCallback(() => {
@@ -287,7 +292,7 @@ export default function App() {
   }, [loadAccounts, loadInstances]);
 
   useEffect(() => {
-    if (!launcherSettingsLoaded) return;
+    if (!launcherSettingsLoaded || !accountsLoaded) return;
     if (defaultAccountId && !accounts.some((a) => a.id === defaultAccountId)) {
       updateSettings({ default_account_id: null });
       void saveSettingsNow();
@@ -297,7 +302,7 @@ export default function App() {
       updateSettings({ default_account_id: accounts[0].id });
       void saveSettingsNow();
     }
-  }, [accounts, defaultAccountId, launcherSettingsLoaded, updateSettings, saveSettingsNow]);
+  }, [accounts, accountsLoaded, defaultAccountId, launcherSettingsLoaded, updateSettings, saveSettingsNow]);
 
   const handleSetDefaultAccount = useCallback(
     (id: string | null) => {
@@ -337,6 +342,7 @@ export default function App() {
     ) => {
       const key = processKey("update-pack", id);
       setError(null);
+      setNotice(`${name} is updating in the background. Follow its progress in Processes.`);
       setUpdatePackInstanceId(null);
       setProcesses((prev) => {
         const next = new Map(prev);
@@ -1346,6 +1352,13 @@ export default function App() {
         destructive
         onConfirm={confirmDeleteInstance}
       />
+
+      {notice && (
+        <div className="fixed bottom-10 right-4 z-50 max-w-sm rounded bg-secondary p-3 text-secondary-foreground shadow-lg">
+          <p className="text-sm">{notice}</p>
+          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setNotice(null)}>Dismiss</Button>
+        </div>
+      )}
 
       {/* Error toast */}
       {error && (
