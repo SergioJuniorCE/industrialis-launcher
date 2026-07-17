@@ -15,11 +15,21 @@ use std::sync::Arc;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 pub use auth::{AccountData, AccountInfo};
+
+fn hide_background_console(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+}
 
 // ── Types ──
 
@@ -1117,11 +1127,12 @@ fn run_shell_command(command: &str, work_dir: &Path, extra_env: &HashMap<String,
         return Ok(());
     }
     let mut cmd = if cfg!(windows) {
-        let mut c = std::process::Command::new("cmd");
+        let mut c = Command::new("cmd");
         c.args(["/C", trimmed]);
+        hide_background_console(&mut c);
         c
     } else {
-        let mut c = std::process::Command::new("sh");
+        let mut c = Command::new("sh");
         c.args(["-c", trimmed]);
         c
     };
@@ -1157,8 +1168,10 @@ fn test_java(path_override: Option<String>) -> Result<String, String> {
     } else {
         java_path().ok_or("no Java configured or found — set JAVA_HOME or pick a Java path")?
     };
-    let output = std::process::Command::new(&java)
-        .arg("-version")
+    let mut command = Command::new(&java);
+    command.arg("-version");
+    hide_background_console(&mut command);
+    let output = command
         .output()
         .map_err(|e| format!("failed to run Java ({java}): {e}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -2577,10 +2590,10 @@ async fn detect_java() -> Result<Vec<JavaInfo>, String> {
 }
 
 fn probe_java(path: &str) -> Option<JavaInfo> {
-    let output = std::process::Command::new(path)
-        .arg("-version")
-        .output()
-        .ok()?;
+    let mut command = Command::new(path);
+    command.arg("-version");
+    hide_background_console(&mut command);
+    let output = command.output().ok()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     // Parse "openjdk version \"21.0.3\"" or similar
     let version_str = stderr.lines().next()?;
@@ -3150,7 +3163,8 @@ async fn launch_instance(
         (java.clone(), args)
     };
 
-    let mut cmd = std::process::Command::new(&cmd_executable);
+    let mut cmd = Command::new(&cmd_executable);
+    hide_background_console(&mut cmd);
     let game_work_dir = minecraft_working_dir(&pack_dir);
     fs::create_dir_all(&game_work_dir).map_err(|e| e.to_string())?;
     cmd.current_dir(&game_work_dir)
