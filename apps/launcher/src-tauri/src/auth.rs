@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -184,11 +184,11 @@ pub struct DeviceCodeInfo {
 
 // ── Persistence ──
 
-pub fn accounts_path(data_dir: &PathBuf) -> PathBuf {
+pub fn accounts_path(data_dir: &Path) -> PathBuf {
     data_dir.join("accounts.json")
 }
 
-pub fn load_accounts(data_dir: &PathBuf) -> Vec<AccountData> {
+pub fn load_accounts(data_dir: &Path) -> Vec<AccountData> {
     let path = accounts_path(data_dir);
     let raw = match fs_read(&path) {
         Some(s) => s,
@@ -203,7 +203,7 @@ pub fn load_accounts(data_dir: &PathBuf) -> Vec<AccountData> {
     Vec::new()
 }
 
-pub fn save_accounts(data_dir: &PathBuf, accounts: &[AccountData]) -> Result<(), String> {
+pub fn save_accounts(data_dir: &Path, accounts: &[AccountData]) -> Result<(), String> {
     let path = accounts_path(data_dir);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -213,7 +213,7 @@ pub fn save_accounts(data_dir: &PathBuf, accounts: &[AccountData]) -> Result<(),
     Ok(())
 }
 
-fn fs_read(path: &PathBuf) -> Option<String> {
+fn fs_read(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
 }
 
@@ -272,7 +272,7 @@ pub fn embedded_microsoft_client_id() -> Result<&'static str, String> {
 pub async fn login_microsoft_account(
     client: &Client,
     app: &AppHandle,
-    data_dir: &PathBuf,
+    data_dir: &Path,
 ) -> Result<AccountInfo, String> {
     let client_id = embedded_microsoft_client_id()?;
     let (cancel_tx, cancel_rx) = watch::channel(false);
@@ -315,7 +315,7 @@ pub async fn login_microsoft_account(
 
 pub async fn ensure_fresh_token(
     client: &Client,
-    data_dir: &PathBuf,
+    data_dir: &Path,
     account: &AccountData,
 ) -> Result<String, String> {
     if !account.needs_refresh() {
@@ -333,7 +333,7 @@ pub async fn ensure_fresh_token(
     Ok(updated.access_token())
 }
 
-fn upsert_account(data_dir: &PathBuf, account: &mut AccountData) -> Result<(), String> {
+fn upsert_account(data_dir: &Path, account: &mut AccountData) -> Result<(), String> {
     let mut accounts = load_accounts(data_dir);
     let profile_id = account.profile_id();
     if !profile_id.is_empty() {
@@ -374,9 +374,7 @@ pub fn validate_offline_username(username: &str) -> Result<String, String> {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '_')
     {
-        return Err(
-            "username may only contain letters, numbers, and underscores".into(),
-        );
+        return Err("username may only contain letters, numbers, and underscores".into());
     }
     Ok(trimmed.to_string())
 }
@@ -390,7 +388,7 @@ pub fn offline_player_uuid(username: &str) -> String {
 }
 
 pub fn find_offline_account_by_username(
-    data_dir: &PathBuf,
+    data_dir: &Path,
     username: &str,
 ) -> Result<Option<AccountInfo>, String> {
     let username = validate_offline_username(username)?;
@@ -401,7 +399,7 @@ pub fn find_offline_account_by_username(
 }
 
 pub fn find_or_create_offline_account(
-    data_dir: &PathBuf,
+    data_dir: &Path,
     username: &str,
 ) -> Result<AccountInfo, String> {
     if let Some(existing) = find_offline_account_by_username(data_dir, username)? {
@@ -410,12 +408,13 @@ pub fn find_or_create_offline_account(
     create_offline_account(data_dir, username)
 }
 
-pub fn create_offline_account(data_dir: &PathBuf, username: &str) -> Result<AccountInfo, String> {
+pub fn create_offline_account(data_dir: &Path, username: &str) -> Result<AccountInfo, String> {
     let username = validate_offline_username(username)?;
     let accounts = load_accounts(data_dir);
-    if accounts.iter().any(|a| {
-        a.is_offline() && a.profile_name().eq_ignore_ascii_case(&username)
-    }) {
+    if accounts
+        .iter()
+        .any(|a| a.is_offline() && a.profile_name().eq_ignore_ascii_case(&username))
+    {
         return Err("an offline account with this username already exists".into());
     }
 
@@ -441,7 +440,9 @@ pub fn create_offline_account(data_dir: &PathBuf, username: &str) -> Result<Acco
 
 // ── Step 1: Microsoft OAuth ──
 
-fn begin_oauth_wait(expected_state: String) -> tokio::sync::oneshot::Receiver<Result<String, String>> {
+fn begin_oauth_wait(
+    expected_state: String,
+) -> tokio::sync::oneshot::Receiver<Result<String, String>> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut guard = OAUTH_PENDING.lock().unwrap();
     *guard = Some(OAuthPending {
@@ -477,9 +478,7 @@ pub fn handle_oauth_callback(url: &str) -> Result<(), String> {
     match result {
         Ok((code, state)) => {
             if state != pending.expected_state {
-                let _ = pending
-                    .sender
-                    .send(Err("OAuth state mismatch".into()));
+                let _ = pending.sender.send(Err("OAuth state mismatch".into()));
                 return Err("OAuth state mismatch".into());
             }
             let _ = pending.sender.send(Ok(code));
@@ -594,12 +593,13 @@ async fn race_oauth_and_device_code(
         }
     }
 
-    Err(oauth_err.unwrap_or_else(|| {
-        device_err.unwrap_or_else(|| "Microsoft login failed".into())
-    }))
+    Err(oauth_err.unwrap_or_else(|| device_err.unwrap_or_else(|| "Microsoft login failed".into())))
 }
 
-async fn request_device_code(client: &Client, client_id: &str) -> Result<DeviceCodeResponse, String> {
+async fn request_device_code(
+    client: &Client,
+    client_id: &str,
+) -> Result<DeviceCodeResponse, String> {
     let body: serde_json::Value = client
         .post(MSA_DEVICE_CODE_URL)
         .header("Accept", "application/json")
@@ -1083,9 +1083,7 @@ fn parse_entitlement_items(items: &[serde_json::Value]) -> MinecraftEntitlement 
         if name == "product_minecraft" || name == "game_minecraft" {
             owns = true;
         }
-        if name == "product_minecraft"
-            || name == "game_minecraft"
-            || name == "product_game_pass_pc"
+        if name == "product_minecraft" || name == "game_minecraft" || name == "product_game_pass_pc"
         {
             can_play = true;
         }
@@ -1118,7 +1116,10 @@ async fn check_entitlements(
         .await
         .map_err(|e| format!("entitlements: {e}"))?;
 
-    let items = body["items"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+    let items = body["items"]
+        .as_array()
+        .map(|a| a.as_slice())
+        .unwrap_or(&[]);
     Ok(parse_entitlement_items(items))
 }
 
@@ -1236,7 +1237,9 @@ mod tests {
         assert!(is_oauth_redirect_url(
             "industrialislauncher://oauth/microsoft/?code=abc&state=xyz"
         ));
-        assert!(!is_oauth_redirect_url("https://example.com/oauth/microsoft?code=abc"));
+        assert!(!is_oauth_redirect_url(
+            "https://example.com/oauth/microsoft?code=abc"
+        ));
     }
 
     #[test]

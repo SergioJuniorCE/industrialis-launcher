@@ -1,0 +1,61 @@
+name: Build Windows launcher
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/launcher/src-tauri -> target
+
+      - name: Verify release configuration
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:MICROSOFT_CLIENT_ID)) {
+            throw "Add MICROSOFT_CLIENT_ID as a GitHub Actions repository secret."
+          }
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build launcher artifacts
+        run: pnpm build:launcher:release
+
+      - name: Upload launcher artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: industrialis-launcher-windows-${{ github.sha }}
+          path: artifacts/launcher/*
+          if-no-files-found: error
+          retention-days: 14

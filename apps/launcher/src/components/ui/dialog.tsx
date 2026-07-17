@@ -16,18 +16,32 @@ function Dialog({
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) {
+  const dialogRef = React.useRef<HTMLDialogElement>(null);
+  const contextValue = React.useMemo(
+    () => ({ open, onOpenChange }),
+    [open, onOpenChange],
+  );
+
+  React.useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+
   return (
-    <DialogContext.Provider value={{ open, onOpenChange }}>
-      {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="fixed inset-0 bg-black/50"
-            onClick={() => onOpenChange(false)}
-            aria-hidden
-          />
-          {children}
-        </div>
-      ) : null}
+    <DialogContext.Provider value={contextValue}>
+      <dialog
+        ref={dialogRef}
+        aria-label="Application dialog"
+        className="fixed inset-0 z-50 m-auto max-h-none max-w-none overflow-visible bg-transparent p-4 text-foreground backdrop:bg-black/50"
+        onCancel={(event) => {
+          event.preventDefault();
+          onOpenChange(false);
+        }}
+      >
+        {open ? children : null}
+      </dialog>
     </DialogContext.Provider>
   );
 }
@@ -43,8 +57,6 @@ function DialogContent({
         "relative z-50 w-full max-w-md rounded-lg border bg-card p-6 shadow-lg",
         className,
       )}
-      role="dialog"
-      aria-modal="true"
       onClick={(e) => e.stopPropagation()}
       {...props}
     >

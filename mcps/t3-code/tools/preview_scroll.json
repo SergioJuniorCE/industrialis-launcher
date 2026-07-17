@@ -1,9 +1,20 @@
 {
   "name": "preview_scroll",
-  "description": "Scroll by CSS pixels. Positive deltaY scrolls down and positive deltaX scrolls right. Without locator/selector it scrolls the viewport; otherwise it scrolls that container. At least one delta is required.",
+  "description": "Scroll the tab selected by tabId, or this agent session's current tab when omitted. Positive deltaY scrolls down and positive deltaX scrolls right; a locator/selector targets a container.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
       "deltaX": {
         "anyOf": [
           {

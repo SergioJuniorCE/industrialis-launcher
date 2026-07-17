@@ -73,24 +73,23 @@ fn replace_in_config_file(path: &Path, from: &str, to: &str) -> Result<(), Strin
     if !path.is_file() {
         return Ok(());
     }
-    let content = fs::read_to_string(path).map_err(|e| {
-        format!("failed to read config {}: {e}", path.display())
-    })?;
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("failed to read config {}: {e}", path.display()))?;
     if !content.contains(from) {
         return Ok(());
     }
     let updated = content.replace(from, to);
-    fs::write(path, updated).map_err(|e| {
-        format!("failed to write config {}: {e}", path.display())
-    })
+    fs::write(path, updated).map_err(|e| format!("failed to write config {}: {e}", path.display()))
 }
 
 fn apply_gadomancy_patch(inst_dir: &Path) -> Result<(), String> {
     const GADOMANCY_FALSE: &str = "B:ancientStoneRecipes=false";
     const GADOMANCY_TRUE: &str = "B:ancientStoneRecipes=true";
-    for rel in ["config/gadomancy.cfg"] {
-        replace_in_config_file(&game_config_path(inst_dir, rel), GADOMANCY_FALSE, GADOMANCY_TRUE)?;
-    }
+    replace_in_config_file(
+        &game_config_path(inst_dir, "config/gadomancy.cfg"),
+        GADOMANCY_FALSE,
+        GADOMANCY_TRUE,
+    )?;
     Ok(())
 }
 

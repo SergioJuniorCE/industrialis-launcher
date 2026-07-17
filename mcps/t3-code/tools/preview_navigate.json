@@ -1,9 +1,20 @@
 {
   "name": "preview_navigate",
-  "description": "Navigate the active collaborative browser tab. Pass {url:'https://t3.chat'} for a website, or {target:{kind:'environment-port',port:5173}} for a dev server in the current environment. Exactly one of url or target is required. Defaults to waiting for page loading to stop.",
+  "description": "Navigate a collaborative browser tab. Pass tabId to target a specific tab, plus {url:'https://t3.chat'} for a website or {target:{kind:'environment-port',port:5173}} for a dev server. Exactly one of url or target is required.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
       "url": {
         "anyOf": [
           {

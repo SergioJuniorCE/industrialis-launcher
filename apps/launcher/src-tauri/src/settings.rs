@@ -2,17 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeMode {
+    #[default]
     Dark,
     Light,
-}
-
-impl Default for ThemeMode {
-    fn default() -> Self {
-        Self::Dark
-    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

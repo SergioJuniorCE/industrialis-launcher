@@ -1,4 +1,12 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type SetStateAction,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy } from "lucide-react";
@@ -15,7 +23,7 @@ import { ThemePresetPicker } from "./components/ThemePresetPicker";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { AccountSwitcher } from "./components/AccountSwitcher";
 import { AccountsTab } from "./components/AccountsTab";
-import { useLauncherSettings } from "./context/LauncherSettingsContext";
+import { useLauncherSettings } from "./context/launcher-settings-context";
 import { resolveDefaultAccountId } from "./lib/launcher-settings";
 import { ProcessesDropdown } from "./components/ProcessesDropdown";
 import { ProcessesTab } from "./components/ProcessesTab";
@@ -60,7 +68,7 @@ import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
-import { cn } from "./lib/utils";
+import { cn, keyedByOccurrence } from "./lib/utils";
 import "./App.css";
 
 // ── Types ──
@@ -199,19 +207,94 @@ function resolveLaunchAccount(
   return null;
 }
 
+interface AppUiState {
+  tab: string;
+  selectedProcessKey: string | null;
+  selectedInstanceId: string | null;
+  showNewInstance: boolean;
+}
+
+type AppUiAction =
+  | { type: "tab"; value: SetStateAction<string> }
+  | { type: "process"; value: SetStateAction<string | null> }
+  | { type: "instance"; value: SetStateAction<string | null> }
+  | { type: "new-instance"; value: SetStateAction<boolean> };
+
+function resolveStateAction<T>(current: T, action: SetStateAction<T>): T {
+  return typeof action === "function"
+    ? (action as (value: T) => T)(current)
+    : action;
+}
+
+function appUiReducer(state: AppUiState, action: AppUiAction): AppUiState {
+  switch (action.type) {
+    case "tab":
+      return { ...state, tab: resolveStateAction(state.tab, action.value) };
+    case "process":
+      return {
+        ...state,
+        selectedProcessKey: resolveStateAction(state.selectedProcessKey, action.value),
+      };
+    case "instance":
+      return {
+        ...state,
+        selectedInstanceId: resolveStateAction(state.selectedInstanceId, action.value),
+      };
+    case "new-instance":
+      return {
+        ...state,
+        showNewInstance: resolveStateAction(state.showNewInstance, action.value),
+      };
+  }
+}
+
+function formatUpdateProgress(proc: BackgroundProcess): string {
+  return `${stageLabel(proc.stage)} · ${formatDownloadProgress(proc)}`;
+}
+
 // ponytail: one file, no router, no zustand
 
+// eslint-disable-next-line react-doctor/no-giant-component -- Desktop orchestration remains centralized while tab views are extracted incrementally.
 export default function App() {
   const { settings: launcherSettings, loaded: launcherSettingsLoaded, updateSettings, saveSettingsNow } = useLauncherSettings();
   const defaultAccountId = resolveDefaultAccountId(launcherSettings);
-  const [tab, setTab] = useState("instances");
-  const [selectedProcessKey, setSelectedProcessKey] = useState<string | null>(null);
+  const [ui, dispatchUi] = useReducer(appUiReducer, {
+    tab: "instances",
+    selectedProcessKey: null,
+    selectedInstanceId: null,
+    showNewInstance: false,
+  });
+  const { tab, selectedProcessKey, selectedInstanceId, showNewInstance } = ui;
+  const setTab = useCallback(
+    (value: SetStateAction<string>) => dispatchUi({ type: "tab", value }),
+    [],
+  );
+  const setSelectedProcessKey = useCallback(
+    (value: SetStateAction<string | null>) => dispatchUi({ type: "process", value }),
+    [],
+  );
+  const setSelectedInstanceId = useCallback(
+    (value: SetStateAction<string | null>) => dispatchUi({ type: "instance", value }),
+    [],
+  );
+  const setShowNewInstance = useCallback(
+    (value: SetStateAction<boolean>) => dispatchUi({ type: "new-instance", value }),
+    [],
+  );
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
   const [sizesRefreshing, setSizesRefreshing] = useState(false);
   const [processes, setProcesses] = useState<Map<string, BackgroundProcess>>(() => new Map());
+  const processesRef = useRef(processes);
+  const updateProcesses = useCallback(
+    (updater: (current: Map<string, BackgroundProcess>) => Map<string, BackgroundProcess>) => {
+      const next = updater(processesRef.current);
+      processesRef.current = next;
+      setProcesses(next);
+    },
+    [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState("info");
   const [javaOptions, setJavaOptions] = useState<JavaInfo[]>([]);
   const [instanceLogs, setInstanceLogs] = useState<Record<string, LaunchLogLine[]>>({});
@@ -222,7 +305,10 @@ export default function App() {
   useEffect(() => {
     launchingRef.current = launching;
   }, [launching]);
-  const [showNewInstance, setShowNewInstance] = useState(false);
+
+  useEffect(() => {
+    processesRef.current = processes;
+  }, [processes]);
   const [updatePackInstanceId, setUpdatePackInstanceId] = useState<string | null>(null);
   const [reinstallInstanceId, setReinstallInstanceId] = useState<string | null>(null);
   const [copyInstanceId, setCopyInstanceId] = useState<string | null>(null);
@@ -315,21 +401,21 @@ export default function App() {
   const registerProcess = useCallback(
     (operation: ProcessOperation, id: string, name: string, initialLog?: string) => {
       const proc = createProcess(operation, id, name, initialLog);
-      setProcesses((prev) => {
+      updateProcesses((prev) => {
         const next = new Map(prev);
         next.set(proc.key, proc);
         return next;
       });
     },
-    [],
+    [updateProcesses],
   );
 
   const handleProcessFailed = useCallback(
     (operation: ProcessOperation, id: string, error: unknown) => {
-      setProcesses((prev) => markProcessFailed(prev, operation, id, error));
+      updateProcesses((prev) => markProcessFailed(prev, operation, id, error));
       setError(`${operationLabel(operation)} failed: ${error}`);
     },
-    [],
+    [updateProcesses],
   );
 
   const startPackUpdate = useCallback(
@@ -344,7 +430,7 @@ export default function App() {
       setError(null);
       setNotice(`${name} is updating in the background. Follow its progress in Processes.`);
       setUpdatePackInstanceId(null);
-      setProcesses((prev) => {
+      updateProcesses((prev) => {
         const next = new Map(prev);
         next.set(
           key,
@@ -361,7 +447,7 @@ export default function App() {
         keepModIdentities,
       }).catch((e) => handleProcessFailed("update-pack", id, e));
     },
-    [handleProcessFailed],
+    [handleProcessFailed, updateProcesses],
   );
 
   const startCleanReinstall = useCallback(
@@ -369,7 +455,7 @@ export default function App() {
       const key = processKey("reinstall", id);
       setError(null);
       setReinstallInstanceId(null);
-      setProcesses((prev) => {
+      updateProcesses((prev) => {
         const next = new Map(prev);
         next.set(
           key,
@@ -385,13 +471,13 @@ export default function App() {
         javaType,
       }).catch((e) => handleProcessFailed("reinstall", id, e));
     },
-    [handleProcessFailed],
+    [handleProcessFailed, updateProcesses],
   );
 
   const handleDismissProcess = useCallback((key: string) => {
-    setProcesses((prev) => dismissProcess(prev, key));
+    updateProcesses((prev) => dismissProcess(prev, key));
     setSelectedProcessKey((current) => (current === key ? null : current));
-  }, []);
+  }, [updateProcesses]);
 
   const openProcesses = useCallback(
     (key?: string) => {
@@ -451,28 +537,29 @@ export default function App() {
   useEffect(() => {
     const unlisten = listen<DlProgressEvent>("dl-progress", (e) => {
       const p = e.payload;
-      setProcesses((prev) => {
-        const operation = resolveOperation(prev, p);
-        const next = applyDlProgressEvent(prev, p);
-        if (p.stage === "failed" && p.id && operation) {
-          const message = p.log_line?.replace(/^Error:\s*/, "") ?? "Unknown error";
-          setError(`${operationLabel(operation)} failed: ${message}`);
+      const previous = processesRef.current;
+      const operation = resolveOperation(previous, p);
+      const next = applyDlProgressEvent(previous, p);
+      processesRef.current = next;
+      setProcesses(next);
+
+      if (p.stage === "failed" && p.id && operation) {
+        const message = p.log_line?.replace(/^Error:\s*/, "") ?? "Unknown error";
+        setError(`${operationLabel(operation)} failed: ${message}`);
+      }
+      if (p.stage === "done" && p.id) {
+        if (operation === "delete") {
+          setSelectedInstanceId((current) => (current === p.id ? null : current));
+        } else if (operation === "install") {
+          setSelectedInstanceId(p.id);
+          setShowNewInstance(false);
+        } else if (operation === "update-pack" || operation === "reinstall" || operation === "copy") {
+          setSelectedInstanceId(p.id);
+          setTab("instances");
+          setSelectedProcessKey(null);
         }
-        if (p.stage === "done" && p.id) {
-          if (operation === "delete") {
-            setSelectedInstanceId((current) => (current === p.id ? null : current));
-          } else if (operation === "install") {
-            setSelectedInstanceId(p.id);
-            setShowNewInstance(false);
-          } else if (operation === "update-pack" || operation === "reinstall" || operation === "copy") {
-            setSelectedInstanceId(p.id);
-            setTab("instances");
-            setSelectedProcessKey(null);
-          }
-          loadInstances();
-        }
-        return next;
-      });
+        loadInstances();
+      }
     });
     return () => { unlisten.then((f) => f()); };
   }, [loadInstances]);
@@ -695,7 +782,7 @@ export default function App() {
     void invoke("delete_instance", { id }).catch((e) => {
       const message = String(e);
       if (message.toLowerCase().includes("cancelled")) {
-        setProcesses((prev) => dismissProcess(prev, processKey("delete", id)));
+        updateProcesses((prev) => dismissProcess(prev, processKey("delete", id)));
         loadInstances();
         return;
       }
@@ -772,14 +859,6 @@ export default function App() {
   const selectedInstanceStarting = selectedInstanceId
     ? launching === selectedInstanceId
     : false;
-
-  const formatUpdateProgress = (proc: BackgroundProcess) => {
-    const stage = stageLabel(proc.stage);
-    const progress = formatDownloadProgress(proc);
-    return progress === `${(proc.pct * 100).toFixed(0)}%`
-      ? `${stage} · ${progress}`
-      : `${stage} · ${progress}`;
-  };
 
   return (
     <div className="app-shell h-screen flex flex-col overflow-hidden">
@@ -2053,9 +2132,9 @@ function LogView({ log, onClear, disableClear }: {
         {log.length === 0 ? (
           <div className="text-muted-foreground">No log output yet.</div>
         ) : (
-          log.map((entry, i) => (
+          keyedByOccurrence(log, (entry) => `${entry.stream}:${entry.line}`).map(({ key, value: entry }) => (
             <div
-              key={i}
+              key={key}
               className={launchLogLevelClass(classifyLaunchLogLine(entry))}
             >
               {entry.line}

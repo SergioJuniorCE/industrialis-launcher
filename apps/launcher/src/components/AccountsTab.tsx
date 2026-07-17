@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Star } from "lucide-react";
@@ -52,15 +52,15 @@ export function AccountsTab({
   const [offlineUsername, setOfflineUsername] = useState("");
   const [addingOffline, setAddingOffline] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     invoke<LauncherAccount[]>("get_accounts")
       .then((list) => {
         setAccounts(list);
         onAccountsChanged?.();
       })
       .catch(() => {});
-  };
-  useEffect(load, []);
+  }, [onAccountsChanged]);
+  useEffect(() => load(), [load]);
 
   useEffect(() => {
     const unlisten = listen<DeviceCodeInfo>("auth-device-code", (e) => {

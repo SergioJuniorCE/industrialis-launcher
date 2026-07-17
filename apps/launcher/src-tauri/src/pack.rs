@@ -19,7 +19,22 @@ pub fn emit_dl_progress(
     id: Option<&str>,
     log_line: Option<&str>,
 ) {
-    emit_dl_progress_with_stats(app, stage, pct, operation, id, log_line, None, None, None);
+    emit_dl_progress_with_stats(
+        app,
+        stage,
+        pct,
+        operation,
+        id,
+        log_line,
+        DownloadStats::default(),
+    );
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DownloadStats {
+    pub speed_mbps: Option<f64>,
+    pub downloaded_mb: Option<f64>,
+    pub total_mb: Option<f64>,
 }
 
 pub fn emit_dl_progress_with_stats(
@@ -29,9 +44,7 @@ pub fn emit_dl_progress_with_stats(
     operation: &str,
     id: Option<&str>,
     log_line: Option<&str>,
-    speed_mbps: Option<f64>,
-    downloaded_mb: Option<f64>,
-    total_mb: Option<f64>,
+    stats: DownloadStats,
 ) {
     let mut payload = serde_json::json!({
         "stage": stage,
@@ -42,13 +55,13 @@ pub fn emit_dl_progress_with_stats(
     if let Some(line) = log_line {
         payload["log_line"] = serde_json::Value::String(line.to_string());
     }
-    if let Some(speed) = speed_mbps {
+    if let Some(speed) = stats.speed_mbps {
         payload["speed_mbps"] = serde_json::json!(speed);
     }
-    if let Some(downloaded) = downloaded_mb {
+    if let Some(downloaded) = stats.downloaded_mb {
         payload["downloaded_mb"] = serde_json::json!(downloaded);
     }
-    if let Some(total) = total_mb {
+    if let Some(total) = stats.total_mb {
         payload["total_mb"] = serde_json::json!(total);
     }
     emit(app, "dl-progress", &payload);
@@ -91,7 +104,10 @@ fn segment_looks_like_version(segment: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    if s.starts_with('v') && s.len() > 1 && s[1..].chars().next().is_some_and(|c| c.is_ascii_digit()) {
+    if s.starts_with('v')
+        && s.len() > 1
+        && s[1..].chars().next().is_some_and(|c| c.is_ascii_digit())
+    {
         return true;
     }
     if s.starts_with("rv") && s.len() > 2 {
@@ -266,8 +282,7 @@ pub async fn download_pack_to_file(
         if periodic || pct_milestone {
             let interval = now.duration_since(last_emit).as_secs_f64().max(0.05);
             let bytes_delta = downloaded.saturating_sub(last_emit_bytes);
-            let instant_mbps =
-                (bytes_delta as f64 / interval) / (1024.0 * 1024.0);
+            let instant_mbps = (bytes_delta as f64 / interval) / (1024.0 * 1024.0);
             let elapsed = now.duration_since(download_start).as_secs_f64().max(0.05);
             let avg_mbps = (downloaded as f64 / elapsed) / (1024.0 * 1024.0);
             let speed_mbps = if bytes_delta > 0 && interval >= 0.2 {
@@ -289,9 +304,11 @@ pub async fn download_pack_to_file(
                 operation,
                 id,
                 None,
-                Some(speed_mbps),
-                Some(downloaded_mb),
-                total_mb,
+                DownloadStats {
+                    speed_mbps: Some(speed_mbps),
+                    downloaded_mb: Some(downloaded_mb),
+                    total_mb,
+                },
             );
 
             last_emit = now;
@@ -311,9 +328,7 @@ pub async fn download_pack_to_file(
         None
     };
     let complete_log = if let Some(total_mb) = total_mb {
-        format!(
-            "Download complete ({downloaded_mb:.1} / {total_mb:.1} MB, avg {avg_mbps:.1} MB/s)"
-        )
+        format!("Download complete ({downloaded_mb:.1} / {total_mb:.1} MB, avg {avg_mbps:.1} MB/s)")
     } else {
         format!("Download complete ({downloaded_mb:.1} MB, avg {avg_mbps:.1} MB/s)")
     };
@@ -324,9 +339,11 @@ pub async fn download_pack_to_file(
         operation,
         id,
         Some(&complete_log),
-        Some(avg_mbps),
-        Some(downloaded_mb),
-        total_mb,
+        DownloadStats {
+            speed_mbps: Some(avg_mbps),
+            downloaded_mb: Some(downloaded_mb),
+            total_mb,
+        },
     );
     Ok(())
 }
@@ -361,24 +378,13 @@ pub fn extract_pack_zip(
             std::io::copy(&mut entry, &mut outfile).map_err(|e| e.to_string())?;
         }
         let pct = (i as f64 + 1.0) / total_files as f64;
-        if (pct * 100.0) as u32 % 10 == 0 {
-            let log = if operation == "preview" && (pct * 100.0) as u32 % 20 == 0 {
-                Some(format!(
-                    "Extracting files… {}/{}",
-                    i + 1,
-                    total_files
-                ))
+        if ((pct * 100.0) as u32).is_multiple_of(10) {
+            let log = if operation == "preview" && ((pct * 100.0) as u32).is_multiple_of(20) {
+                Some(format!("Extracting files… {}/{}", i + 1, total_files))
             } else {
                 None
             };
-            emit_dl_progress(
-                app,
-                "extracting",
-                pct,
-                operation,
-                id,
-                log.as_deref(),
-            );
+            emit_dl_progress(app, "extracting", pct, operation, id, log.as_deref());
         }
     }
     if operation == "preview" {
@@ -415,9 +421,8 @@ pub async fn download_and_extract_to_staging(
     if let Some(cache_pack) =
         crate::pack_cache::lookup_pack_cache(pack_version, java_type, &dl_url)?
     {
-        let cache_log = format!(
-            "Using cached pack {pack_version} ({java_type}) — skipping download"
-        );
+        let cache_log =
+            format!("Using cached pack {pack_version} ({java_type}) — skipping download");
         emit_dl_progress(app, "cached", 1.0, operation, id, Some(&cache_log));
         emit_dl_progress(
             app,
@@ -551,7 +556,9 @@ pub fn add_custom_mod(inst_dir: &Path, source: &Path) -> Result<ModEntry, String
     Ok(ModEntry {
         identity: mod_identity_from_filename(&filename),
         filename,
-        size_bytes: fs::metadata(&dest_persistent).map_err(|e| e.to_string())?.len(),
+        size_bytes: fs::metadata(&dest_persistent)
+            .map_err(|e| e.to_string())?
+            .len(),
     })
 }
 
@@ -563,10 +570,8 @@ pub fn remove_custom_mod(inst_dir: &Path, identity: &str) -> Result<(), String> 
 
     let removed_persistent =
         remove_mod_files_by_identity(&persistent_custom_mods_dir(inst_dir), &identity)?;
-    let removed_inst = remove_mod_files_by_identity(
-        &inst_dir.join(".minecraft").join("mods"),
-        &identity,
-    )?;
+    let removed_inst =
+        remove_mod_files_by_identity(&inst_dir.join(".minecraft").join("mods"), &identity)?;
 
     if removed_persistent == 0 && removed_inst == 0 {
         return Err("custom mod not found".into());
@@ -605,7 +610,10 @@ pub fn remove_custom_mods_except(
     Ok(removed)
 }
 
-pub fn restore_persistent_custom_mods(persistent_mods: &Path, inst_mods: &Path) -> Result<u32, String> {
+pub fn restore_persistent_custom_mods(
+    persistent_mods: &Path,
+    inst_mods: &Path,
+) -> Result<u32, String> {
     if !persistent_mods.is_dir() {
         return Ok(0);
     }

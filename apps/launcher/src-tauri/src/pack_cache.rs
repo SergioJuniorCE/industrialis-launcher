@@ -248,10 +248,7 @@ mod tests {
             cached_at_secs: 0,
             last_used_at_secs: 0,
         };
-        assert!(cache_is_expired(
-            &meta,
-            PACK_CACHE_TTL.as_secs() + 1
-        ));
+        assert!(cache_is_expired(&meta, PACK_CACHE_TTL.as_secs() + 1));
         assert!(!cache_is_expired(&meta, PACK_CACHE_TTL.as_secs()));
     }
 }

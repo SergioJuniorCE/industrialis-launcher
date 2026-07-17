@@ -3,7 +3,8 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 const MAX_READ_BYTES: u64 = 2 * 1024 * 1024;
-const OVERLAY_EXCLUDED_PREFIXES: &[&str] = &["saves/", "assets/", "logs/", "crash-reports/", "mods/"];
+const OVERLAY_EXCLUDED_PREFIXES: &[&str] =
+    &["saves/", "assets/", "logs/", "crash-reports/", "mods/"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MinecraftDirEntry {
@@ -68,7 +69,11 @@ fn persistent_paths_set(inst_dir: &Path) -> Result<std::collections::HashSet<Str
     Ok(set)
 }
 
-fn collect_rel_paths(base: &Path, dir: &Path, out: &mut std::collections::HashSet<String>) -> Result<(), String> {
+fn collect_rel_paths(
+    base: &Path,
+    dir: &Path,
+    out: &mut std::collections::HashSet<String>,
+) -> Result<(), String> {
     for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();

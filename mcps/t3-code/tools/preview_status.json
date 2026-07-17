@@ -1,8 +1,21 @@
 {
   "name": "preview_status",
-  "description": "Report whether the scoped thread has an automation-capable desktop preview, including its active tab, URL, title, visibility, loading state, viewport mode, and measured CSS-pixel size.",
+  "description": "Report whether a collaborative browser tab is automation-capable, including its URL, title, visibility, loading state, viewport mode, and measured CSS-pixel size. Pass tabId to inspect a specific tab; omit it to use this agent session's current tab.",
   "inputSchema": {
     "type": "object",
+    "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      }
+    },
     "additionalProperties": false
   }
 }

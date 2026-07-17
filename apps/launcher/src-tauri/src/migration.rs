@@ -143,7 +143,10 @@ pub fn backup_player_data(inst_dir: &Path, preserve_dir: &Path) -> Result<(), St
     }
 
     for rel in MC_CONFIG_REL_PATHS {
-        copy_path_if_exists(&mc.join("config").join(rel), &preserve_mc.join("config").join(rel))?;
+        copy_path_if_exists(
+            &mc.join("config").join(rel),
+            &preserve_mc.join("config").join(rel),
+        )?;
     }
 
     Ok(())
@@ -239,7 +242,11 @@ mod tests {
 
         wipe_instance_for_reinstall(&inst, &preserve).unwrap();
         assert!(!inst.join(".minecraft").exists());
-        assert!(preserve.join("minecraft").join("saves").join("world1").is_dir());
+        assert!(preserve
+            .join("minecraft")
+            .join("saves")
+            .join("world1")
+            .is_dir());
 
         fs::create_dir_all(inst.join(".minecraft")).unwrap();
         restore_player_data(&inst, &preserve).unwrap();

@@ -10,7 +10,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "./ui/resizable";
-import { useLauncherSettings } from "../context/LauncherSettingsContext";
+import { useLauncherSettings } from "../context/launcher-settings-context";
 import { cn } from "../lib/utils";
 import { ConfigCodeEditor } from "./ConfigCodeEditor";
 import { ForgeConfigEasyEditor } from "./ForgeConfigEasyEditor";
@@ -94,7 +94,9 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
     }
   }, [selectedPath, content, instanceId, loadDir, cwd]);
 
-  saveRef.current = save;
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

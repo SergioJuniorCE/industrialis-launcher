@@ -3,6 +3,19 @@
   "description": "Stop the active browser recording and save it as a local evidence artifact.",
   "inputSchema": {
     "type": "object",
+    "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      }
+    },
     "additionalProperties": false
   }
 }

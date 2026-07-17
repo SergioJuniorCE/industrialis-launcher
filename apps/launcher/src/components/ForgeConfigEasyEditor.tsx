@@ -84,6 +84,7 @@ function FieldControl({
         )}
         <textarea
           id={id}
+          aria-label={field.key}
           className="w-full min-h-[72px] rounded-md border border-input bg-transparent px-2 py-1.5 text-xs font-mono"
           value={String(field.value)}
           onChange={(e) => onFieldChange(sectionName, field.key, e.target.value)}
@@ -111,15 +112,15 @@ function FieldControl({
 }
 
 export function ForgeConfigEasyEditor({ document, onChange, serialize }: ForgeConfigEasyEditorProps) {
-  const editableFields = useMemo(
-    () =>
-      document.sections.flatMap((section) =>
-        section.fields
-          .filter((field) => field.type !== "unknown")
-          .map((field) => ({ section, field })),
-      ),
-    [document],
-  );
+  const editableFields = useMemo(() => {
+    const result: Array<{ section: ForgeConfigDocument["sections"][number]; field: ForgeConfigField }> = [];
+    for (const section of document.sections) {
+      for (const field of section.fields) {
+        if (field.type !== "unknown") result.push({ section, field });
+      }
+    }
+    return result;
+  }, [document]);
 
   const handleFieldChange = (
     sectionName: string,

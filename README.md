@@ -48,10 +48,24 @@ Launcher-only:
 
 ```bash
 pnpm build:launcher
-cd apps/launcher && pnpm tauri build   # release installer
 pnpm test --filter=@industrialis/launcher
 cd apps/launcher/src-tauri && cargo test
 ```
+
+Create Windows release artifacts (NSIS installer, MSI installer, and portable ZIP):
+
+```powershell
+$env:MICROSOFT_CLIENT_ID="your-azure-client-id"
+pnpm build:launcher:release
+```
+
+The artifacts are written to `artifacts/launcher`. You can build only one format with
+`pnpm build:launcher:installer`, `pnpm build:launcher:portable`, or
+`powershell -File scripts/build-launcher.ps1 -Target msi`.
+
+Pushes to `master` run the same release build in GitHub Actions and retain the
+artifacts for 14 days. Add `MICROSOFT_CLIENT_ID` as a repository Actions secret
+before running the workflow.
 
 ## Microsoft client ID (maintainers only)
 

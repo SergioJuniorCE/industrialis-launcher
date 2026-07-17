@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const GROUP_FILE_FORMAT_VERSION: u32 = 1;
 
@@ -11,7 +11,7 @@ pub struct GroupFileEntry {
     pub instances: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UngroupedEntry {
     pub hidden: bool,
     #[serde(default)]
@@ -28,15 +28,6 @@ struct GroupFile {
     ungrouped: UngroupedEntry,
 }
 
-impl Default for UngroupedEntry {
-    fn default() -> Self {
-        Self {
-            hidden: false,
-            instances: Vec::new(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceGroupsState {
     pub collapsed: HashMap<String, bool>,
@@ -50,11 +41,11 @@ struct GroupData {
     collapsed: HashSet<String>,
 }
 
-pub fn groups_file_path(instances_dir: &PathBuf) -> PathBuf {
+pub fn groups_file_path(instances_dir: &Path) -> PathBuf {
     instances_dir.join("instgroups.json")
 }
 
-fn load_group_data(instances_dir: &PathBuf, known_instances: &HashSet<String>) -> GroupData {
+fn load_group_data(instances_dir: &Path, known_instances: &HashSet<String>) -> GroupData {
     let path = groups_file_path(instances_dir);
     let mut instance_index = HashMap::new();
     let mut group_order: HashMap<String, Vec<String>> = HashMap::new();
@@ -153,7 +144,7 @@ fn reconcile_group_orders(data: &mut GroupData, known_instances: &HashSet<String
 }
 
 fn save_group_data(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     data: &GroupData,
     known_instances: &HashSet<String>,
 ) -> Result<(), String> {
@@ -192,8 +183,7 @@ fn save_group_data(
         .map(|ids| {
             ids.iter()
                 .filter(|id| {
-                    known_instances.contains(*id)
-                        && data.instance_index.get(*id).is_none()
+                    known_instances.contains(*id) && !data.instance_index.contains_key(*id)
                 })
                 .filter(|id| ungrouped_seen.insert((*id).clone()))
                 .cloned()
@@ -217,7 +207,7 @@ fn save_group_data(
 }
 
 pub fn get_instance_group(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     instance_id: &str,
     known_instances: &HashSet<String>,
 ) -> String {
@@ -229,7 +219,7 @@ pub fn get_instance_group(
 }
 
 pub fn get_groups_state(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     known_instances: &HashSet<String>,
 ) -> InstanceGroupsState {
     let data = load_group_data(instances_dir, known_instances);
@@ -249,7 +239,7 @@ pub fn get_groups_state(
         .filter(|g| !g.is_empty())
         .cloned()
         .collect();
-    groups.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    groups.sort_by_key(|a| a.to_lowercase());
 
     let mut collapsed = HashMap::new();
     for group in &groups {
@@ -278,7 +268,7 @@ fn append_to_group_order(data: &mut GroupData, instance_id: &str, group: &str) {
 }
 
 pub fn set_instance_group(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     instance_id: &str,
     group: &str,
     known_instances: &HashSet<String>,
@@ -313,7 +303,7 @@ pub fn set_instance_group(
 }
 
 pub fn move_instance_in_group(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     instance_id: &str,
     direction: &str,
     known_instances: &HashSet<String>,
@@ -356,19 +346,13 @@ fn group_member_ids(
 ) -> HashSet<String> {
     known_instances
         .iter()
-        .filter(|id| {
-            data.instance_index
-                .get(*id)
-                .cloned()
-                .unwrap_or_default()
-                == group
-        })
+        .filter(|id| data.instance_index.get(*id).cloned().unwrap_or_default() == group)
         .cloned()
         .collect()
 }
 
 pub fn set_group_instance_order(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     group: &str,
     order: &[String],
     known_instances: &HashSet<String>,
@@ -403,7 +387,7 @@ pub fn set_group_instance_order(
 }
 
 pub fn rename_group(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     old_name: &str,
     new_name: &str,
     known_instances: &HashSet<String>,
@@ -455,7 +439,7 @@ pub fn rename_group(
 }
 
 pub fn delete_group(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     name: &str,
     known_instances: &HashSet<String>,
 ) -> Result<(), String> {
@@ -483,7 +467,7 @@ pub fn delete_group(
 }
 
 pub fn set_group_collapsed(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     group: &str,
     collapsed: bool,
     known_instances: &HashSet<String>,
@@ -498,7 +482,7 @@ pub fn set_group_collapsed(
 }
 
 pub fn remove_instance_from_groups(
-    instances_dir: &PathBuf,
+    instances_dir: &Path,
     instance_id: &str,
     known_instances: &HashSet<String>,
 ) -> Result<(), String> {
@@ -591,7 +575,12 @@ mod tests {
         assert_eq!(
             state.instance_order.get("Pack").map(|v| v.as_slice()),
             Some(
-                ["inst-c".to_string(), "inst-a".to_string(), "inst-b".to_string()].as_slice()
+                [
+                    "inst-c".to_string(),
+                    "inst-a".to_string(),
+                    "inst-b".to_string()
+                ]
+                .as_slice()
             )
         );
 
@@ -627,7 +616,12 @@ mod tests {
         assert_eq!(
             state.instance_order.get("Pack").map(|v| v.as_slice()),
             Some(
-                ["inst-c".to_string(), "inst-a".to_string(), "inst-b".to_string()].as_slice()
+                [
+                    "inst-c".to_string(),
+                    "inst-a".to_string(),
+                    "inst-b".to_string()
+                ]
+                .as_slice()
             )
         );
 
@@ -665,7 +659,12 @@ mod tests {
         assert_eq!(
             state.instance_order.get("Pack").map(|v| v.as_slice()),
             Some(
-                ["inst-b".to_string(), "inst-a".to_string(), "inst-c".to_string()].as_slice()
+                [
+                    "inst-b".to_string(),
+                    "inst-a".to_string(),
+                    "inst-c".to_string()
+                ]
+                .as_slice()
             )
         );
 

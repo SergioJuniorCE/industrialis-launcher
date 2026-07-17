@@ -1,9 +1,20 @@
 {
   "name": "preview_press",
-  "description": "Press one keyboard key in the active page, for example {key:'Enter'}, {key:'Escape'}, or {key:'a',modifiers:['Meta']}. This targets the page's current focus.",
+  "description": "Press one keyboard key in the tab selected by tabId, or this agent session's current tab when omitted. Examples: {key:'Enter'}, {key:'Escape'}, or {key:'a',modifiers:['Meta']}.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
       "key": {
         "type": "string",
         "allOf": [

@@ -1,8 +1,21 @@
 {
   "name": "preview_snapshot",
-  "description": "Inspect the current page before interacting. Returns URL/title/loading state, visible text, semantic interactive elements with reusable selectors and coordinates, accessibility data, recent console/network failures, action history, and a PNG screenshot.",
+  "description": "Inspect a page before interacting. Pass tabId to inspect a specific tab; omit it to use this agent session's current tab. Returns page state, semantic elements, diagnostics, action history, and a PNG screenshot.",
   "inputSchema": {
     "type": "object",
+    "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      }
+    },
     "additionalProperties": false
   }
 }

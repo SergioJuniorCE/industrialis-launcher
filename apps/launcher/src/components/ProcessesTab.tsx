@@ -13,6 +13,7 @@ import {
   stageLabel,
   type BackgroundProcess,
 } from "../lib/background-processes";
+import { keyedByOccurrence } from "../lib/utils";
 
 export function ProcessCard({
   proc,
@@ -176,9 +177,9 @@ function ProcessLogPanel({
         {proc.logs.length === 0 ? (
           <p className="text-muted-foreground">No log output yet.</p>
         ) : (
-          proc.logs.map((line, i) => (
+          keyedByOccurrence(proc.logs, (line) => line).map(({ key, value: line }) => (
             <div
-              key={i}
+              key={key}
               className={line.startsWith("Error:") ? "text-destructive" : "text-muted-foreground"}
             >
               {line}

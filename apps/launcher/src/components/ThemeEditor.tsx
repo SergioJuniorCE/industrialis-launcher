@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLauncherSettings } from "../context/LauncherSettingsContext";
+import { useLauncherSettings } from "../context/launcher-settings-context";
 import type { ThemeOverrides } from "../lib/launcher-settings";
 import { resolveThemePresetOrDefault } from "../lib/theme-presets";
 import { hasLowContrast, validateHexColor, validateRadius } from "../lib/theme";

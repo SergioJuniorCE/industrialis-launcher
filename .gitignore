@@ -16,6 +16,7 @@ dist-ssr
 .next
 out
 .turbo
+artifacts/
 *.local
 
 # Cursor agent background shell logs (not part of the project)

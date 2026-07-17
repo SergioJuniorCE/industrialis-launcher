@@ -1,9 +1,20 @@
 {
   "name": "preview_click",
-  "description": "Click exactly one page target. Prefer locator with a Playwright selector such as role=button[name='Send']; selector accepts legacy CSS; x and y are viewport CSS pixels and must be supplied together. Call preview_snapshot first when the target is unknown.",
+  "description": "Click exactly one target in the tab selected by tabId, or this agent session's current tab when omitted. Prefer a Playwright locator; selector accepts legacy CSS; x and y must be supplied together.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
       "selector": {
         "anyOf": [
           {

@@ -11,7 +11,8 @@ import { THEME_TOKEN_CSS_VARS, tokensToCssVars, validateHexColor } from "./theme
 
 export { THEME_TOKEN_CSS_VARS, validateHexColor, validateRadius } from "./theme-utils";
 
-export const THEME_CACHE_KEY = "industrialis-theme-cache";
+export const THEME_CACHE_KEY = "industrialis-theme-cache:v2";
+const LEGACY_THEME_CACHE_KEY = "industrialis-theme-cache";
 export const THEME_CACHE_VERSION = 2;
 
 export interface ThemeCache {
@@ -66,7 +67,7 @@ export function applyTheme(
 
 export function readThemeCache(): ThemeCache | null {
   try {
-    const raw = localStorage.getItem(THEME_CACHE_KEY);
+    const raw = localStorage.getItem(THEME_CACHE_KEY) ?? localStorage.getItem(LEGACY_THEME_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ThemeCache>;
     const mode: ThemeMode = parsed.mode === "light" ? "light" : "dark";
