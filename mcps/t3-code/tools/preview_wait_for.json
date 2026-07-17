@@ -1,9 +1,20 @@
 {
   "name": "preview_wait_for",
-  "description": "Wait until all supplied conditions match: a Playwright locator, legacy CSS selector, visible-text substring, and/or URL substring. Provide at least one condition. Defaults to 15 seconds, maximum 60 seconds.",
+  "description": "Wait in the tab selected by tabId, or this agent session's current tab when omitted, until all supplied locator, selector, text, and URL conditions match.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
       "selector": {
         "anyOf": [
           {

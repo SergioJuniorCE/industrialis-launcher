@@ -1,9 +1,20 @@
 {
   "name": "preview_open",
-  "description": "Show and initialize the browser preview for the scoped thread, optionally reusing its current tab and navigating to a URL.",
+  "description": "Show and initialize a collaborative browser tab. Pass tabId to reuse a specific existing tab, set reuseExistingTab=false to create another tab, or omit both to use this agent session's current tab.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
       "url": {
         "anyOf": [
           {
@@ -42,7 +53,7 @@
         "anyOf": [
           {
             "type": "boolean",
-            "description": "Reuse the thread's active browser tab when available. Defaults to true; set false to create a new tab."
+            "description": "Reuse tabId when supplied, otherwise this agent session's current tab. Defaults to true; set false to create a new tab."
           },
           {
             "type": "null"
@@ -50,7 +61,6 @@
         ]
       }
     },
-    "additionalProperties": false,
-    "description": "Opens the collaborative browser for the current thread. Use preview_navigate afterward when readiness waiting matters."
+    "additionalProperties": false
   }
 }

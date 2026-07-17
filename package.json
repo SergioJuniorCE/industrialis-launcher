@@ -9,6 +9,9 @@
     "dev:launcher": "turbo dev --filter=@industrialis/launcher",
     "dev:website": "turbo dev --filter=@industrialis/website",
     "build:launcher": "turbo build --filter=@industrialis/launcher",
+    "build:launcher:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-launcher.ps1",
+    "build:launcher:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-launcher.ps1 -Target nsis",
+    "build:launcher:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-launcher.ps1 -Target portable",
     "build:website": "turbo build --filter=@industrialis/website"
   },
   "devDependencies": {

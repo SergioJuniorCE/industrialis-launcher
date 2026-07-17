@@ -1,8 +1,7 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -30,34 +29,10 @@ import {
   readThemeCache,
   writeThemeCache,
 } from "../lib/theme";
-
-interface LauncherSettingsContextValue {
-  settings: LauncherSettingsData;
-  loaded: boolean;
-  customPresets: LauncherSettingsData["custom_theme_presets"];
-  presetRepaired: boolean;
-  updateSettings: (patch: Partial<LauncherSettingsData>) => void;
-  saveSettingsNow: () => Promise<void>;
-  scheduleSaveSettings: () => void;
-  saveError: string | null;
-  clearSaveError: () => void;
-  setThemeMode: (mode: ThemeMode) => void;
-  setThemePreset: (presetId: ThemePresetId) => void;
-  setThemeOverrides: (overrides: ThemeOverrides) => void;
-  resetThemeOverrides: () => void;
-  saveCustomPreset: (name: string, description?: string) => void;
-  deleteCustomPreset: (id: string) => void;
-}
-
-const LauncherSettingsContext = createContext<LauncherSettingsContextValue | null>(null);
-
-export function useLauncherSettings(): LauncherSettingsContextValue {
-  const ctx = useContext(LauncherSettingsContext);
-  if (!ctx) {
-    throw new Error("useLauncherSettings must be used within LauncherSettingsProvider");
-  }
-  return ctx;
-}
+import {
+  LauncherSettingsContext,
+  type LauncherSettingsContextValue,
+} from "./launcher-settings-context";
 
 function normalizeDiskSettings(disk: Partial<LauncherSettingsData>): LauncherSettingsData {
   const defaultAccountId =
@@ -285,23 +260,41 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
     };
   }, [saveSettingsNow]);
 
-  const value: LauncherSettingsContextValue = {
-    settings,
-    loaded,
-    customPresets: settings.custom_theme_presets,
-    presetRepaired,
-    updateSettings,
-    saveSettingsNow,
-    scheduleSaveSettings,
-    saveError,
-    clearSaveError,
-    setThemeMode,
-    setThemePreset,
-    setThemeOverrides,
-    resetThemeOverrides,
-    saveCustomPreset,
-    deleteCustomPreset,
-  };
+  const value = useMemo<LauncherSettingsContextValue>(
+    () => ({
+      settings,
+      loaded,
+      customPresets: settings.custom_theme_presets,
+      presetRepaired,
+      updateSettings,
+      saveSettingsNow,
+      scheduleSaveSettings,
+      saveError,
+      clearSaveError,
+      setThemeMode,
+      setThemePreset,
+      setThemeOverrides,
+      resetThemeOverrides,
+      saveCustomPreset,
+      deleteCustomPreset,
+    }),
+    [
+      settings,
+      loaded,
+      presetRepaired,
+      updateSettings,
+      saveSettingsNow,
+      scheduleSaveSettings,
+      saveError,
+      clearSaveError,
+      setThemeMode,
+      setThemePreset,
+      setThemeOverrides,
+      resetThemeOverrides,
+      saveCustomPreset,
+      deleteCustomPreset,
+    ],
+  );
 
   return (
     <LauncherSettingsContext.Provider value={value}>

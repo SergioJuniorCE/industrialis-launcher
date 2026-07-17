@@ -112,7 +112,7 @@ function EnvVarEditor({
   return (
     <div className="space-y-2">
       {rows.map(([key, val], index) => (
-        <div key={index} className="flex gap-2">
+        <div key={key || "new-variable"} className="flex gap-2">
           <Input
             value={key}
             onChange={(e) => updateRow(index, e.target.value, val)}
@@ -134,6 +134,79 @@ function EnvVarEditor({
         Add variable
       </Button>
     </div>
+  );
+}
+
+function AdvancedSettingsTabs({
+  settings,
+  update,
+}: {
+  settings: InstanceSettings;
+  update: (patch: Partial<InstanceSettings>) => void;
+}) {
+  return (
+    <>
+      <TabsContent value="commands" className="space-y-2 mt-2">
+        <SettingsSection
+          title="Custom commands"
+          description="Pre-launch runs before the game starts; post-exit runs after it closes. Wrapper wraps the Java command."
+          override={settings.override_commands}
+          onOverrideChange={(value) => update({ override_commands: value })}
+        >
+          <FieldLabel>Pre-launch command</FieldLabel>
+          <Input
+            className="mt-1 font-mono text-xs"
+            value={settings.pre_launch_command}
+            onChange={(event) => update({ pre_launch_command: event.target.value })}
+          />
+          <FieldLabel>Wrapper command</FieldLabel>
+          <Input
+            className="mt-1 font-mono text-xs"
+            value={settings.wrapper_command}
+            onChange={(event) => update({ wrapper_command: event.target.value })}
+            placeholder="e.g. optirun"
+          />
+          <FieldLabel>Post-exit command</FieldLabel>
+          <Input
+            className="mt-1 font-mono text-xs"
+            value={settings.post_exit_command}
+            onChange={(event) => update({ post_exit_command: event.target.value })}
+          />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Available variables: $INST_NAME, $INST_ID, $INST_DIR, $INST_MC_DIR, $INST_JAVA
+          </p>
+        </SettingsSection>
+      </TabsContent>
+
+      <TabsContent value="environment" className="space-y-2 mt-2">
+        <SettingsSection
+          title="Environment variables"
+          override={settings.override_env}
+          onOverrideChange={(value) => update({ override_env: value })}
+        >
+          <EnvVarEditor
+            value={settings.env_vars}
+            onChange={(env_vars) => update({ env_vars })}
+          />
+        </SettingsSection>
+      </TabsContent>
+    </>
+  );
+}
+
+function LauncherSettingsLink({ onOpen }: { onOpen?: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={onOpen}
+      className="h-auto w-full flex-col items-start gap-0.5 bg-muted/30 px-3 py-2 text-left font-normal hover:bg-muted/50"
+    >
+      <span className="font-medium text-xs">Open launcher settings</span>
+      <span className="text-[11px] text-muted-foreground font-normal">
+        Instance settings below override defaults only when each section&apos;s override box is checked.
+      </span>
+    </Button>
   );
 }
 
@@ -192,17 +265,7 @@ export function InstanceSettingsPanel({
 
   return (
     <div className="flex flex-col gap-2 max-w-2xl pb-2">
-      <Button
-        type="button"
-        variant="outline"
-        onClick={onOpenLauncherSettings}
-        className="h-auto w-full flex-col items-start gap-0.5 bg-muted/30 px-3 py-2 text-left font-normal hover:bg-muted/50"
-      >
-        <span className="font-medium text-xs">Open launcher settings</span>
-        <span className="text-[11px] text-muted-foreground font-normal">
-          Instance settings below override defaults only when each section&apos;s override box is checked.
-        </span>
-      </Button>
+      <LauncherSettingsLink onOpen={onOpenLauncherSettings} />
 
       <Tabs value={settingsTab} onValueChange={setSettingsTab} className="w-full">
         <TabsList className="flex flex-wrap h-auto gap-0.5">
@@ -438,47 +501,7 @@ export function InstanceSettingsPanel({
           </SettingsSection>
         </TabsContent>
 
-        <TabsContent value="commands" className="space-y-2 mt-2">
-          <SettingsSection
-            title="Custom commands"
-            description="Pre-launch runs before the game starts; post-exit runs after it closes. Wrapper wraps the Java command."
-            override={settings.override_commands}
-            onOverrideChange={(v) => update({ override_commands: v })}
-          >
-            <FieldLabel>Pre-launch command</FieldLabel>
-            <Input
-              className="mt-1 font-mono text-xs"
-              value={settings.pre_launch_command}
-              onChange={(e) => update({ pre_launch_command: e.target.value })}
-            />
-            <FieldLabel>Wrapper command</FieldLabel>
-            <Input
-              className="mt-1 font-mono text-xs"
-              value={settings.wrapper_command}
-              onChange={(e) => update({ wrapper_command: e.target.value })}
-              placeholder="e.g. optirun"
-            />
-            <FieldLabel>Post-exit command</FieldLabel>
-            <Input
-              className="mt-1 font-mono text-xs"
-              value={settings.post_exit_command}
-              onChange={(e) => update({ post_exit_command: e.target.value })}
-            />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Available variables: $INST_NAME, $INST_ID, $INST_DIR, $INST_MC_DIR, $INST_JAVA
-            </p>
-          </SettingsSection>
-        </TabsContent>
-
-        <TabsContent value="environment" className="space-y-2 mt-2">
-          <SettingsSection
-            title="Environment variables"
-            override={settings.override_env}
-            onOverrideChange={(v) => update({ override_env: v })}
-          >
-            <EnvVarEditor value={settings.env_vars} onChange={(env_vars) => update({ env_vars })} />
-          </SettingsSection>
-        </TabsContent>
+        <AdvancedSettingsTabs settings={settings} update={update} />
       </Tabs>
 
       <Button onClick={() => onSave(instanceId, settings)}>Save instance settings</Button>

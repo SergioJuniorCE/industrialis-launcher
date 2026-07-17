@@ -11,7 +11,7 @@ export const THEME_BOOT_DEFAULT = {
 
 export function themeBootInlineScript(): string {
   const payload = JSON.stringify(THEME_BOOT_DEFAULT);
-  return `(function(){try{var c=JSON.parse(localStorage.getItem("industrialis-theme-cache")||"{}");
+  return `(function(){try{var c=JSON.parse(localStorage.getItem("industrialis-theme-cache:v2")||localStorage.getItem("industrialis-theme-cache")||"{}");
 var d=${payload};
 var mode=c.mode==="light"?"light":d.mode;
 var preset=typeof c.preset==="string"&&c.preset?c.preset:d.preset;

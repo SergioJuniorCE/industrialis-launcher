@@ -1,6 +1,6 @@
 import { Moon, Sun } from "lucide-react";
 import { Button } from "./ui/button";
-import { useLauncherSettings } from "../context/LauncherSettingsContext";
+import { useLauncherSettings } from "../context/launcher-settings-context";
 
 export function ThemeSwitcher() {
   const { settings, setThemeMode } = useLauncherSettings();

@@ -1,9 +1,6 @@
 import {
   DEFAULT_LAUNCHER_SETTINGS,
   type LauncherSettingsData,
-  type ThemeMode,
-  type ThemeOverrides,
-  type ThemePresetId,
 } from "./launcher-settings";
 import {
   createCustomPresetId,
@@ -12,7 +9,6 @@ import {
   LEGACY_CUSTOM_PRESETS_STORAGE_KEY,
   resolveThemePreset,
   type SavedThemePreset,
-  type ThemePreset,
 } from "./theme-presets";
 import { isValidThemeTokens, mergeOverridesIntoTokens } from "./theme-utils";
 
@@ -159,20 +155,4 @@ export function migrateSettingsFromLegacyStorage(
     settings: { ...disk, custom_theme_presets: merged },
     migrated: true,
   };
-}
-
-export function effectiveOverrideValue(
-  key: keyof ThemeOverrides,
-  mode: ThemeMode,
-  presetId: ThemePresetId,
-  overrides: ThemeOverrides,
-  customPresets: SavedThemePreset[] = [],
-  preset?: ThemePreset
-): string | undefined {
-  if (overrides[key]) return overrides[key];
-  const resolved = preset ?? resolveThemePreset(presetId, customPresets);
-  if (!resolved) return undefined;
-  const tokens = mode === "dark" ? resolved.dark : resolved.light;
-  if (key in tokens) return tokens[key as keyof typeof tokens];
-  return undefined;
 }

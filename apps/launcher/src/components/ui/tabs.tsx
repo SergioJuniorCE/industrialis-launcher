@@ -13,8 +13,12 @@ function Tabs({ value, onValueChange, className, children, ...props }: {
   className?: string;
   children: React.ReactNode;
 }) {
+  const contextValue = React.useMemo(
+    () => ({ value, onValueChange }),
+    [value, onValueChange],
+  );
   return (
-    <TabsContext.Provider value={{ value, onValueChange }}>
+    <TabsContext.Provider value={contextValue}>
       <div className={cn("w-full", className)} {...props}>
         {children}
       </div>

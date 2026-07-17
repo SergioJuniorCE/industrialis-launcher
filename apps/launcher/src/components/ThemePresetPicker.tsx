@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, Palette, Save, Trash2 } from "lucide-react";
-import { useLauncherSettings } from "../context/LauncherSettingsContext";
+import { useLauncherSettings } from "../context/launcher-settings-context";
 import { BUILTIN_THEME_PRESETS } from "../lib/theme-presets";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";

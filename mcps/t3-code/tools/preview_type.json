@@ -1,9 +1,20 @@
 {
   "name": "preview_type",
-  "description": "Insert literal text into one input. Prefer locator with a Playwright role/text selector; selector accepts legacy CSS. If neither is supplied, types into the currently focused element. Set clear=true to replace existing text.",
+  "description": "Insert literal text into one input in the tab selected by tabId, or this agent session's current tab when omitted. Prefer a Playwright locator; set clear=true to replace existing text.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
       "text": {
         "type": "string",
         "description": "Literal text to insert."

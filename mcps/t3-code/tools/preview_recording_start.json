@@ -1,8 +1,21 @@
 {
   "name": "preview_recording_start",
-  "description": "Start recording the active collaborative browser tab while keeping it interactive for both agent and human use.",
+  "description": "Start recording the collaborative browser tab selected by tabId, or this agent session's current tab when omitted.",
   "inputSchema": {
     "type": "object",
+    "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      }
+    },
     "additionalProperties": false
   }
 }

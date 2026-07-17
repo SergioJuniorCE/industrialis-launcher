@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Loader2 } from "lucide-react";
@@ -12,6 +12,7 @@ import { Checkbox } from "./ui/checkbox";
 import { Progress } from "./ui/progress";
 import { formatDownloadProgress, formatDownloadSpeed, type DlProgressEvent } from "../lib/background-processes";
 import { compareVersionsByReleaseDate } from "../lib/pack-version-status";
+import { keyedByOccurrence } from "../lib/utils";
 
 interface GtnhVersion {
   title: string;
@@ -42,6 +43,78 @@ function formatBytes(bytes: number): string {
 
 type Step = "version" | "mods";
 
+interface PreviewProgressState {
+  loading: boolean;
+  error: string | null;
+  logs: string[];
+  stage: string | null;
+  pct: number;
+  speedMbps?: number;
+  downloadedMb?: number;
+  totalMb?: number;
+}
+
+type PreviewProgressAction =
+  | { type: "start"; packVersion: string }
+  | { type: "progress"; event: DlProgressEvent }
+  | { type: "failed"; error: string }
+  | { type: "finished" };
+
+const INITIAL_PREVIEW_PROGRESS: PreviewProgressState = {
+  loading: false,
+  error: null,
+  logs: [],
+  stage: null,
+  pct: 0,
+};
+
+function previewProgressReducer(
+  state: PreviewProgressState,
+  action: PreviewProgressAction,
+): PreviewProgressState {
+  if (action.type === "start") {
+    return {
+      ...INITIAL_PREVIEW_PROGRESS,
+      loading: true,
+      logs: [`Starting mod analysis for ${action.packVersion}…`],
+    };
+  }
+  if (action.type === "failed") {
+    return { ...state, loading: false, error: action.error };
+  }
+  if (action.type === "finished") {
+    return { ...state, loading: false };
+  }
+
+  const event = action.event;
+  const logs = event.log_line ? [...state.logs, event.log_line] : state.logs;
+  if (event.stage === "downloading") {
+    return {
+      ...state,
+      logs,
+      stage: event.stage,
+      pct: event.pct * 0.6,
+      speedMbps: event.speed_mbps,
+      downloadedMb: event.downloaded_mb,
+      totalMb: event.total_mb,
+    };
+  }
+  const pct = event.stage === "extracting"
+    ? 0.6 + event.pct * 0.25
+    : event.stage === "preview"
+      ? Math.max(0.85, event.pct)
+      : state.pct;
+  return {
+    ...state,
+    logs,
+    stage: event.stage,
+    pct,
+    speedMbps: undefined,
+    downloadedMb: undefined,
+    totalMb: undefined,
+  };
+}
+
 export function UpdatePackDialog({
   instanceId,
   instanceName,
@@ -67,14 +140,20 @@ export function UpdatePackDialog({
   const [targetVersion, setTargetVersion] = useState<string | null>(null);
   const [javaType, setJavaType] = useState(defaultJavaType || "java17+");
   const [preview, setPreview] = useState<UpdateModPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewLogs, setPreviewLogs] = useState<string[]>([]);
-  const [previewStage, setPreviewStage] = useState<string | null>(null);
-  const [previewPct, setPreviewPct] = useState(0);
-  const [previewSpeedMbps, setPreviewSpeedMbps] = useState<number | undefined>();
-  const [previewDownloadedMb, setPreviewDownloadedMb] = useState<number | undefined>();
-  const [previewTotalMb, setPreviewTotalMb] = useState<number | undefined>();
+  const [previewProgress, dispatchPreviewProgress] = useReducer(
+    previewProgressReducer,
+    INITIAL_PREVIEW_PROGRESS,
+  );
+  const {
+    loading: previewLoading,
+    error: previewError,
+    logs: previewLogs,
+    stage: previewStage,
+    pct: previewPct,
+    speedMbps: previewSpeedMbps,
+    downloadedMb: previewDownloadedMb,
+    totalMb: previewTotalMb,
+  } = previewProgress;
   const previewLogRef = useRef<HTMLDivElement>(null);
   const [keepMods, setKeepMods] = useState<Record<string, boolean>>({});
   const [handoff, setHandoff] = useState(false);
@@ -91,39 +170,11 @@ export function UpdatePackDialog({
   };
 
   useEffect(() => {
-    if (!preview) return;
-    const next: Record<string, boolean> = {};
-    for (const mod of preview.custom_mods) {
-      next[mod.identity] = true;
-    }
-    setKeepMods(next);
-  }, [preview]);
-
-  useEffect(() => {
     if (!previewLoading) return;
     const unlisten = listen<DlProgressEvent>("dl-progress", (e) => {
       const p = e.payload;
       if (p.operation !== "preview" || p.id !== instanceId) return;
-      if (p.log_line) {
-        setPreviewLogs((prev) => [...prev, p.log_line!]);
-      }
-      setPreviewStage(p.stage);
-      if (p.stage === "downloading") {
-        setPreviewPct(p.pct * 0.6);
-        setPreviewSpeedMbps(p.speed_mbps);
-        setPreviewDownloadedMb(p.downloaded_mb);
-        setPreviewTotalMb(p.total_mb);
-      } else if (p.stage === "extracting") {
-        setPreviewPct(0.6 + p.pct * 0.25);
-        setPreviewSpeedMbps(undefined);
-        setPreviewDownloadedMb(undefined);
-        setPreviewTotalMb(undefined);
-      } else if (p.stage === "preview") {
-        setPreviewPct(Math.max(0.85, p.pct));
-        setPreviewSpeedMbps(undefined);
-        setPreviewDownloadedMb(undefined);
-        setPreviewTotalMb(undefined);
-      }
+      dispatchPreviewProgress({ type: "progress", event: p });
     });
     return () => { unlisten.then((f) => f()); };
   }, [previewLoading, instanceId]);
@@ -165,14 +216,7 @@ export function UpdatePackDialog({
     : `${(previewPct * 100).toFixed(0)}%`;
 
   const loadPreview = async (packVersion: string) => {
-    setPreviewLoading(true);
-    setPreviewError(null);
-    setPreviewLogs([`Starting mod analysis for ${packVersion}…`]);
-    setPreviewStage(null);
-    setPreviewPct(0);
-    setPreviewSpeedMbps(undefined);
-    setPreviewDownloadedMb(undefined);
-    setPreviewTotalMb(undefined);
+    dispatchPreviewProgress({ type: "start", packVersion });
     try {
       const result = await invoke<UpdateModPreview>("preview_update_mods", {
         id: instanceId,
@@ -180,6 +224,9 @@ export function UpdatePackDialog({
         javaType,
       });
       setPreview(result);
+      const nextKeepMods: Record<string, boolean> = {};
+      for (const mod of result.custom_mods) nextKeepMods[mod.identity] = true;
+      setKeepMods(nextKeepMods);
       if (result.custom_mods.length > 0) {
         setStep("mods");
       } else {
@@ -187,9 +234,9 @@ export function UpdatePackDialog({
         onUpdate(packVersion, javaType, []);
       }
     } catch (e) {
-      setPreviewError(String(e));
+      dispatchPreviewProgress({ type: "failed", error: String(e) });
     } finally {
-      setPreviewLoading(false);
+      dispatchPreviewProgress({ type: "finished" });
     }
   };
 
@@ -204,9 +251,10 @@ export function UpdatePackDialog({
     onUpdate(targetVersion, javaType, keepIdentities);
   };
 
-  const keepIdentities = Object.entries(keepMods)
-    .filter(([, v]) => v)
-    .map(([k]) => k);
+  const keepIdentities: string[] = [];
+  for (const [identity, keep] of Object.entries(keepMods)) {
+    if (keep) keepIdentities.push(identity);
+  }
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) requestClose(); }}>
@@ -280,8 +328,8 @@ export function UpdatePackDialog({
                       ref={previewLogRef}
                       className="max-h-32 overflow-y-auto rounded-md border border-border bg-black/50 p-2 font-mono text-xs space-y-0.5"
                     >
-                      {previewLogs.map((line, i) => (
-                        <div key={i} className="text-muted-foreground">{line}</div>
+                      {keyedByOccurrence(previewLogs, (line) => line).map(({ key, value: line }) => (
+                        <div key={key} className="text-muted-foreground">{line}</div>
                       ))}
                     </div>
                   )}

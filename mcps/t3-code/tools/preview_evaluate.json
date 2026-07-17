@@ -1,9 +1,20 @@
 {
   "name": "preview_evaluate",
-  "description": "Evaluate a JavaScript expression in the page's main frame and return a serializable result up to 64 KB. Prefer preview_snapshot and semantic click/type/wait tools; use this for inspection or interactions those tools cannot express. The expression may mutate page state.",
+  "description": "Evaluate JavaScript in the tab selected by tabId, or this agent session's current tab when omitted. Returns a serializable result up to 64 KB; the expression may mutate page state.",
   "inputSchema": {
     "type": "object",
     "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
       "expression": {
         "type": "string",
         "allOf": [

@@ -7,19 +7,19 @@ mod pack;
 mod pack_cache;
 mod settings;
 
+pub use auth::{AccountData, AccountInfo};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
-pub use auth::{AccountData, AccountInfo};
 
 fn hide_background_console(command: &mut Command) {
     #[cfg(windows)]
@@ -500,7 +500,7 @@ fn library_allowed(rules: Option<&[PatchRule]>) -> bool {
         let applies = rule
             .os
             .as_ref()
-            .map_or(true, |os| os.name.as_deref() == Some(current_os_name()));
+            .is_none_or(|os| os.name.as_deref() == Some(current_os_name()));
         if applies && rule.action != "defer" {
             allowed = rule.action == "allow";
         }
@@ -591,10 +591,7 @@ fn asset_object_digest(hash: &str) -> &str {
 
 fn asset_object_path(assets_dir: &Path, hash: &str) -> PathBuf {
     let digest = asset_object_digest(hash);
-    assets_dir
-        .join("objects")
-        .join(&digest[..2])
-        .join(digest)
+    assets_dir.join("objects").join(&digest[..2]).join(digest)
 }
 
 fn asset_object_url(hash: &str) -> String {
@@ -856,7 +853,9 @@ pub(crate) fn instance_dir(id: &str) -> PathBuf {
 pub(crate) fn sanitize_name(s: &str) -> String {
     s.chars()
         .map(|c| {
-            if c.is_whitespace() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
+            if c.is_whitespace()
+                || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+            {
                 '_'
             } else {
                 c
@@ -918,7 +917,11 @@ fn allowed_icon_extensions() -> &'static [&'static str] {
 
 fn resolve_instance_icon_path(id: &str, settings: &InstanceSettings) -> Option<String> {
     let dir = instance_dir(id);
-    if let Some(filename) = settings.custom_icon.as_ref().filter(|name| !name.is_empty()) {
+    if let Some(filename) = settings
+        .custom_icon
+        .as_ref()
+        .filter(|name| !name.is_empty())
+    {
         let path = dir.join(filename);
         if path.is_file() {
             return Some(path.to_string_lossy().to_string());
@@ -1105,8 +1108,6 @@ fn instance_command_vars(
     ])
 }
 
-
-
 fn record_play_time(version: &str, elapsed_secs: u64) {
     if elapsed_secs == 0 {
         return;
@@ -1121,7 +1122,11 @@ fn record_play_time(version: &str, elapsed_secs: u64) {
     let _ = save_settings_file(version, &settings);
 }
 
-fn run_shell_command(command: &str, work_dir: &Path, extra_env: &HashMap<String, String>) -> Result<(), String> {
+fn run_shell_command(
+    command: &str,
+    work_dir: &Path,
+    extra_env: &HashMap<String, String>,
+) -> Result<(), String> {
     let trimmed = command.trim();
     if trimmed.is_empty() {
         return Ok(());
@@ -1194,7 +1199,6 @@ async fn get_versions(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<HashMap<String, GtnhVersion>, String> {
     let client = state.lock().map_err(|e| e.to_string())?.http.clone();
-    drop(state);
     let url = "https://raw.githubusercontent.com/GTNewHorizons/GTNewHorizons.github.io/refs/heads/master/public/versions.json";
     let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
     let versions: HashMap<String, GtnhVersion> = resp.json().await.map_err(|e| e.to_string())?;
@@ -1471,13 +1475,11 @@ fn run_delete_instance(
         }
 
         if path.is_dir() {
-            fs::remove_dir(path).map_err(|e| {
-                format!("failed to remove directory {}: {e}", path.display())
-            })?;
+            fs::remove_dir(path)
+                .map_err(|e| format!("failed to remove directory {}: {e}", path.display()))?;
         } else {
-            fs::remove_file(path).map_err(|e| {
-                format!("failed to remove file {}: {e}", path.display())
-            })?;
+            fs::remove_file(path)
+                .map_err(|e| format!("failed to remove file {}: {e}", path.display()))?;
         }
 
         let pct = (i + 1) as f64 / total as f64;
@@ -1524,9 +1526,10 @@ async fn delete_instance(
 
     let app_bg = app.clone();
     let id_bg = id.clone();
-    let result = tokio::task::spawn_blocking(move || run_delete_instance(&app_bg, &id_bg, &cancel_flag))
-        .await
-        .map_err(|e| e.to_string())?;
+    let result =
+        tokio::task::spawn_blocking(move || run_delete_instance(&app_bg, &id_bg, &cancel_flag))
+            .await
+            .map_err(|e| e.to_string())?;
 
     {
         let mut guard = state.lock().map_err(|e| e.to_string())?;
@@ -1747,7 +1750,6 @@ async fn download_install(
     }
 
     let client = state.lock().map_err(|e| e.to_string())?.http.clone();
-    drop(state);
 
     let inst_dir = instance_dir(&id);
     fs::create_dir_all(&inst_dir).map_err(|e| e.to_string())?;
@@ -1878,7 +1880,10 @@ async fn preview_update_mods(
         0.88,
         "preview",
         Some(&id),
-        Some(&format!("Found {} mod(s) in current instance", old_mods.len())),
+        Some(&format!(
+            "Found {} mod(s) in current instance",
+            old_mods.len()
+        )),
     );
 
     pack::emit_dl_progress(
@@ -2276,7 +2281,10 @@ async fn reinstall_instance(
 }
 
 #[tauri::command]
-fn list_minecraft_entries(id: String, subpath: Option<String>) -> Result<Vec<minecraft_files::MinecraftDirEntry>, String> {
+fn list_minecraft_entries(
+    id: String,
+    subpath: Option<String>,
+) -> Result<Vec<minecraft_files::MinecraftDirEntry>, String> {
     let id = sanitize_name(id.trim());
     let inst_dir = instance_dir(&id);
     minecraft_files::list_minecraft_entries(&inst_dir, subpath.as_deref().unwrap_or(""))
@@ -2585,7 +2593,7 @@ async fn detect_java() -> Result<Vec<JavaInfo>, String> {
         }
     }
     // ponytail: O(n²) dedup, fine for <20 results
-    found.sort_by(|a, b| b.version.cmp(&a.version));
+    found.sort_by_key(|item| std::cmp::Reverse(item.version));
     Ok(found)
 }
 
@@ -2621,7 +2629,10 @@ fn nested_pack_dir(inst_dir: &Path) -> Option<PathBuf> {
         }
     }
     if matches.len() > 1 {
-        matches.sort_by_key(|path| path.file_name().map(|name| name.to_string_lossy().to_string()));
+        matches.sort_by_key(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().to_string())
+        });
     }
     matches.into_iter().next()
 }
@@ -2720,16 +2731,13 @@ fn replace_in_config_file(path: &Path, from: &str, to: &str) -> Result<(), Strin
     if !path.is_file() {
         return Ok(());
     }
-    let content = fs::read_to_string(path).map_err(|e| {
-        format!("failed to read config {}: {e}", path.display())
-    })?;
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("failed to read config {}: {e}", path.display()))?;
     if !content.contains(from) {
         return Ok(());
     }
     let updated = content.replace(from, to);
-    fs::write(path, updated).map_err(|e| {
-        format!("failed to write config {}: {e}", path.display())
-    })
+    fs::write(path, updated).map_err(|e| format!("failed to write config {}: {e}", path.display()))
 }
 
 /// Dreamcraft's Gadomancy script expects ANCIENT_STONES research, which Gadomancy
@@ -2743,7 +2751,10 @@ fn apply_gtnh_config_patches(inst_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn prepare_instance_configs(inst_dir: &Path, overwrite_pack_configs: bool) -> Result<(), String> {
+pub(crate) fn prepare_instance_configs(
+    inst_dir: &Path,
+    overwrite_pack_configs: bool,
+) -> Result<(), String> {
     seed_pack_configs(inst_dir, overwrite_pack_configs)?;
     apply_gtnh_config_patches(inst_dir)?;
     Ok(())
@@ -3110,12 +3121,7 @@ async fn launch_instance(
 
     emit_launch_log(&app, &id, "system", "──────── Launch ────────");
     emit_launch_log(&app, &id, "system", &format!("Java: {java}"));
-    emit_launch_log(
-        &app,
-        &id,
-        "system",
-        &format!("Main class: {main_class}"),
-    );
+    emit_launch_log(&app, &id, "system", &format!("Main class: {main_class}"));
     emit_launch_log(
         &app,
         &id,
@@ -3144,19 +3150,11 @@ async fn launch_instance(
         } else {
             let substituted = substitute_command_vars(wrapper, &command_vars);
             let parts = split_command_args(&substituted);
-            let wrapper_exe = parts
-                .first()
-                .cloned()
-                .ok_or("wrapper command is empty")?;
+            let wrapper_exe = parts.first().cloned().ok_or("wrapper command is empty")?;
             let mut wrapper_args = parts[1..].to_vec();
             wrapper_args.push(java.clone());
             wrapper_args.extend(args);
-            emit_launch_log(
-                &app,
-                &id,
-                "system",
-                &format!("Wrapper: {substituted}"),
-            );
+            emit_launch_log(&app, &id, "system", &format!("Wrapper: {substituted}"));
             (wrapper_exe, wrapper_args)
         }
     } else {
@@ -3182,11 +3180,7 @@ async fn launch_instance(
         .spawn()
         .map_err(|e| format!("launch failed ({cmd_executable}): {e}"))?;
 
-    emit(
-        &app,
-        "instance-started",
-        &serde_json::json!({ "id": id }),
-    );
+    emit(&app, "instance-started", &serde_json::json!({ "id": id }));
 
     let child_handle = Arc::new(Mutex::new(child));
     {
@@ -3202,11 +3196,10 @@ async fn launch_instance(
 
     let launch_id = id.clone();
     let app_for_wait = app.clone();
-    let exit_code = tokio::task::spawn_blocking(move || {
-        wait_for_launch(child_handle, app_for_wait, launch_id)
-    })
-    .await
-    .map_err(|e| format!("launch task failed: {e}"))??;
+    let exit_code =
+        tokio::task::spawn_blocking(move || wait_for_launch(child_handle, app_for_wait, launch_id))
+            .await
+            .map_err(|e| format!("launch task failed: {e}"))??;
 
     record_play_time(&id, play_start.elapsed().as_secs());
 
@@ -3300,12 +3293,12 @@ async fn start_microsoft_login(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<AccountInfo, String> {
     let client = state.lock().map_err(|e| e.to_string())?.http.clone();
-    drop(state);
 
     auth::login_microsoft_account(&client, &app, &data_dir()).await
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
 
@@ -3329,9 +3322,7 @@ mod tests {
         );
         assert_eq!(
             path,
-            PathBuf::from(
-                r"C:\game\assets\objects\18\1863782e33ce7b584fc45b037325a1964e095d3e"
-            )
+            PathBuf::from(r"C:\game\assets\objects\18\1863782e33ce7b584fc45b037325a1964e095d3e")
         );
     }
 
@@ -3496,10 +3487,7 @@ mod tests {
             .iter()
             .position(|p| p.ends_with("file.txt"))
             .expect("file path");
-        let nested_idx = paths
-            .iter()
-            .position(|p| p == &nested)
-            .expect("nested dir");
+        let nested_idx = paths.iter().position(|p| p == &nested).expect("nested dir");
         let root_idx = paths.iter().position(|p| p == &root).expect("root dir");
         assert!(file_idx < nested_idx);
         assert!(nested_idx < root_idx);
@@ -3514,7 +3502,11 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         fs::create_dir_all(root.join("config/nested")).unwrap();
-        fs::write(root.join("config/gadomancy.cfg"), "B:ancientStoneRecipes=false\n").unwrap();
+        fs::write(
+            root.join("config/gadomancy.cfg"),
+            "B:ancientStoneRecipes=false\n",
+        )
+        .unwrap();
         fs::write(root.join("config/nested/child.cfg"), "flag=true\n").unwrap();
 
         seed_pack_configs(&root, true).expect("seed should succeed");
@@ -3582,7 +3574,11 @@ mod tests {
         ));
         let nested = root.join("GT New Horizons 2.9.0-beta-1");
         fs::create_dir_all(nested.join(".minecraft/mods")).unwrap();
-        fs::write(nested.join("mmc-pack.json"), r#"{"components":[],"formatVersion":1}"#).unwrap();
+        fs::write(
+            nested.join("mmc-pack.json"),
+            r#"{"components":[],"formatVersion":1}"#,
+        )
+        .unwrap();
         fs::write(nested.join(".minecraft/mods/test.jar"), b"mod").unwrap();
         fs::write(root.join("instance.json"), r#"{"name":"test"}"#).unwrap();
 
