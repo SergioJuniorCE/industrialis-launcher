@@ -13,7 +13,6 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $launcherDirectory = Join-Path $repoRoot "apps\launcher"
 $tauriDirectory = Join-Path $launcherDirectory "src-tauri"
 $releaseDirectory = Join-Path $tauriDirectory "target\release"
-$clientIdFile = Join-Path $tauriDirectory "microsoft-client-id"
 
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repoRoot "artifacts\launcher"
@@ -23,12 +22,6 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
     throw "pnpm is required but was not found on PATH."
-}
-
-$hasEnvironmentClientId = -not [string]::IsNullOrWhiteSpace($env:MICROSOFT_CLIENT_ID)
-$hasClientIdFile = Test-Path -LiteralPath $clientIdFile -PathType Leaf
-if (-not $hasEnvironmentClientId -and -not $hasClientIdFile) {
-    throw "Microsoft authentication requires MICROSOFT_CLIENT_ID or apps\launcher\src-tauri\microsoft-client-id before creating a release build."
 }
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null

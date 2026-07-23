@@ -33,8 +33,5 @@ terminals/
 *.sln
 *.sw?
 
-# Build-time Microsoft OAuth client ID (see apps/launcher/src-tauri/microsoft-client-id.example)
-apps/launcher/src-tauri/microsoft-client-id
-
 # Rust
 apps/launcher/src-tauri/target
