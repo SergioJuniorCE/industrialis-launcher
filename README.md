@@ -55,7 +55,6 @@ cd apps/launcher/src-tauri && cargo test
 Create Windows release artifacts (NSIS installer, MSI installer, and portable ZIP):
 
 ```powershell
-$env:MICROSOFT_CLIENT_ID="your-azure-client-id"
 pnpm build:launcher:release
 ```
 
@@ -64,35 +63,16 @@ The artifacts are written to `artifacts/launcher`. You can build only one format
 `powershell -File scripts/build-launcher.ps1 -Target msi`.
 
 Pushes to `master` run the same release build in GitHub Actions and retain the
-artifacts for 14 days. Add `MICROSOFT_CLIENT_ID` as a repository Actions secret
-before running the workflow.
+artifacts for 14 days.
 
-## Microsoft client ID (maintainers only)
+## Microsoft login
 
-End users do **not** configure a client ID. It is embedded at build time.
+The launcher uses Prism Launcher's public Microsoft application ID, embedded at
+build time. Microsoft login uses the device-code flow: follow the link shown in
+the Accounts tab and enter the displayed code.
 
-**Option A — local file (recommended for dev)**
-
-```bash
-cp apps/launcher/src-tauri/microsoft-client-id.example apps/launcher/src-tauri/microsoft-client-id
-# Paste your Azure Application (client) ID on its own line
-```
-
-**Option B — environment variable (CI / release)**
-
-```powershell
-$env:MICROSOFT_CLIENT_ID="your-azure-client-id"
-pnpm build:launcher
-cd apps/launcher && pnpm tauri build
-```
-
-### Azure app registration
-
-1. [Azure portal → App registrations](https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
-2. New registration — **Personal Microsoft accounts only**
-3. Authentication → **Mobile and desktop applications** → redirect URI `industrialislauncher://oauth/microsoft`
-4. **Allow public client flows** → Yes
-5. Submit the client ID for Mojang API access: [https://aka.ms/mce-reviewappid](https://aka.ms/mce-reviewappid)
+Use of the application ID is subject to the
+[Microsoft Identity Platform terms of use](https://learn.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use).
 
 ## Project structure
 

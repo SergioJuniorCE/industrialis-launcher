@@ -15,6 +15,7 @@ const MSA_TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/
 const MSA_DEVICE_CODE_URL: &str =
     "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const MSA_SCOPES: &str = "XboxLive.SignIn XboxLive.offline_access";
+const PRISM_LAUNCHER_CLIENT_ID: &str = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb";
 const OAUTH_REDIRECT_URI: &str = "industrialislauncher://oauth/microsoft";
 const OAUTH_TIMEOUT_SECS: u64 = 5 * 60;
 const REFRESH_WINDOW_SECS: u64 = 12 * 60 * 60;
@@ -275,25 +276,32 @@ pub async fn login_microsoft_account(
     data_dir: &Path,
 ) -> Result<AccountInfo, String> {
     let client_id = embedded_microsoft_client_id()?;
-    let (cancel_tx, cancel_rx) = watch::channel(false);
+    let msa = if client_id == PRISM_LAUNCHER_CLIENT_ID {
+        // Prism's application is approved for Minecraft and supports device-code
+        // login, but it is not registered for our custom callback URI.
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        device_code_flow(client, app, client_id, cancel_rx).await?
+    } else {
+        let (cancel_tx, cancel_rx) = watch::channel(false);
 
-    let oauth_client = client.clone();
-    let oauth_app = app.clone();
-    let oauth_cid = client_id.to_string();
-    let oauth_cancel = cancel_rx.clone();
-    let oauth_task = tokio::spawn(async move {
-        oauth_code_flow(&oauth_client, &oauth_app, &oauth_cid, oauth_cancel).await
-    });
+        let oauth_client = client.clone();
+        let oauth_app = app.clone();
+        let oauth_cid = client_id.to_string();
+        let oauth_cancel = cancel_rx.clone();
+        let oauth_task = tokio::spawn(async move {
+            oauth_code_flow(&oauth_client, &oauth_app, &oauth_cid, oauth_cancel).await
+        });
 
-    let device_client = client.clone();
-    let device_app = app.clone();
-    let device_cid = client_id.to_string();
-    let device_cancel = cancel_rx;
-    let device_task = tokio::spawn(async move {
-        device_code_flow(&device_client, &device_app, &device_cid, device_cancel).await
-    });
+        let device_client = client.clone();
+        let device_app = app.clone();
+        let device_cid = client_id.to_string();
+        let device_cancel = cancel_rx;
+        let device_task = tokio::spawn(async move {
+            device_code_flow(&device_client, &device_app, &device_cid, device_cancel).await
+        });
 
-    let msa = race_oauth_and_device_code(oauth_task, device_task, cancel_tx).await?;
+        race_oauth_and_device_code(oauth_task, device_task, cancel_tx).await?
+    };
 
     let mut account = AccountData {
         format_version: 3,
@@ -643,6 +651,13 @@ async fn device_code_flow(
             message: device.message.clone(),
         },
     );
+
+    if let Err(error) = app
+        .opener()
+        .open_url(&device.verification_uri, None::<&str>)
+    {
+        eprintln!("failed to open device-code login page: {error}");
+    }
 
     poll_device_code_token(client, client_id, &device, cancel).await
 }
@@ -1186,6 +1201,14 @@ async fn download_skin(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_embeds_prism_launcher_client_id() {
+        assert_eq!(
+            embedded_microsoft_client_id().unwrap(),
+            PRISM_LAUNCHER_CLIENT_ID
+        );
+    }
 
     #[test]
     fn account_data_access_token_uses_yggdrasil() {
