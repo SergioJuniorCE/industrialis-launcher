@@ -1104,7 +1104,10 @@ fn java_path() -> Option<String> {
         .or_else(java_from_path)
 }
 
-fn resolve_java(settings: &InstanceSettings) -> Result<String, String> {
+fn resolve_java(
+    settings: &InstanceSettings,
+    default_java_path: Option<&str>,
+) -> Result<String, String> {
     if settings.override_java_location {
         if let Some(ref custom) = settings.java_path {
             let custom = custom.trim();
@@ -1117,8 +1120,18 @@ fn resolve_java(settings: &InstanceSettings) -> Result<String, String> {
             }
         }
     }
+    if let Some(default_java) = default_java_path {
+        let default_java = default_java.trim();
+        if !default_java.is_empty() {
+            let path = PathBuf::from(default_java);
+            if path.exists() {
+                return Ok(path.to_string_lossy().to_string());
+            }
+            return Err(format!("default Java not found: {default_java}"));
+        }
+    }
     java_path().ok_or_else(|| {
-        "no Java configured or found — set JAVA_HOME or pick a Java in instance settings".into()
+        "no Java configured or found — choose a default Java in launcher settings, set JAVA_HOME, or pick a Java in instance settings".into()
     })
 }
 
@@ -3080,7 +3093,8 @@ async fn launch_instance(
     pack::apply_persistent_custom_mods(&inst_dir)?;
 
     let settings = load_settings(&id).ok_or("no settings")?;
-    let java = resolve_java(&settings)?;
+    let launcher_settings = load_launcher_settings();
+    let java = resolve_java(&settings, launcher_settings.default_java_path.as_deref())?;
 
     let config = build_launch_config(&inst_dir, &client, &app, &id).await?;
     if let Some(asset_index) = &config.asset_index {
@@ -3147,7 +3161,6 @@ async fn launch_instance(
     }
 
     let accounts = load_accounts();
-    let launcher_settings = load_launcher_settings();
     let acc = pick_launch_account(
         &settings,
         &accounts,
@@ -3487,6 +3500,35 @@ mod tests {
             let resolved = java_from_home(&home).expect("java should resolve after trim");
             assert!(resolved.ends_with("java.exe") || resolved.ends_with("java"));
         }
+    }
+
+    #[test]
+    fn resolve_java_prefers_instance_override_then_launcher_default() {
+        let dir = std::env::temp_dir().join(format!(
+            "industrialis-java-resolution-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let instance_java = dir.join("instance-java");
+        let default_java = dir.join("default-java");
+        fs::write(&instance_java, b"").unwrap();
+        fs::write(&default_java, b"").unwrap();
+
+        let mut settings = InstanceSettings::default();
+        assert_eq!(
+            resolve_java(&settings, Some(&default_java.to_string_lossy())).unwrap(),
+            default_java.to_string_lossy()
+        );
+
+        settings.override_java_location = true;
+        settings.java_path = Some(instance_java.to_string_lossy().to_string());
+        assert_eq!(
+            resolve_java(&settings, Some(&default_java.to_string_lossy())).unwrap(),
+            instance_java.to_string_lossy()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

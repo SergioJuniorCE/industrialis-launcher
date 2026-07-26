@@ -297,6 +297,7 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState("info");
   const [javaOptions, setJavaOptions] = useState<JavaInfo[]>([]);
+  const [javaRefreshing, setJavaRefreshing] = useState(false);
   const [instanceLogs, setInstanceLogs] = useState<Record<string, LaunchLogLine[]>>({});
   const [launching, setLaunching] = useState<string | null>(null);
   const [runningInstanceIds, setRunningInstanceIds] = useState<Set<string>>(() => new Set());
@@ -343,6 +344,20 @@ export default function App() {
       .finally(() => setAccountsLoaded(true));
   }, []);
 
+  const refreshJava = useCallback(async () => {
+    setJavaRefreshing(true);
+    try {
+      const detected = await invoke<JavaInfo[]>("detect_java");
+      setJavaOptions(detected);
+      return detected;
+    } catch (e) {
+      setError(`Java detection failed: ${e}`);
+      return [];
+    } finally {
+      setJavaRefreshing(false);
+    }
+  }, []);
+
   const loadInstanceSizes = useCallback(() => {
     setSizesRefreshing(true);
     void invoke<Record<string, number>>("refresh_instance_sizes", { ids: null })
@@ -373,9 +388,9 @@ export default function App() {
   useEffect(() => {
     loadInstances();
     loadAccounts();
-    invoke<JavaInfo[]>("detect_java").then(setJavaOptions).catch(() => {});
+    void refreshJava();
     invoke<Record<string, GtnhVersion>>("get_versions").then(setGtnhVersions).catch(() => {});
-  }, [loadAccounts, loadInstances]);
+  }, [loadAccounts, loadInstances, refreshJava]);
 
   useEffect(() => {
     if (!launcherSettingsLoaded || !accountsLoaded) return;
@@ -393,6 +408,14 @@ export default function App() {
   const handleSetDefaultAccount = useCallback(
     (id: string | null) => {
       updateSettings({ default_account_id: id });
+      void saveSettingsNow();
+    },
+    [updateSettings, saveSettingsNow],
+  );
+
+  const handleSetDefaultJava = useCallback(
+    (path: string | null) => {
+      updateSettings({ default_java_path: path });
       void saveSettingsNow();
     },
     [updateSettings, saveSettingsNow],
@@ -808,14 +831,16 @@ export default function App() {
     }).catch((e) => handleProcessFailed("copy", newId, e));
   };
 
-  const handleSaveSettings = async (id: string, settings: InstanceSettings) => {
+  const handleSaveSettings = useCallback(async (id: string, settings: InstanceSettings) => {
+    setInstances((current) =>
+      current.map((instance) => instance.id === id ? { ...instance, settings } : instance),
+    );
     try {
       await invoke("save_settings", { id, settings });
-      loadInstances();
     } catch (e) {
       setError(`Save failed: ${e}`);
     }
-  };
+  }, []);
 
   const handleRenameInstance = async (id: string, newName: string) => {
     const inst = instances.find((i) => i.id === id);
@@ -1033,7 +1058,12 @@ export default function App() {
                         { label: "Instance ID", value: sel.id },
                         { label: "Size", value: formatInstanceSize(sel.size_bytes, sizesRefreshing) },
                         { label: "Group", value: sel.group || "Ungrouped" },
-                        { label: "Java", value: sel.settings.java_path || "Auto-detect" },
+                        {
+                          label: "Java",
+                          value: mergeInstanceSettings(sel.settings).override_java_location
+                            ? sel.settings.java_path || "Invalid instance override"
+                            : launcherSettings.default_java_path || "Auto-detect",
+                        },
                         {
                           label: "RAM",
                           value: sel.settings.override_memory
@@ -1078,10 +1108,11 @@ export default function App() {
                     <InstanceSettingsPanel
                       instanceId={selectedInstanceId!}
                       packVersion={instancePackVersion(sel)}
-                      javaOptions={javaOptions}
+                      javaRefreshing={javaRefreshing}
                       accounts={accounts}
                       onOpenLauncherSettings={() => setTab("settings")}
-                      onSave={(v, s) => handleSaveSettings(v, s)}
+                      onRefreshJava={refreshJava}
+                      onSave={handleSaveSettings}
                     />
                   </TabsContent>
 
@@ -1270,6 +1301,10 @@ export default function App() {
           {tab === "settings" && (
             <SettingsTab
               javaOptions={javaOptions}
+              javaRefreshing={javaRefreshing}
+              onRefreshJava={refreshJava}
+              defaultJavaPath={launcherSettings.default_java_path ?? null}
+              onDefaultJavaChange={handleSetDefaultJava}
               gridColumns={launcherSettings.instance_grid_columns ?? 3}
               onGridColumnsChange={(columns) => updateSettings({ instance_grid_columns: columns })}
             />
@@ -2289,13 +2324,28 @@ function NewInstanceDialog({
 
 function SettingsTab({
   javaOptions,
+  javaRefreshing,
+  onRefreshJava,
+  defaultJavaPath,
+  onDefaultJavaChange,
   gridColumns,
   onGridColumnsChange,
 }: {
   javaOptions: JavaInfo[];
+  javaRefreshing: boolean;
+  onRefreshJava: () => Promise<JavaInfo[]>;
+  defaultJavaPath: string | null;
+  onDefaultJavaChange: (path: string | null) => void;
   gridColumns: number;
   onGridColumnsChange: (columns: number) => void;
 }) {
+  const browseDefaultJava = async () => {
+    const picked = await invoke<string | null>("browse_java_executable");
+    if (picked) onDefaultJavaChange(picked);
+  };
+  const selectedJavaIsDetected =
+    defaultJavaPath !== null && javaOptions.some((java) => java.path === defaultJavaPath);
+
   return (
     <div className="space-y-4">
       <ThemePresetPicker />
@@ -2325,8 +2375,47 @@ function SettingsTab({
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Java Detection</CardTitle></CardHeader>
-        <CardContent>
+        <CardHeader className="flex-row items-center justify-between gap-2">
+          <CardTitle>Java Detection</CardTitle>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={javaRefreshing}
+            onClick={() => void onRefreshJava()}
+          >
+            <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
+            {javaRefreshing ? "Scanning..." : "Refresh"}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="default-java">Default Java installation</Label>
+            <div className="flex gap-2">
+              <Select
+                id="default-java"
+                className="flex-1"
+                value={defaultJavaPath ?? ""}
+                onChange={(e) => onDefaultJavaChange(e.target.value || null)}
+              >
+                <option value="">Auto-detect (JAVA_HOME / PATH)</option>
+                {!selectedJavaIsDetected && defaultJavaPath && (
+                  <option value={defaultJavaPath}>{defaultJavaPath}</option>
+                )}
+                {javaOptions.map((java) => (
+                  <option key={java.path} value={java.path}>
+                    Java {java.version} — {java.path}
+                  </option>
+                ))}
+              </Select>
+              <Button type="button" variant="outline" onClick={() => void browseDefaultJava()}>
+                Browse
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Used by every instance unless that instance has a Java location override.
+            </p>
+          </div>
           <p className="text-sm text-muted-foreground mb-2">Detected Java installations:</p>
           {javaOptions.length === 0 && <p className="text-xs text-muted-foreground">None found</p>}
           <div className="space-y-1">

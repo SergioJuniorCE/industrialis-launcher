@@ -7,6 +7,7 @@ export interface ServerConfig {
   dataDir: string;
   apiUrl: string;
   imageRepository: string;
+  dockerSocket: string;
   apiToken?: string;
 }
 
@@ -25,6 +26,8 @@ export function getConfig(overrides: Partial<ServerConfig> = {}): ServerConfig {
       overrides.imageRepository ??
       process.env.INDUSTRIALIS_GTNH_IMAGE ??
       "ghcr.io/debuas/gtnhserverdocker",
+    dockerSocket:
+      overrides.dockerSocket ?? process.env.INDUSTRIALIS_DOCKER_SOCKET ?? "/var/run/docker.sock",
     apiToken: overrides.apiToken ?? process.env.INDUSTRIALIS_API_TOKEN,
   };
 }

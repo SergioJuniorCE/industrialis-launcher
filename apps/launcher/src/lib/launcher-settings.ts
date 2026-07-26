@@ -25,6 +25,8 @@ export interface LauncherSettingsData {
   custom_theme_presets: SavedThemePreset[];
   /** Account used for every launch unless an instance overrides it. */
   default_account_id?: string | null;
+  /** Java executable used for every launch unless an instance overrides it. */
+  default_java_path?: string | null;
   /** @deprecated Renamed to default_account_id */
   active_account_id?: string | null;
   /** Number of columns in the instance grid (2–5). */
@@ -43,5 +45,6 @@ export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
   theme_overrides: {},
   custom_theme_presets: [],
   default_account_id: null,
+  default_java_path: null,
   instance_grid_columns: 3,
 };

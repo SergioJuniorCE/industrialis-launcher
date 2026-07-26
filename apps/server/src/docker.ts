@@ -43,11 +43,12 @@ export function decodeDockerLogs(output: Buffer): string {
 }
 
 export class DockerServerManager {
-  private readonly docker = new Docker();
+  private readonly docker: Docker;
   private readonly registry: ServerRegistry;
   private createQueue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly config: ServerConfig) {
+    this.docker = new Docker({ socketPath: config.dockerSocket });
     this.registry = new ServerRegistry(config.dataDir);
   }
 
@@ -55,7 +56,9 @@ export class DockerServerManager {
     try {
       await this.docker.ping();
     } catch {
-      throw new Error("Docker is unavailable. Start Docker and verify the current user can access it.");
+      throw new Error(
+        `Docker Engine is unavailable at ${this.config.dockerSocket}. Verify the daemon is running and this user can access the socket.`,
+      );
     }
   }
 

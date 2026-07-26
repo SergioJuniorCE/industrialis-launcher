@@ -1,7 +1,8 @@
 # GTNH server hosting
 
-Industrialis Server is a local daemon, CLI, and web dashboard for Docker-hosted
-GregTech: New Horizons servers.
+Industrialis Server is a Linux daemon, CLI, and web dashboard for hosting
+GregTech: New Horizons servers on a dedicated server or VPS. It talks directly
+to Docker Engine through the host socket; Docker Desktop is not used.
 
 ## Current scope
 
@@ -12,16 +13,21 @@ GregTech: New Horizons servers.
 - Retain server files when a container is removed.
 
 The daemon uses a generated bearer token and listens on `127.0.0.1` by default.
-The dashboard keeps that token server-side and proxies browser requests. Do not
-expose the daemon directly to a public network. Use an SSH tunnel if the
-dashboard must control a remote host.
+The dashboard keeps that token server-side and proxies browser requests. Neither
+port `4310` nor port `3001` should be publicly exposed. Put the dashboard behind
+an authenticated reverse proxy or a private VPN.
 
 ## Prerequisites
 
+- A Linux server or VPS, with Ubuntu or Debian recommended
 - Node.js 22 or newer
 - pnpm 9
-- Docker Engine or Docker Desktop using Linux containers
+- Docker Engine with access to `/var/run/docker.sock`
 - At least 6 GB of free memory for the default configuration
+
+Install Docker Engine using Docker's official repository instructions for your
+distribution. The user running `industrialis-server` must belong to the
+`docker` group, or have equivalent access to the configured socket.
 
 ## Development
 
@@ -32,7 +38,7 @@ pnpm install
 pnpm --filter @industrialis/server-contracts build
 ```
 
-Start Docker, then run the daemon:
+Start Docker Engine, then run the daemon:
 
 ```bash
 pnpm dev:server
@@ -71,9 +77,66 @@ node apps/server/dist/cli.js remove assembly-line --yes
 Set `INDUSTRIALIS_API_URL` or pass `--api-url` before the command to target a
 different daemon.
 
+## VPS deployment
+
+Build the repository on the VPS under `/opt/industrialis`:
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build:server
+pnpm build:dashboard
+```
+
+Create a dedicated service account and persistent directories:
+
+```bash
+sudo useradd --system --create-home --home-dir /var/lib/industrialis industrialis
+sudo usermod --append --groups docker industrialis
+sudo install -d -o industrialis -g industrialis /var/lib/industrialis/servers
+sudo install -d /etc/industrialis
+sudo install -m 640 -o root -g industrialis deploy/systemd/industrialis.env.example /etc/industrialis/industrialis.env
+```
+
+Ensure the service account can read the built repository, then install and start
+the systemd units:
+
+```bash
+sudo install -m 644 deploy/systemd/industrialis-server.service /etc/systemd/system/
+sudo install -m 644 deploy/systemd/industrialis-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now industrialis-server industrialis-dashboard
+```
+
+Inspect service output with:
+
+```bash
+sudo journalctl -u industrialis-server -f
+sudo journalctl -u industrialis-dashboard -f
+```
+
+The supplied units expect the repository at `/opt/industrialis`, store state in
+`/var/lib/industrialis`, and run both HTTP services on loopback. Edit the units
+if your deployment path differs.
+
+### Public access
+
+Do not open daemon port `4310`. Do not expose dashboard port `3001` directly.
+Use `deploy/Caddyfile.example` as an authenticated HTTPS reverse proxy, or
+access the dashboard through WireGuard, Tailscale, or an SSH tunnel. Generate a
+Caddy password hash before enabling the example:
+
+```bash
+caddy hash-password
+```
+
+Only expose the Minecraft ports assigned to servers, plus the reverse proxy's
+HTTP/HTTPS ports if applicable.
+
 ## Storage and images
 
-Daemon state and persistent files default to `~/.industrialis/servers`:
+Daemon state and persistent files default to `~/.industrialis/servers`. The
+provided VPS environment changes this to `/var/lib/industrialis/servers`:
 
 ```text
 servers/
@@ -107,4 +170,5 @@ against accidental world loss.
 | `INDUSTRIALIS_API_URL` | `http://127.0.0.1:4310` | CLI API target |
 | `INDUSTRIALIS_SERVER_DATA` | `~/.industrialis/servers` | Persistent server root |
 | `INDUSTRIALIS_GTNH_IMAGE` | `ghcr.io/debuas/gtnhserverdocker` | GTNH image repository |
+| `INDUSTRIALIS_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker Engine socket |
 | `INDUSTRIALIS_API_TOKEN` | generated in the data root | Shared daemon/dashboard token |

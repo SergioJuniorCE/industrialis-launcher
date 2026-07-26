@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Star } from "lucide-react";
+import { Check, Copy, Star } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
@@ -15,6 +15,13 @@ interface DeviceCodeInfo {
 }
 
 const OFFLINE_USERNAME_RE = /^[a-zA-Z0-9_]{1,16}$/;
+
+async function copyText(text: string): Promise<void> {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error("Clipboard access is not available");
+  }
+  await navigator.clipboard.writeText(text);
+}
 
 function accountLabel(account: LauncherAccount): string {
   if (account.username.trim()) return account.username;
@@ -48,6 +55,7 @@ export function AccountsTab({
   const [accounts, setAccounts] = useState<LauncherAccount[]>([]);
   const [loggingIn, setLoggingIn] = useState(false);
   const [deviceCode, setDeviceCode] = useState<DeviceCodeInfo | null>(null);
+  const [deviceCodeCopied, setDeviceCodeCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [offlineUsername, setOfflineUsername] = useState("");
   const [addingOffline, setAddingOffline] = useState(false);
@@ -65,14 +73,32 @@ export function AccountsTab({
   useEffect(() => {
     const unlisten = listen<DeviceCodeInfo>("auth-device-code", (e) => {
       setDeviceCode(e.payload);
+      setDeviceCodeCopied(false);
+      void copyText(e.payload.user_code)
+        .then(() => setDeviceCodeCopied(true))
+        .catch(() => {
+          // Clipboard permissions can reject automatic writes. The visible
+          // copy button still lets the user copy from an explicit action.
+        });
     });
     return () => { unlisten.then((f) => f()); };
   }, []);
+
+  const handleCopyDeviceCode = async () => {
+    if (!deviceCode) return;
+    try {
+      await copyText(deviceCode.user_code);
+      setDeviceCodeCopied(true);
+    } catch {
+      setDeviceCodeCopied(false);
+    }
+  };
 
   const handleMicrosoftLogin = async () => {
     setLoggingIn(true);
     setError(null);
     setDeviceCode(null);
+    setDeviceCodeCopied(false);
     try {
       const account = await invoke<LauncherAccount>("start_microsoft_login");
       onSetDefaultAccount(account.id);
@@ -82,6 +108,7 @@ export function AccountsTab({
     }
     setLoggingIn(false);
     setDeviceCode(null);
+    setDeviceCodeCopied(false);
   };
 
   const handleAddOffline = async () => {
@@ -253,15 +280,39 @@ export function AccountsTab({
       </div>
 
       {loggingIn && deviceCode && (
-        <div className="rounded-md border border-border p-3 space-y-1.5">
-          <p className="text-xs font-medium">Device code login</p>
+        <div className="rounded-md border border-border p-3 space-y-2">
+          <p className="text-xs font-medium">Complete Microsoft sign-in</p>
           <p className="text-[11px] text-muted-foreground">
-            Enter this code at{" "}
+            Paste the code below at{" "}
             <a className="text-foreground underline" href={deviceCode.verification_uri} target="_blank" rel="noreferrer">
               {deviceCode.verification_uri}
             </a>
           </p>
-          <p className="text-xl font-mono tracking-widest">{deviceCode.user_code}</p>
+          <div className="flex items-center gap-2">
+            <div
+              className="flex min-w-0 flex-1 items-center justify-center rounded-md border border-border bg-muted/40 px-3 py-2"
+              aria-label={`Microsoft device code ${deviceCode.user_code}`}
+            >
+              <span className="select-all text-xl font-mono font-semibold tracking-widest">
+                {deviceCode.user_code}
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-10 shrink-0 gap-1.5"
+              onClick={() => void handleCopyDeviceCode()}
+            >
+              {deviceCodeCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {deviceCodeCopied ? "Copied" : "Copy code"}
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            {deviceCodeCopied
+              ? "The code was copied automatically. Paste it into the Microsoft page."
+              : "If it was not copied automatically, use Copy code or select it manually."}
+          </p>
           <p className="text-[10px] text-muted-foreground">{deviceCode.message}</p>
         </div>
       )}

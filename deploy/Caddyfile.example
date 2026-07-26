@@ -1,0 +1,9 @@
+servers.example.com {
+    # The dashboard has no user-account system yet. Keep this authentication
+    # layer or expose the dashboard only through a private VPN.
+    basic_auth {
+        admin REPLACE_WITH_CADDY_HASHED_PASSWORD
+    }
+
+    reverse_proxy 127.0.0.1:3001
+}

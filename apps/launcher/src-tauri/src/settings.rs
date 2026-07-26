@@ -93,6 +93,8 @@ pub struct LauncherSettings {
         alias = "active_account_id"
     )]
     pub default_account_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_java_path: Option<String>,
     #[serde(default = "default_instance_grid_columns")]
     pub instance_grid_columns: u8,
 }
@@ -109,6 +111,7 @@ impl Default for LauncherSettings {
             theme_overrides: ThemeOverrides::default(),
             custom_theme_presets: Vec::new(),
             default_account_id: None,
+            default_java_path: None,
             instance_grid_columns: default_instance_grid_columns(),
         }
     }
@@ -156,6 +159,13 @@ pub fn validate_launcher_settings(settings: &LauncherSettings) -> Result<(), Str
     }
     if !(2..=5).contains(&settings.instance_grid_columns) {
         return Err("instance grid columns must be between 2 and 5".into());
+    }
+    if settings
+        .default_java_path
+        .as_ref()
+        .is_some_and(|path| path.trim().is_empty() || path.len() > 4096)
+    {
+        return Err("invalid default Java path".into());
     }
     for value in [
         settings.theme_overrides.background.as_deref(),
@@ -238,6 +248,7 @@ mod tests {
         assert!(matches!(settings.theme_mode, ThemeMode::Dark));
         assert_eq!(settings.theme_preset, "industrialis");
         assert!(settings.custom_theme_presets.is_empty());
+        assert!(settings.default_java_path.is_none());
     }
 
     #[test]
@@ -281,5 +292,17 @@ mod tests {
             ..LauncherSettings::default()
         };
         assert!(validate_launcher_settings(&settings).is_err());
+    }
+
+    #[test]
+    fn deserialize_default_java_path() {
+        let settings: LauncherSettings = serde_json::from_str(
+            r#"{ "default_java_path": "C:\\Program Files\\Java\\bin\\java.exe" }"#,
+        )
+        .expect("default Java path should parse");
+        assert_eq!(
+            settings.default_java_path.as_deref(),
+            Some(r"C:\Program Files\Java\bin\java.exe")
+        );
     }
 }

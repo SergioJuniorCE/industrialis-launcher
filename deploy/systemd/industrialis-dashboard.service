@@ -1,0 +1,22 @@
+[Unit]
+Description=Industrialis GTNH server dashboard
+After=network-online.target industrialis-server.service
+Wants=network-online.target
+Requires=industrialis-server.service
+
+[Service]
+Type=simple
+User=industrialis
+Group=industrialis
+WorkingDirectory=/opt/industrialis
+EnvironmentFile=/etc/industrialis/industrialis.env
+ExecStart=/usr/bin/env pnpm --dir apps/dashboard start
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

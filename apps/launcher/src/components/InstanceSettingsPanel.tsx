@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { Button } from "./ui/button";
@@ -213,40 +213,86 @@ function LauncherSettingsLink({ onOpen }: { onOpen?: () => void }) {
 export function InstanceSettingsPanel({
   instanceId,
   packVersion,
-  javaOptions,
+  javaRefreshing,
   accounts,
   onOpenLauncherSettings,
+  onRefreshJava,
   onSave,
 }: {
   instanceId: string;
   packVersion: string;
-  javaOptions: JavaInfo[];
+  javaRefreshing: boolean;
   accounts: AccountOption[];
   onOpenLauncherSettings?: () => void;
+  onRefreshJava: () => Promise<JavaInfo[]>;
   onSave: (instanceId: string, settings: InstanceSettings) => void;
 }) {
   const [settings, setSettings] = useState<InstanceSettings>(DEFAULT_INSTANCE_SETTINGS);
   const [settingsTab, setSettingsTab] = useState("general");
   const [javaTestResult, setJavaTestResult] = useState<string | null>(null);
   const [testingJava, setTestingJava] = useState(false);
+  const settingsRef = useRef(settings);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<{ id: string; settings: InstanceSettings } | null>(null);
+  const loadVersionRef = useRef(0);
+  const onSaveRef = useRef(onSave);
 
   useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
+  const flushPendingSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    onSaveRef.current(pending.id, pending.settings);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadVersion = ++loadVersionRef.current;
+    flushPendingSave();
     invoke<InstanceSettings>("get_settings", { id: instanceId })
-      .then((disk) => setSettings(mergeInstanceSettings(disk)))
-      .catch(() => setSettings({ ...DEFAULT_INSTANCE_SETTINGS }));
-  }, [instanceId]);
+      .then((disk) => {
+        if (cancelled || loadVersionRef.current !== loadVersion) return;
+        const next = mergeInstanceSettings(disk);
+        settingsRef.current = next;
+        setSettings(next);
+      })
+      .catch(() => {
+        if (cancelled || loadVersionRef.current !== loadVersion) return;
+        const next = { ...DEFAULT_INSTANCE_SETTINGS };
+        settingsRef.current = next;
+        setSettings(next);
+      });
+    return () => {
+      cancelled = true;
+      flushPendingSave();
+    };
+  }, [flushPendingSave, instanceId]);
 
   const update = useCallback((patch: Partial<InstanceSettings>) => {
-    setSettings((s) => ({ ...s, ...patch }));
-  }, []);
+    loadVersionRef.current += 1;
+    const next = { ...settingsRef.current, ...patch };
+    settingsRef.current = next;
+    setSettings(next);
+    pendingSaveRef.current = { id: instanceId, settings: next };
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushPendingSave, 250);
+  }, [flushPendingSave, instanceId]);
 
   const browseJava = async () => {
     const picked = await invoke<string | null>("browse_java_executable");
     if (picked) update({ java_path: picked });
   };
 
-  const detectJava = () => {
-    if (javaOptions.length > 0) update({ java_path: javaOptions[0].path });
+  const detectJava = async () => {
+    const detected = await onRefreshJava();
+    if (detected.length > 0) update({ java_path: detected[0].path });
   };
 
   const testJava = async () => {
@@ -428,11 +474,11 @@ export function InstanceSettingsPanel({
               className="mt-1 font-mono text-xs"
               value={settings.java_path ?? ""}
               onChange={(e) => update({ java_path: e.target.value || null })}
-              placeholder="Auto-detect when override is off"
+              placeholder="Uses launcher default when override is off"
             />
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={detectJava}>
-                Detect
+              <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void detectJava()}>
+                {javaRefreshing ? "Scanning..." : "Detect"}
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => void browseJava()}>
                 Browse
@@ -504,7 +550,6 @@ export function InstanceSettingsPanel({
         <AdvancedSettingsTabs settings={settings} update={update} />
       </Tabs>
 
-      <Button onClick={() => onSave(instanceId, settings)}>Save instance settings</Button>
     </div>
   );
 }
