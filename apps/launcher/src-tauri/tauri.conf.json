@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -45,6 +46,15 @@
     "deep-link": {
       "desktop": {
         "schemes": ["industrialislauncher"]
+      }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE5RDk1NzA0MjRDMjk5MTQKUldRVW1jSWtCRmZacWVHcm14V1NGTjN3V0pCaWR1YXZ6RTFRS1VUejhuMWwrdVhwNlVQSlZ5SVgK",
+      "endpoints": [
+        "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

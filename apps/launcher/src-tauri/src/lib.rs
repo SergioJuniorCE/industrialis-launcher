@@ -83,7 +83,11 @@ fn parse_java_major_from_release(content: &str) -> Option<u32> {
 fn java_home_from_executable(java: &Path) -> Option<PathBuf> {
     let bin = java.parent()?;
     let home = bin.parent()?;
-    if bin.file_name()?.to_string_lossy().eq_ignore_ascii_case("bin") {
+    if bin
+        .file_name()?
+        .to_string_lossy()
+        .eq_ignore_ascii_case("bin")
+    {
         Some(home.to_path_buf())
     } else {
         None
@@ -3549,10 +3553,8 @@ mod tests {
 
     #[test]
     fn java_gui_executable_prefers_javaw_on_windows() {
-        let dir = std::env::temp_dir().join(format!(
-            "industrialis-javaw-test-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("industrialis-javaw-test-{}", std::process::id()));
         let bin = dir.join("bin");
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&bin).unwrap();
@@ -3787,18 +3789,36 @@ fn handle_oauth_deep_links(urls: &[url::Url]) {
     }
 }
 
+#[cfg(desktop)]
+async fn install_launcher_update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    if cfg!(debug_assertions) {
+        return Ok(());
+    }
+
+    if let Some(update) = app.updater()?.check().await? {
+        update.download_and_install(|_, _| {}, || {}).await?;
+        app.restart();
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_focus();
-                let _ = window.unminimize();
-            }
-        }));
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_focus();
+                    let _ = window.unminimize();
+                }
+            }))
+            .plugin(tauri_plugin_updater::Builder::new().build());
     }
 
     builder
@@ -3823,6 +3843,16 @@ pub fn run() {
             app.deep_link().on_open_url(|event| {
                 handle_oauth_deep_links(&event.urls());
             });
+
+            #[cfg(desktop)]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = install_launcher_update(handle).await {
+                        eprintln!("Launcher update failed: {error}");
+                    }
+                });
+            }
 
             Ok(())
         })
