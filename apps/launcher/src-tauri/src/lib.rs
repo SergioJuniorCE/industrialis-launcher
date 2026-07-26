@@ -21,13 +21,72 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
+/// Prevent console windows when spawning helper processes from the GUI app.
 fn hide_background_console(command: &mut Command) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
 
+        // CREATE_NO_WINDOW: no console allocation for console-subsystem children.
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
+/// Prefer `javaw.exe` on Windows so the game never owns a console window.
+fn java_gui_executable(java: &str) -> String {
+    #[cfg(windows)]
+    {
+        let path = Path::new(java);
+        let file_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        if file_name.eq_ignore_ascii_case("java.exe") || file_name.eq_ignore_ascii_case("java") {
+            let javaw = path.with_file_name("javaw.exe");
+            if javaw.is_file() {
+                return javaw.to_string_lossy().to_string();
+            }
+        }
+    }
+    java.to_string()
+}
+
+fn parse_java_major_from_release(content: &str) -> Option<u32> {
+    for line in content.lines() {
+        let line = line.trim();
+        let Some(value) = line
+            .strip_prefix("JAVA_VERSION=")
+            .or_else(|| line.strip_prefix("JAVA_RUNTIME_VERSION="))
+        else {
+            continue;
+        };
+        let value = value.trim().trim_matches('"');
+        // "21.0.5", "1.8.0_412", "21.0.5+9-LTS-239"
+        let major = if let Some(rest) = value.strip_prefix("1.") {
+            rest.split(|c: char| !c.is_ascii_digit())
+                .find(|s| !s.is_empty())
+                .and_then(|s| s.parse().ok())
+        } else {
+            value
+                .split(|c: char| !c.is_ascii_digit())
+                .find(|s| !s.is_empty())
+                .and_then(|s| s.parse().ok())
+        };
+        if let Some(major) = major {
+            return Some(major);
+        }
+    }
+    None
+}
+
+fn java_home_from_executable(java: &Path) -> Option<PathBuf> {
+    let bin = java.parent()?;
+    let home = bin.parent()?;
+    if bin.file_name()?.to_string_lossy().eq_ignore_ascii_case("bin") {
+        Some(home.to_path_buf())
+    } else {
+        None
     }
 }
 
@@ -1141,7 +1200,10 @@ fn run_shell_command(
         c.args(["-c", trimmed]);
         c
     };
-    cmd.current_dir(work_dir);
+    cmd.current_dir(work_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     for (k, v) in extra_env {
         cmd.env(k, v);
     }
@@ -1174,7 +1236,11 @@ fn test_java(path_override: Option<String>) -> Result<String, String> {
         java_path().ok_or("no Java configured or found — set JAVA_HOME or pick a Java path")?
     };
     let mut command = Command::new(&java);
-    command.arg("-version");
+    command
+        .arg("-version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     hide_background_console(&mut command);
     let output = command
         .output()
@@ -2522,21 +2588,26 @@ async fn detect_java() -> Result<Vec<JavaInfo>, String> {
     }
     // Try PATH
     if let Ok(paths) = std::env::var("PATH") {
-        for dir in paths.split(';') {
-            let candidate = PathBuf::from(dir).join("java.exe");
-            if candidate.exists() {
-                if let Some(info) = probe_java(&candidate.to_string_lossy()) {
-                    if !found.iter().any(|j: &JavaInfo| j.path == info.path) {
-                        found.push(info);
-                    }
-                }
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        for dir in paths.split(sep) {
+            let dir = dir.trim();
+            if dir.is_empty() {
+                continue;
             }
-            let candidate_nix = PathBuf::from(dir).join("java");
-            if candidate_nix.exists() {
-                let p = candidate_nix.to_string_lossy().to_string();
-                if let Some(info) = probe_java(&p) {
-                    if !found.iter().any(|j| j.path == info.path) {
-                        found.push(info);
+            let candidates = if cfg!(windows) {
+                vec![
+                    PathBuf::from(dir).join("java.exe"),
+                    PathBuf::from(dir).join("java"),
+                ]
+            } else {
+                vec![PathBuf::from(dir).join("java")]
+            };
+            for candidate in candidates {
+                if candidate.is_file() {
+                    if let Some(info) = probe_java(&candidate.to_string_lossy()) {
+                        if !found.iter().any(|j: &JavaInfo| j.path == info.path) {
+                            found.push(info);
+                        }
                     }
                 }
             }
@@ -2598,8 +2669,30 @@ async fn detect_java() -> Result<Vec<JavaInfo>, String> {
 }
 
 fn probe_java(path: &str) -> Option<JavaInfo> {
+    let exe = Path::new(path);
+    if !exe.is_file() {
+        return None;
+    }
+
+    // Prefer the JDK `release` file so detection never spawns a console process.
+    if let Some(home) = java_home_from_executable(exe) {
+        let release_path = home.join("release");
+        if let Ok(content) = fs::read_to_string(&release_path) {
+            if let Some(version) = parse_java_major_from_release(&content) {
+                return Some(JavaInfo {
+                    path: path.to_string(),
+                    version,
+                });
+            }
+        }
+    }
+
     let mut command = Command::new(path);
-    command.arg("-version");
+    command
+        .arg("-version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
     hide_background_console(&mut command);
     let output = command.output().ok()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -3143,22 +3236,33 @@ async fn launch_instance(
         &format!("Launch args saved to {}", argfile_path.display()),
     );
 
+    // On Windows launch via javaw.exe so no console window is created for the game.
+    let launch_java = java_gui_executable(&java);
+    if launch_java != java {
+        emit_launch_log(
+            &app,
+            &id,
+            "system",
+            &format!("Using GUI Java executable: {launch_java}"),
+        );
+    }
+
     let (cmd_executable, cmd_args) = if settings.override_commands {
         let wrapper = settings.wrapper_command.trim();
         if wrapper.is_empty() {
-            (java.clone(), args)
+            (launch_java.clone(), args)
         } else {
             let substituted = substitute_command_vars(wrapper, &command_vars);
             let parts = split_command_args(&substituted);
             let wrapper_exe = parts.first().cloned().ok_or("wrapper command is empty")?;
             let mut wrapper_args = parts[1..].to_vec();
-            wrapper_args.push(java.clone());
+            wrapper_args.push(launch_java.clone());
             wrapper_args.extend(args);
             emit_launch_log(&app, &id, "system", &format!("Wrapper: {substituted}"));
             (wrapper_exe, wrapper_args)
         }
     } else {
-        (java.clone(), args)
+        (launch_java.clone(), args)
     };
 
     let mut cmd = Command::new(&cmd_executable);
@@ -3167,6 +3271,7 @@ async fn launch_instance(
     fs::create_dir_all(&game_work_dir).map_err(|e| e.to_string())?;
     cmd.current_dir(&game_work_dir)
         .args(&cmd_args)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if settings.override_env {
@@ -3382,6 +3487,45 @@ mod tests {
             let resolved = java_from_home(&home).expect("java should resolve after trim");
             assert!(resolved.ends_with("java.exe") || resolved.ends_with("java"));
         }
+    }
+
+    #[test]
+    fn parse_java_major_from_release_handles_modern_and_legacy() {
+        assert_eq!(
+            parse_java_major_from_release("JAVA_VERSION=\"21.0.5\"\n"),
+            Some(21)
+        );
+        assert_eq!(
+            parse_java_major_from_release("JAVA_VERSION=\"1.8.0_412\"\n"),
+            Some(8)
+        );
+        assert_eq!(
+            parse_java_major_from_release("JAVA_RUNTIME_VERSION=\"17.0.12+8-LTS-286\"\n"),
+            Some(17)
+        );
+    }
+
+    #[test]
+    fn java_gui_executable_prefers_javaw_on_windows() {
+        let dir = std::env::temp_dir().join(format!(
+            "industrialis-javaw-test-{}",
+            std::process::id()
+        ));
+        let bin = dir.join("bin");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&bin).unwrap();
+        let java = bin.join("java.exe");
+        let javaw = bin.join("javaw.exe");
+        fs::write(&java, b"").unwrap();
+        fs::write(&javaw, b"").unwrap();
+
+        let resolved = java_gui_executable(&java.to_string_lossy());
+        #[cfg(windows)]
+        assert_eq!(resolved, javaw.to_string_lossy());
+        #[cfg(not(windows))]
+        assert_eq!(resolved, java.to_string_lossy());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

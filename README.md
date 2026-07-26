@@ -52,18 +52,26 @@ pnpm test --filter=@industrialis/launcher
 cd apps/launcher/src-tauri && cargo test
 ```
 
-Create Windows release artifacts (NSIS installer, MSI installer, and portable ZIP):
+Create release artifacts for the current OS (installers + portable):
 
-```powershell
+```bash
 pnpm build:launcher:release
 ```
 
-The artifacts are written to `artifacts/launcher`. You can build only one format with
-`pnpm build:launcher:installer`, `pnpm build:launcher:portable`, or
-`powershell -File scripts/build-launcher.ps1 -Target msi`.
+The artifacts are written to `artifacts/launcher`.
 
-Pushes to `master` run the same release build in GitHub Actions and retain the
-artifacts for 14 days.
+| Platform | Installer | Portable |
+|----------|-----------|----------|
+| Windows | NSIS (`.exe`), MSI (`.msi`) | ZIP of `.exe` |
+| macOS | DMG | ZIP of `.app` |
+| Linux | DEB | AppImage + ZIP of binary |
+
+Build only one format with `pnpm build:launcher:installer` or
+`pnpm build:launcher:portable`. On Windows you can still target a single
+bundle with `powershell -File scripts/build-launcher.ps1 -Target msi`.
+
+Pushes to `master` build Windows, macOS, and Linux in GitHub Actions and
+publish a GitHub Release (`build-<run number>`) with all artifacts.
 
 ## Microsoft login
 

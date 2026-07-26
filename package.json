@@ -8,14 +8,18 @@
     "test": "turbo test",
     "dev:launcher": "turbo dev --filter=@industrialis/launcher",
     "dev:website": "turbo dev --filter=@industrialis/website",
+    "dev:server": "turbo dev --filter=@industrialis/server",
+    "dev:dashboard": "turbo dev --filter=@industrialis/dashboard",
     "build:launcher": "turbo build --filter=@industrialis/launcher",
-    "build:launcher:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-launcher.ps1",
-    "build:launcher:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-launcher.ps1 -Target nsis",
-    "build:launcher:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-launcher.ps1 -Target portable",
-    "build:website": "turbo build --filter=@industrialis/website"
+    "build:launcher:release": "node scripts/run-build-launcher.mjs",
+    "build:launcher:installer": "node scripts/run-build-launcher.mjs installer",
+    "build:launcher:portable": "node scripts/run-build-launcher.mjs portable",
+    "build:website": "turbo build --filter=@industrialis/website",
+    "build:server": "turbo build --filter=@industrialis/server",
+    "build:dashboard": "turbo build --filter=@industrialis/dashboard"
   },
   "devDependencies": {
-    "turbo": "^2.5.4"
+    "turbo": "^2.10.6"
   },
   "packageManager": "pnpm@9.15.9"
 }

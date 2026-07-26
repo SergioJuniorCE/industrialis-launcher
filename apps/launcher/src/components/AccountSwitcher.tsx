@@ -18,6 +18,27 @@ function accountLabel(account: LauncherAccount): string {
   return account.account_type === "offline" ? "Offline account" : "Microsoft account";
 }
 
+function SkinFace({ skin, className }: { skin: string; className: string }) {
+  const src = `data:image/png;base64,${skin}`;
+
+  return (
+    <span className={`relative overflow-hidden rounded-sm shrink-0 ${className}`} aria-hidden="true">
+      <img
+        src={src}
+        alt=""
+        className="absolute -left-full -top-full w-[800%] max-w-none"
+        style={{ imageRendering: "pixelated" }}
+      />
+      <img
+        src={src}
+        alt=""
+        className="absolute left-[-500%] -top-full w-[800%] max-w-none"
+        style={{ imageRendering: "pixelated" }}
+      />
+    </span>
+  );
+}
+
 export function AccountSwitcher({
   accounts,
   defaultAccountId,
@@ -59,12 +80,7 @@ export function AccountSwitcher({
         }
       >
         {selected?.skin_png_base64 ? (
-          <img
-            src={`data:image/png;base64,${selected.skin_png_base64}`}
-            alt=""
-            className="size-5 rounded-sm shrink-0 image-pixelated"
-            style={{ imageRendering: "pixelated" }}
-          />
+          <SkinFace skin={selected.skin_png_base64} className="size-5" />
         ) : (
           <UserCircle className="size-4 shrink-0 text-muted-foreground" />
         )}
@@ -96,12 +112,7 @@ export function AccountSwitcher({
                   }}
                 >
                   {acc.skin_png_base64 ? (
-                    <img
-                      src={`data:image/png;base64,${acc.skin_png_base64}`}
-                      alt=""
-                      className="size-6 rounded-sm shrink-0 image-pixelated"
-                      style={{ imageRendering: "pixelated" }}
-                    />
+                    <SkinFace skin={acc.skin_png_base64} className="size-6" />
                   ) : (
                     <User className="size-4 shrink-0 text-muted-foreground" />
                   )}

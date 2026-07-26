@@ -81,11 +81,7 @@ body {
 
 .instance-row-selected {
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 24%, var(--color-accent)), color-mix(in srgb, var(--color-accent) 86%, transparent));
-  box-shadow:
-    inset 3px 0 0 var(--color-primary),
-    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 32%, var(--color-border)),
-    0 0 22px color-mix(in srgb, var(--color-primary) 8%, transparent);
+    linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 18%, var(--color-accent)), color-mix(in srgb, var(--color-accent) 82%, transparent));
 }
 
 .status-running {

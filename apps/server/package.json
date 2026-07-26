@@ -1,0 +1,29 @@
+{
+  "name": "@industrialis/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "industrialis-server": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/cli.ts daemon",
+    "start": "node dist/cli.js daemon",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@industrialis/server-contracts": "workspace:*",
+    "commander": "^14.0.1",
+    "dockerode": "^4.0.7",
+    "fastify": "^5.4.0",
+    "zod": "^4.0.5"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.38",
+    "@types/node": "^22.15.32",
+    "tsx": "^4.20.3",
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.4"
+  }
+}

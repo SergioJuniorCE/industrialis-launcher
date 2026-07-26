@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("all", "nsis", "msi", "portable")]
+    [ValidateSet("all", "nsis", "msi", "portable", "installer")]
     [string]$Target = "all",
 
     [string]$OutputDirectory
@@ -70,6 +70,11 @@ try {
             # Preserve an unpatched executable before Tauri marks the binary for each installer type.
             Invoke-Pnpm -Arguments @("tauri", "build", "--no-bundle")
             New-PortableArchive
+            Invoke-Pnpm -Arguments @("tauri", "build", "--bundles", "nsis,msi")
+            Copy-BundleArtifacts -BundleName "nsis" -Filter "*.exe"
+            Copy-BundleArtifacts -BundleName "msi" -Filter "*.msi"
+        }
+        "installer" {
             Invoke-Pnpm -Arguments @("tauri", "build", "--bundles", "nsis,msi")
             Copy-BundleArtifacts -BundleName "nsis" -Filter "*.exe"
             Copy-BundleArtifacts -BundleName "msi" -Filter "*.msi"

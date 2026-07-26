@@ -139,13 +139,13 @@ export function InstanceGridCard({
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            "group/card relative flex flex-col rounded-xl border p-2.5 transition-colors",
+            "group/card relative flex flex-col rounded-lg p-2.5 transition-colors",
             packBusy && "opacity-80",
             isDragging && "opacity-40",
-            isDragOver && "border-primary/60 ring-2 ring-primary/25",
+            isDragOver && "bg-primary/15 ring-2 ring-primary/35",
             selected
-              ? "instance-row-selected border-primary/50 bg-primary/10 shadow-sm"
-              : "border-border/70 bg-card/40 hover:border-primary/35 hover:bg-primary/8",
+              ? "instance-row-selected"
+              : "hover:bg-accent/70",
           )}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -172,8 +172,27 @@ export function InstanceGridCard({
           <button
             type="button"
             onClick={onSelect}
-            className="flex min-w-0 flex-1 flex-col items-center gap-2 text-left"
+            onDoubleClick={() => {
+              if (!running && !starting && !busy && !packBusy && !isInstanceBusy(inst.id)) {
+                onLaunch();
+              }
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !running &&
+                !starting &&
+                !busy &&
+                !packBusy &&
+                !isInstanceBusy(inst.id)
+              ) {
+                event.preventDefault();
+                onLaunch();
+              }
+            }}
+            className="flex min-w-0 flex-1 flex-col items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             draggable={false}
+            title="Double-click to launch"
           >
             <InstanceAvatar
               instanceId={inst.id}
@@ -235,21 +254,7 @@ export function InstanceGridCard({
               <Button variant="ghost" size="icon" className="size-7" disabled>
                 <Loader2 className="size-3.5 animate-spin" />
               </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                title="Launch"
-                disabled={busy || isInstanceBusy(inst.id)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onLaunch();
-                }}
-              >
-                <Play className="size-3.5" />
-              </Button>
-            )}
+            ) : null}
             {!packBusy && (
               <PackVersionStatus
                 currentVersion={packVersion(inst)}
@@ -258,20 +263,6 @@ export function InstanceGridCard({
                 disabled={busy || running || starting || isInstanceBusy(inst.id)}
                 compact
               />
-            )}
-            {!deleting && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                title="Settings"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenSettings();
-                }}
-              >
-                <SlidersHorizontal className="size-3.5" />
-              </Button>
             )}
           </div>
 
