@@ -12,9 +12,13 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::Write;
+#[cfg(not(windows))]
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+#[cfg(not(windows))]
+use std::process::Child;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -50,6 +54,142 @@ fn java_gui_executable(java: &str) -> String {
         }
     }
     java.to_string()
+}
+
+#[cfg(windows)]
+#[derive(Serialize)]
+struct WindowsWmiLaunch {
+    command_line: String,
+    current_directory: String,
+    environment: Vec<String>,
+}
+
+#[cfg(windows)]
+fn quote_windows_argument(argument: &str) -> String {
+    if !argument.is_empty()
+        && !argument
+            .chars()
+            .any(|character| character.is_whitespace() || character == '"')
+    {
+        return argument.to_string();
+    }
+
+    let mut quoted = String::from("\"");
+    let mut backslashes = 0;
+    for character in argument.chars() {
+        if character == '\\' {
+            backslashes += 1;
+            continue;
+        }
+        if character == '"' {
+            quoted.push_str(&"\\".repeat(backslashes * 2 + 1));
+            quoted.push('"');
+            backslashes = 0;
+            continue;
+        }
+        quoted.push_str(&"\\".repeat(backslashes));
+        backslashes = 0;
+        quoted.push(character);
+    }
+    quoted.push_str(&"\\".repeat(backslashes * 2));
+    quoted.push('"');
+    quoted
+}
+
+#[cfg(windows)]
+fn windows_command_line(executable: &str, arguments: &[String]) -> String {
+    std::iter::once(executable)
+        .chain(arguments.iter().map(String::as_str))
+        .map(quote_windows_argument)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Win32 job objects cannot always be escaped with `CREATE_BREAKAWAY_FROM_JOB`.
+/// Microsoft documents that processes created by `Win32_Process.Create` do not
+/// inherit the caller's job, so use the local WMI provider as the Windows launch
+/// broker. The returned PID still supports waiting and the launcher's Stop action.
+#[cfg(windows)]
+fn spawn_game_process_via_wmi(
+    executable: &str,
+    arguments: &[String],
+    current_directory: &Path,
+    environment_overrides: Option<&HashMap<String, String>>,
+) -> Result<u32, String> {
+    let mut environment: HashMap<String, (String, String)> = std::env::vars()
+        .map(|(key, value)| (key.to_ascii_lowercase(), (key, value)))
+        .collect();
+    if let Some(overrides) = environment_overrides {
+        for (key, value) in overrides {
+            environment.insert(key.to_ascii_lowercase(), (key.clone(), value.clone()));
+        }
+    }
+    let mut environment = environment
+        .into_values()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>();
+    environment.sort_unstable();
+
+    let payload = WindowsWmiLaunch {
+        command_line: windows_command_line(executable, arguments),
+        current_directory: current_directory.to_string_lossy().to_string(),
+        environment,
+    };
+    let payload_path = std::env::temp_dir().join(format!(
+        "industrialis-wmi-launch-{}.json",
+        uuid::Uuid::new_v4()
+    ));
+    let payload_json =
+        serde_json::to_vec(&payload).map_err(|error| format!("serialize WMI launch: {error}"))?;
+    fs::write(&payload_path, payload_json)
+        .map_err(|error| format!("write WMI launch payload: {error}"))?;
+
+    let script = r#"
+$ErrorActionPreference = 'Stop'
+$payload = Get-Content -LiteralPath $env:INDUSTRIALIS_WMI_PAYLOAD -Raw | ConvertFrom-Json
+$startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{
+    CreateFlags = [uint32]520
+    ShowWindow = [uint16]0
+    EnvironmentVariables = [string[]]$payload.environment
+}
+$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+    CommandLine = [string]$payload.command_line
+    CurrentDirectory = [string]$payload.current_directory
+    ProcessStartupInformation = $startup
+}
+if ([uint32]$result.ReturnValue -ne 0) {
+    throw "Win32_Process.Create failed with code $($result.ReturnValue)"
+}
+[Console]::Out.Write([string]$result.ProcessId)
+"#;
+
+    let result = (|| {
+        let mut powershell = Command::new("powershell.exe");
+        hide_background_console(&mut powershell);
+        let output = powershell
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                script,
+            ])
+            .env("INDUSTRIALIS_WMI_PAYLOAD", &payload_path)
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|error| format!("start Windows process broker: {error}"))?;
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Windows process broker failed: {}", error.trim()));
+        }
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<u32>()
+            .map_err(|error| format!("invalid Windows process broker PID: {error}"))
+    })();
+    let _ = fs::remove_file(payload_path);
+    result
 }
 
 fn parse_java_major_from_release(content: &str) -> Option<u32> {
@@ -853,9 +993,17 @@ async fn ensure_main_jar(
 
 // ── App State ──
 
+#[derive(Clone)]
+enum RunningProcess {
+    #[cfg(not(windows))]
+    Child(Arc<Mutex<Child>>),
+    #[cfg(windows)]
+    DetachedPid(u32),
+}
+
 struct AppState {
     http: reqwest::Client,
-    running_processes: HashMap<String, Arc<Mutex<Child>>>,
+    running_processes: HashMap<String, RunningProcess>,
     delete_cancel: HashMap<String, Arc<AtomicBool>>,
     update_in_progress: HashSet<String>,
     reinstall_in_progress: HashSet<String>,
@@ -2499,6 +2647,7 @@ fn emit_launch_log(app: &tauri::AppHandle, id: &str, stream: &str, line: &str) {
     );
 }
 
+#[cfg(not(windows))]
 fn pipe_launch_output<R: Read + Send + 'static>(
     reader: R,
     app: tauri::AppHandle,
@@ -2539,6 +2688,7 @@ fn write_launch_argfile(path: &Path, args: &[String]) -> Result<(), String> {
     fs::write(path, content).map_err(|e| e.to_string())
 }
 
+#[cfg(not(windows))]
 fn wait_for_launch(
     child: Arc<Mutex<Child>>,
     app: tauri::AppHandle,
@@ -2564,6 +2714,107 @@ fn wait_for_launch(
         &format!("Process exited with code {code}"),
     );
     Ok(code)
+}
+
+#[cfg(windows)]
+fn wait_for_detached_process_exit(process_id: u32) -> Result<i32, String> {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_FAILED};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, WaitForSingleObject, INFINITE,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    // SAFETY: the handle is checked for null, used only with process APIs, and
+    // closed exactly once before returning.
+    let code = unsafe {
+        let process = OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE,
+            0,
+            process_id,
+        );
+        if process.is_null() {
+            return Err(format!(
+                "open detached process {process_id}: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        let wait_result = WaitForSingleObject(process, INFINITE);
+        if wait_result == WAIT_FAILED {
+            let error = std::io::Error::last_os_error();
+            CloseHandle(process);
+            return Err(format!("wait for detached process {process_id}: {error}"));
+        }
+        let mut exit_code = 0;
+        if GetExitCodeProcess(process, &mut exit_code) == 0 {
+            let error = std::io::Error::last_os_error();
+            CloseHandle(process);
+            return Err(format!(
+                "read detached process {process_id} exit code: {error}"
+            ));
+        }
+        CloseHandle(process);
+        exit_code as i32
+    };
+    Ok(code)
+}
+
+#[cfg(windows)]
+fn wait_for_detached_process(
+    process_id: u32,
+    app: tauri::AppHandle,
+    version: String,
+) -> Result<i32, String> {
+    let code = wait_for_detached_process_exit(process_id)?;
+    emit_launch_log(
+        &app,
+        &version,
+        "system",
+        &format!("Process exited with code {code}"),
+    );
+    Ok(code)
+}
+
+#[cfg(windows)]
+fn kill_detached_process(process_id: u32) -> Result<(), String> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+
+    // SAFETY: the handle is checked for null, used only for termination, and
+    // closed exactly once before returning.
+    unsafe {
+        let process = OpenProcess(PROCESS_TERMINATE, 0, process_id);
+        if process.is_null() {
+            let error = std::io::Error::last_os_error();
+            // ERROR_INVALID_PARAMETER means the process already exited.
+            if error.raw_os_error() == Some(87) {
+                return Ok(());
+            }
+            return Err(format!("open detached process {process_id}: {error}"));
+        }
+        if TerminateProcess(process, 1) == 0 {
+            let error = std::io::Error::last_os_error();
+            CloseHandle(process);
+            return Err(format!("stop detached process {process_id}: {error}"));
+        }
+        CloseHandle(process);
+    }
+    Ok(())
+}
+
+fn wait_for_running_process(
+    process: RunningProcess,
+    app: tauri::AppHandle,
+    version: String,
+) -> Result<i32, String> {
+    match process {
+        #[cfg(not(windows))]
+        RunningProcess::Child(child) => wait_for_launch(child, app, version),
+        #[cfg(windows)]
+        RunningProcess::DetachedPid(process_id) => {
+            wait_for_detached_process(process_id, app, version)
+        }
+    }
 }
 
 #[tauri::command]
@@ -3282,34 +3533,51 @@ async fn launch_instance(
         (launch_java.clone(), args)
     };
 
-    let mut cmd = Command::new(&cmd_executable);
-    hide_background_console(&mut cmd);
     let game_work_dir = minecraft_working_dir(&pack_dir);
     fs::create_dir_all(&game_work_dir).map_err(|e| e.to_string())?;
-    cmd.current_dir(&game_work_dir)
-        .args(&cmd_args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if settings.override_env {
-        for (key, value) in &settings.env_vars {
-            cmd.env(key, value);
-        }
-    }
 
     let play_start = std::time::Instant::now();
-    let child = cmd
-        .spawn()
-        .map_err(|e| format!("launch failed ({cmd_executable}): {e}"))?;
+    #[cfg(windows)]
+    let running_process = {
+        let environment = settings.override_env.then_some(&settings.env_vars);
+        let process_id =
+            spawn_game_process_via_wmi(&cmd_executable, &cmd_args, &game_work_dir, environment)
+                .map_err(|error| format!("launch failed ({cmd_executable}): {error}"))?;
+        emit_launch_log(
+            &app,
+            &id,
+            "system",
+            &format!("Launched outside the launcher job as process {process_id}"),
+        );
+        RunningProcess::DetachedPid(process_id)
+    };
+    #[cfg(not(windows))]
+    let running_process = {
+        let mut command = Command::new(&cmd_executable);
+        command
+            .current_dir(&game_work_dir)
+            .args(&cmd_args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if settings.override_env {
+            for (key, value) in &settings.env_vars {
+                command.env(key, value);
+            }
+        }
+        let child = command
+            .spawn()
+            .map_err(|error| format!("launch failed ({cmd_executable}): {error}"))?;
+        RunningProcess::Child(Arc::new(Mutex::new(child)))
+    };
 
     emit(&app, "instance-started", &serde_json::json!({ "id": id }));
 
-    let child_handle = Arc::new(Mutex::new(child));
     {
         let mut guard = state.lock().map_err(|e| e.to_string())?;
         guard
             .running_processes
-            .insert(id.clone(), child_handle.clone());
+            .insert(id.clone(), running_process.clone());
     }
     let running_guard = RunningInstanceGuard {
         state: &state,
@@ -3318,10 +3586,11 @@ async fn launch_instance(
 
     let launch_id = id.clone();
     let app_for_wait = app.clone();
-    let exit_code =
-        tokio::task::spawn_blocking(move || wait_for_launch(child_handle, app_for_wait, launch_id))
-            .await
-            .map_err(|e| format!("launch task failed: {e}"))??;
+    let exit_code = tokio::task::spawn_blocking(move || {
+        wait_for_running_process(running_process, app_for_wait, launch_id)
+    })
+    .await
+    .map_err(|e| format!("launch task failed: {e}"))??;
 
     record_play_time(&id, play_start.elapsed().as_secs());
 
@@ -3360,23 +3629,29 @@ fn exit_launcher(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn kill_instance(state: State<'_, Mutex<AppState>>, id: String) -> Result<(), String> {
-    let child_arc = {
+    let process = {
         let guard = state.lock().map_err(|e| e.to_string())?;
         guard.running_processes.get(&id).cloned()
     };
-    let Some(child_arc) = child_arc else {
+    let Some(process) = process else {
         return Ok(());
     };
-    let mut child = child_arc
-        .lock()
-        .map_err(|e| format!("process lock failed: {e}"))?;
-    if child.try_wait().ok().flatten().is_some() {
-        return Ok(());
+    match process {
+        #[cfg(not(windows))]
+        RunningProcess::Child(child) => {
+            let mut child = child
+                .lock()
+                .map_err(|e| format!("process lock failed: {e}"))?;
+            if child.try_wait().ok().flatten().is_some() {
+                return Ok(());
+            }
+            child
+                .kill()
+                .map_err(|e| format!("failed to stop process: {e}"))
+        }
+        #[cfg(windows)]
+        RunningProcess::DetachedPid(process_id) => kill_detached_process(process_id),
     }
-    child
-        .kill()
-        .map_err(|e| format!("failed to stop process: {e}"))?;
-    Ok(())
 }
 
 #[tauri::command]
@@ -3457,6 +3732,36 @@ mod tests {
     #[test]
     fn sanitize_name_replaces_whitespace() {
         assert_eq!(sanitize_name("foo bar"), "foo_bar");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_command_line_quotes_spaces_and_trailing_slashes() {
+        assert_eq!(
+            windows_command_line(
+                r"C:\Program Files\Java\javaw.exe",
+                &[r"C:\game path\".into(), r#"say"hello"#.into()]
+            ),
+            r#""C:\Program Files\Java\javaw.exe" "C:\game path\\" "say\"hello""#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn wmi_game_process_spawns_outside_the_current_job() {
+        let arguments = vec![
+            "-NoProfile".into(),
+            "-NonInteractive".into(),
+            "-Command".into(),
+            "Start-Sleep -Milliseconds 200".into(),
+        ];
+        let process_id =
+            spawn_game_process_via_wmi("powershell.exe", &arguments, &std::env::temp_dir(), None)
+                .expect("WMI should launch a detached process");
+        assert_eq!(
+            wait_for_detached_process_exit(process_id).expect("detached process should exit"),
+            0
+        );
     }
 
     #[test]
