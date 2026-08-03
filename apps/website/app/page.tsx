@@ -2,6 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { DownloadSection } from "@/components/download-section";
 import { Features } from "@/components/features";
 import { LauncherPreview } from "@/components/launcher-preview";
+import { ServerHosting } from "@/components/server-hosting";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Workflow } from "@/components/workflow";
@@ -54,6 +55,7 @@ export default function HomePage() {
 
         <Features />
         <Workflow />
+        <ServerHosting />
         <DownloadSection />
       </main>
 

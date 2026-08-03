@@ -16,7 +16,8 @@
     "build:launcher:portable": "node scripts/run-build-launcher.mjs portable",
     "build:website": "turbo build --filter=@industrialis/website",
     "build:server": "turbo build --filter=@industrialis/server",
-    "build:dashboard": "turbo build --filter=@industrialis/dashboard"
+    "build:dashboard": "turbo build --filter=@industrialis/dashboard",
+    "pack:server": "node scripts/pack-server-release.mjs"
   },
   "devDependencies": {
     "turbo": "^2.10.6"

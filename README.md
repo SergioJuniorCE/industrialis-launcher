@@ -8,6 +8,18 @@ Turborepo monorepo for the Industrialis GT New Horizons launcher and website.
 |-----|---------|-------------|
 | [Launcher](apps/launcher) | `@industrialis/launcher` | Tauri desktop app — install GTNH, manage Java, Microsoft auth, launch |
 | [Website](apps/website) | `@industrialis/website` | Next.js marketing site |
+| [Server](apps/server) | `@industrialis/server` | Linux CLI + Docker daemon for hosting GTNH servers |
+| [Dashboard](apps/dashboard) | `@industrialis/dashboard` | Astro UI for managing hosted servers |
+
+### Host a GTNH server (Linux)
+
+```bash
+curl -fsSL https://industrialislauncher.yoggan.dev/install.sh | bash
+industrialis up
+# open http://127.0.0.1:3001
+```
+
+See [docs/server-hosting.md](docs/server-hosting.md) for Docker, systemd, and configuration details.
 
 ## Prerequisites
 
@@ -36,6 +48,8 @@ Or run a single app:
 ```bash
 pnpm dev:launcher    # Tauri desktop app (Vite on :1420)
 pnpm dev:website     # Next.js site on :3000
+pnpm dev:server      # GTNH server daemon on :4310
+pnpm dev:dashboard   # Astro server console on :3001
 ```
 
 Build all apps:
@@ -88,11 +102,13 @@ Use of the application ID is subject to the
 industrialis/
 ├── apps/
 │   ├── launcher/          # Tauri + React desktop app
-│   │   ├── src/
-│   │   └── src-tauri/
-│   └── website/           # Next.js marketing site
-│       └── app/
-├── package.json           # workspace root
+│   ├── website/           # Next.js marketing site
+│   ├── server/            # industrialis CLI + Docker daemon
+│   └── dashboard/         # Astro server console
+├── packages/
+│   └── server-contracts/
+├── docs/server-hosting.md
+├── package.json
 ├── pnpm-workspace.yaml
 └── turbo.json
 ```
@@ -102,6 +118,8 @@ industrialis/
 - **Monorepo:** pnpm workspaces, Turborepo
 - **Launcher:** React 19, Vite, Tailwind CSS 4, Tauri 2, Rust
 - **Website:** Next.js 16, React 19
+- **Server:** Node, Fastify, Dockerode, Commander
+- **Dashboard:** Astro 5, React islands, Tailwind CSS 4
 
 ## License
 

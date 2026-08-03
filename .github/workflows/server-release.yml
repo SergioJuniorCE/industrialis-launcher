@@ -1,0 +1,64 @@
+name: Build and release server
+
+on:
+  push:
+    tags:
+      - "server-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-server-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Pack Linux server release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pack server release
+        run: pnpm pack:server
+
+      - name: Verify release archive
+        shell: bash
+        run: |
+          test -s artifacts/server/industrialis-server-linux-x64.tar.gz
+          tar -tzf artifacts/server/industrialis-server-linux-x64.tar.gz | grep -qx 'industrialis/bin/industrialis'
+          tar -tzf artifacts/server/industrialis-server-linux-x64.tar.gz | grep -qx 'industrialis/dist/cli.js'
+          tar -tzf artifacts/server/industrialis-server-linux-x64.tar.gz | grep -qx 'industrialis/dashboard/server/entry.mjs'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: industrialis-server-linux-x64
+          path: artifacts/server/industrialis-server-linux-x64.tar.gz
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/server/industrialis-server-linux-x64.tar.gz
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          name: Server ${{ github.ref_name }}

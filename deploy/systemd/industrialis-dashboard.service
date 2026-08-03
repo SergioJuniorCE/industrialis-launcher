@@ -10,7 +10,11 @@ User=industrialis
 Group=industrialis
 WorkingDirectory=/opt/industrialis
 EnvironmentFile=/etc/industrialis/industrialis.env
-ExecStart=/usr/bin/env pnpm --dir apps/dashboard start
+Environment=HOST=127.0.0.1
+Environment=PORT=3001
+# Monorepo checkout layout (Astro Node standalone). For a release install:
+# ExecStart=/usr/bin/env node /usr/local/share/industrialis/dashboard/server/entry.mjs
+ExecStart=/usr/bin/env node apps/dashboard/dist/server/entry.mjs
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
