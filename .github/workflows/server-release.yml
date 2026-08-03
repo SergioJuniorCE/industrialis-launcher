@@ -43,9 +43,10 @@ jobs:
         shell: bash
         run: |
           test -s artifacts/server/industrialis-server-linux-x64.tar.gz
-          tar -tzf artifacts/server/industrialis-server-linux-x64.tar.gz | grep -qx 'industrialis/bin/industrialis'
-          tar -tzf artifacts/server/industrialis-server-linux-x64.tar.gz | grep -qx 'industrialis/dist/cli.js'
-          tar -tzf artifacts/server/industrialis-server-linux-x64.tar.gz | grep -qx 'industrialis/dashboard/server/entry.mjs'
+          tar -tzf artifacts/server/industrialis-server-linux-x64.tar.gz > archive-list.txt
+          grep -Fx 'industrialis/bin/industrialis' archive-list.txt
+          grep -Fx 'industrialis/dist/cli.js' archive-list.txt
+          grep -Fx 'industrialis/dashboard/server/entry.mjs' archive-list.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
