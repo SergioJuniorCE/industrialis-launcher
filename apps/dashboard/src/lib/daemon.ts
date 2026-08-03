@@ -1,29 +1,27 @@
 import { homedir } from "node:os";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { NextRequest } from "next/server";
 
-const DAEMON_URL = process.env.INDUSTRIALIS_API_URL ?? "http://127.0.0.1:4310";
+export const DAEMON_URL = process.env.INDUSTRIALIS_API_URL ?? "http://127.0.0.1:4310";
 
-async function apiToken(): Promise<string> {
+export async function resolveDaemonToken(): Promise<string> {
   if (process.env.INDUSTRIALIS_API_TOKEN) return process.env.INDUSTRIALIS_API_TOKEN;
   const dataDir = process.env.INDUSTRIALIS_SERVER_DATA
-    ? resolve(/* turbopackIgnore: true */ process.env.INDUSTRIALIS_SERVER_DATA)
-    : resolve(/* turbopackIgnore: true */ homedir(), ".industrialis", "servers");
+    ? resolve(process.env.INDUSTRIALIS_SERVER_DATA)
+    : resolve(homedir(), ".industrialis", "servers");
   return (await readFile(join(dataDir, ".api-token"), "utf8")).trim();
 }
 
-async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const { path } = await context.params;
-  const target = new URL(`/api/${path.map(encodeURIComponent).join("/")}`, DAEMON_URL);
-  target.search = request.nextUrl.search;
+export async function proxyToDaemon(request: Request, pathSegments: string[]): Promise<Response> {
+  const target = new URL(`/api/${pathSegments.map(encodeURIComponent).join("/")}`, DAEMON_URL);
+  target.search = new URL(request.url).search;
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text();
   const response = await fetch(target, {
     method: request.method,
     body,
     cache: "no-store",
     headers: {
-      authorization: `Bearer ${await apiToken()}`,
+      authorization: `Bearer ${await resolveDaemonToken()}`,
       "content-type": request.headers.get("content-type") ?? "application/json",
     },
   });
@@ -32,7 +30,3 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
   });
 }
-
-export const GET = proxy;
-export const POST = proxy;
-export const DELETE = proxy;

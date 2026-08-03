@@ -1,8 +1,38 @@
 # GTNH server hosting
 
-Industrialis Server is a Linux daemon, CLI, and web dashboard for hosting
+Industrialis is a Linux CLI, daemon, and web dashboard for hosting
 GregTech: New Horizons servers on a dedicated server or VPS. It talks directly
 to Docker Engine through the host socket; Docker Desktop is not used.
+
+## Quick install
+
+On a Linux host with Docker Engine and Node.js 22+:
+
+```bash
+curl -fsSL https://industrialislauncher.yoggan.dev/install.sh | bash
+```
+
+To inspect the script first:
+
+```bash
+curl -fsSL https://industrialislauncher.yoggan.dev/install.sh -o install.sh
+less install.sh
+bash install.sh
+```
+
+Then:
+
+```bash
+industrialis up        # start daemon + dashboard
+industrialis status
+# open http://127.0.0.1:3001
+industrialis down
+```
+
+The installer downloads the latest `industrialis-server-linux-x64.tar.gz` release
+asset, installs under `~/.local/share/industrialis`, and links
+`~/.local/bin/industrialis`. Override with `INDUSTRIALIS_INSTALL_DIR`,
+`INDUSTRIALIS_BIN_DIR`, `INDUSTRIALIS_VERSION`, or `INDUSTRIALIS_RELEASE_BASE`.
 
 ## Current scope
 
@@ -21,17 +51,34 @@ an authenticated reverse proxy or a private VPN.
 
 - A Linux server or VPS, with Ubuntu or Debian recommended
 - Node.js 22 or newer
-- pnpm 9
 - Docker Engine with access to `/var/run/docker.sock`
 - At least 6 GB of free memory for the default configuration
 
 Install Docker Engine using Docker's official repository instructions for your
-distribution. The user running `industrialis-server` must belong to the
-`docker` group, or have equivalent access to the configured socket.
+distribution. The user running Industrialis must belong to the `docker` group,
+or have equivalent access to the configured socket.
+
+## CLI
+
+| Command | Description |
+| --- | --- |
+| `industrialis` | Show help |
+| `industrialis up` | Start daemon + dashboard (background) |
+| `industrialis status` | Process health + server summary |
+| `industrialis down` | Stop daemon + dashboard |
+| `industrialis list` | List managed servers |
+| `industrialis create <name>` | Create a GTNH server (`--port`, `--memory`, `--version`) |
+| `industrialis start\|stop\|restart <id>` | Control a server |
+| `industrialis remove <id> --yes` | Remove container (world retained) |
+| `industrialis logs <id>` | Recent container logs |
+| `industrialis daemon` | Run API only in the foreground (systemd) |
+
+Set `INDUSTRIALIS_API_URL` or pass `--api-url` before the command to target a
+different daemon.
 
 ## Development
 
-Install dependencies and build the shared contract once:
+Install dependencies and build shared contracts:
 
 ```bash
 pnpm install
@@ -44,40 +91,55 @@ Start Docker Engine, then run the daemon:
 pnpm dev:server
 ```
 
-In another terminal, run the dashboard at `http://localhost:3001`:
+In another terminal, run the Astro dashboard at `http://127.0.0.1:3001`:
 
 ```bash
 pnpm dev:dashboard
+```
+
+Or use the lifecycle CLI from a built package:
+
+```bash
+pnpm build:server
+pnpm build:dashboard
+node apps/server/dist/cli.js up
 ```
 
 The dashboard server proxies to `http://127.0.0.1:4310` by default. Override it
 with `INDUSTRIALIS_API_URL`. On a separate host, also set the same
 `INDUSTRIALIS_API_TOKEN` for both processes.
 
-## CLI
-
-Build the CLI and start the daemon:
+### Release tarball
 
 ```bash
-pnpm build:server
-node apps/server/dist/cli.js daemon
+pnpm pack:server
+# → artifacts/server/industrialis-server-linux-x64.tar.gz
 ```
 
-Manage servers from a second terminal:
+Tag `server-v*` to publish the asset that `install.sh` downloads. Running the
+`server-release` workflow manually is useful for producing a test artifact,
+but does not create a GitHub Release unless it runs for a matching tag.
+
+## VPS deployment (systemd)
+
+For always-on hosts, prefer systemd over `industrialis up`.
+
+### Option A — installed release
 
 ```bash
-node apps/server/dist/cli.js list
-node apps/server/dist/cli.js create "Assembly Line" --port 25565 --memory 6144
-node apps/server/dist/cli.js start assembly-line
-node apps/server/dist/cli.js logs assembly-line --tail 100
-node apps/server/dist/cli.js stop assembly-line
-node apps/server/dist/cli.js remove assembly-line --yes
+curl -fsSL https://industrialislauncher.yoggan.dev/install.sh | bash
+sudo useradd --system --create-home --home-dir /var/lib/industrialis industrialis
+sudo usermod --append --groups docker industrialis
+sudo install -d -o industrialis -g industrialis /var/lib/industrialis/servers
+sudo install -d /etc/industrialis
+sudo install -m 640 -o root -g industrialis deploy/systemd/industrialis.env.example /etc/industrialis/industrialis.env
 ```
 
-Set `INDUSTRIALIS_API_URL` or pass `--api-url` before the command to target a
-different daemon.
+Point the unit `ExecStart` at the installed binary (default
+`/home/<user>/.local/bin/industrialis` or a system path you choose), and set
+`INDUSTRIALIS_SERVER_DATA=/var/lib/industrialis/servers`.
 
-## VPS deployment
+### Option B — monorepo checkout
 
 Build the repository on the VPS under `/opt/industrialis`:
 
@@ -88,20 +150,12 @@ pnpm build:server
 pnpm build:dashboard
 ```
 
-Create a dedicated service account and persistent directories:
-
 ```bash
 sudo useradd --system --create-home --home-dir /var/lib/industrialis industrialis
 sudo usermod --append --groups docker industrialis
 sudo install -d -o industrialis -g industrialis /var/lib/industrialis/servers
 sudo install -d /etc/industrialis
 sudo install -m 640 -o root -g industrialis deploy/systemd/industrialis.env.example /etc/industrialis/industrialis.env
-```
-
-Ensure the service account can read the built repository, then install and start
-the systemd units:
-
-```bash
 sudo install -m 644 deploy/systemd/industrialis-server.service /etc/systemd/system/
 sudo install -m 644 deploy/systemd/industrialis-dashboard.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -114,10 +168,6 @@ Inspect service output with:
 sudo journalctl -u industrialis-server -f
 sudo journalctl -u industrialis-dashboard -f
 ```
-
-The supplied units expect the repository at `/opt/industrialis`, store state in
-`/var/lib/industrialis`, and run both HTTP services on loopback. Edit the units
-if your deployment path differs.
 
 ### Public access
 
@@ -135,8 +185,9 @@ HTTP/HTTPS ports if applicable.
 
 ## Storage and images
 
-Daemon state and persistent files default to `~/.industrialis/servers`. The
-provided VPS environment changes this to `/var/lib/industrialis/servers`:
+Daemon state and persistent files default to `~/.industrialis/servers`. Process
+logs and PID files live under `~/.industrialis/run`. The provided VPS
+environment changes data to `/var/lib/industrialis/servers`:
 
 ```text
 servers/
@@ -167,8 +218,12 @@ against accidental world loss.
 | --- | --- | --- |
 | `INDUSTRIALIS_HOST` | `127.0.0.1` | Daemon listen address |
 | `INDUSTRIALIS_PORT` | `4310` | Daemon listen port |
-| `INDUSTRIALIS_API_URL` | `http://127.0.0.1:4310` | CLI API target |
+| `INDUSTRIALIS_API_URL` | `http://127.0.0.1:4310` | CLI / dashboard API target |
 | `INDUSTRIALIS_SERVER_DATA` | `~/.industrialis/servers` | Persistent server root |
+| `INDUSTRIALIS_STATE_DIR` | `~/.industrialis` | PID/log state root |
+| `INDUSTRIALIS_DASHBOARD_DIR` | install `dashboard/` | Built Astro dashboard directory |
+| `INDUSTRIALIS_DASHBOARD_HOST` | `127.0.0.1` | Dashboard bind host |
+| `INDUSTRIALIS_DASHBOARD_PORT` | `3001` | Dashboard bind port |
 | `INDUSTRIALIS_GTNH_IMAGE` | `ghcr.io/debuas/gtnhserverdocker` | GTNH image repository |
 | `INDUSTRIALIS_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker Engine socket |
 | `INDUSTRIALIS_API_TOKEN` | generated in the data root | Shared daemon/dashboard token |

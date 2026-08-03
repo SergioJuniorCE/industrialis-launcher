@@ -11,6 +11,8 @@ Group=industrialis
 SupplementaryGroups=docker
 WorkingDirectory=/opt/industrialis
 EnvironmentFile=/etc/industrialis/industrialis.env
+# Monorepo checkout layout. For a release install, point at the industrialis binary:
+# ExecStart=/usr/local/bin/industrialis daemon
 ExecStart=/usr/bin/env node apps/server/dist/cli.js daemon
 Restart=on-failure
 RestartSec=5

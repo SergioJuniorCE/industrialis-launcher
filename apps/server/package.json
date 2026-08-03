@@ -2,9 +2,10 @@
   "name": "@industrialis/server",
   "private": true,
   "version": "0.1.0",
+  "files": ["dist"],
   "type": "module",
   "bin": {
-    "industrialis-server": "./dist/cli.js"
+    "industrialis": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
