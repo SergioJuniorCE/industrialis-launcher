@@ -9,7 +9,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy } from "lucide-react";
+import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy, ExternalLink } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./components/ui/card";
 import { Input } from "./components/ui/input";
@@ -71,6 +71,8 @@ import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
 import { cn, keyedByOccurrence } from "./lib/utils";
 import "./App.css";
+
+const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 
 // ── Types ──
 
@@ -2474,6 +2476,19 @@ function SettingsTab({
         <CardContent className="text-sm text-muted-foreground space-y-1">
           <p>Industrialis Launcher v0.1.0</p>
           <p>GT New Horizons modpack manager built with Tauri.</p>
+          <a
+            href={GITHUB_URL}
+            className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
+            onClick={(e) => {
+              e.preventDefault();
+              void import("@tauri-apps/plugin-opener")
+                .then(({ openUrl }) => openUrl(GITHUB_URL))
+                .catch(() => undefined);
+            }}
+          >
+            <ExternalLink className="size-3.5" />
+            View on GitHub
+          </a>
         </CardContent>
       </Card>
     </div>
