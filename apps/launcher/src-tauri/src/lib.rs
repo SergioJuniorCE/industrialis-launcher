@@ -4095,19 +4095,202 @@ fn handle_oauth_deep_links(urls: &[url::Url]) {
 }
 
 #[cfg(desktop)]
-async fn install_launcher_update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
+#[derive(Clone, Serialize)]
+struct LauncherUpdateEvent {
+    status: String,
+    current_version: String,
+    version: Option<String>,
+    body: Option<String>,
+    progress: Option<f64>,
+    error: Option<String>,
+}
+
+#[cfg(desktop)]
+fn emit_launcher_update(app: &tauri::AppHandle, event: LauncherUpdateEvent) {
+    let _ = app.emit("launcher-update", event);
+}
+
+#[cfg(desktop)]
+fn launcher_update_info(
+    status: &str,
+    current_version: String,
+    version: Option<String>,
+    body: Option<String>,
+    progress: Option<f64>,
+    error: Option<String>,
+) -> LauncherUpdateEvent {
+    LauncherUpdateEvent {
+        status: status.to_string(),
+        current_version,
+        version,
+        body,
+        progress,
+        error,
+    }
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn check_launcher_update(app: tauri::AppHandle) -> Result<LauncherUpdateEvent, String> {
     use tauri_plugin_updater::UpdaterExt;
 
+    let current_version = app.package_info().version.to_string();
     if cfg!(debug_assertions) {
-        return Ok(());
+        return Ok(launcher_update_info(
+            "disabled",
+            current_version,
+            None,
+            None,
+            None,
+            None,
+        ));
     }
 
-    if let Some(update) = app.updater()?.check().await? {
-        update.download_and_install(|_, _| {}, || {}).await?;
-        app.restart();
+    emit_launcher_update(
+        &app,
+        launcher_update_info("checking", current_version.clone(), None, None, None, None),
+    );
+
+    match app
+        .updater()
+        .map_err(|error| error.to_string())?
+        .check()
+        .await
+    {
+        Ok(Some(update)) => {
+            let event = launcher_update_info(
+                "available",
+                current_version,
+                Some(update.version.clone()),
+                update.body.clone(),
+                None,
+                None,
+            );
+            emit_launcher_update(&app, event.clone());
+            Ok(event)
+        }
+        Ok(None) => {
+            let event = launcher_update_info("up-to-date", current_version, None, None, None, None);
+            emit_launcher_update(&app, event.clone());
+            Ok(event)
+        }
+        Err(error) => {
+            let event = launcher_update_info(
+                "failed",
+                current_version,
+                None,
+                None,
+                None,
+                Some(error.to_string()),
+            );
+            emit_launcher_update(&app, event.clone());
+            Ok(event)
+        }
+    }
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn install_launcher_update(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<LauncherUpdateEvent, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let current_version = app.package_info().version.to_string();
+    if cfg!(debug_assertions) {
+        return Ok(launcher_update_info(
+            "disabled",
+            current_version,
+            None,
+            None,
+            None,
+            None,
+        ));
     }
 
-    Ok(())
+    {
+        let guard = state.lock().map_err(|error| error.to_string())?;
+        if !guard.running_processes.is_empty()
+            || !guard.update_in_progress.is_empty()
+            || !guard.reinstall_in_progress.is_empty()
+            || !guard.copy_in_progress.is_empty()
+        {
+            let event = launcher_update_info(
+                "deferred",
+                current_version,
+                None,
+                None,
+                None,
+                Some("Stop active instances and operations before updating.".to_string()),
+            );
+            emit_launcher_update(&app, event.clone());
+            return Ok(event);
+        }
+    }
+
+    let update = match app
+        .updater()
+        .map_err(|error| error.to_string())?
+        .check()
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        Some(update) => update,
+        None => {
+            let event = launcher_update_info("up-to-date", current_version, None, None, None, None);
+            emit_launcher_update(&app, event.clone());
+            return Ok(event);
+        }
+    };
+
+    let available = launcher_update_info(
+        "downloading",
+        current_version.clone(),
+        Some(update.version.clone()),
+        update.body.clone(),
+        Some(0.0),
+        None,
+    );
+    emit_launcher_update(&app, available);
+
+    let app_for_progress = app.clone();
+    let progress_version = update.version.clone();
+    let progress_current_version = current_version.clone();
+    let body = update.body.clone();
+    update
+        .download_and_install(
+            move |downloaded, total| {
+                let progress = total
+                    .filter(|total| *total > 0)
+                    .map(|total| downloaded as f64 / total as f64);
+                emit_launcher_update(
+                    &app_for_progress,
+                    launcher_update_info(
+                        "downloading",
+                        progress_current_version.clone(),
+                        Some(progress_version.clone()),
+                        body.clone(),
+                        progress,
+                        None,
+                    ),
+                );
+            },
+            || {},
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let event = launcher_update_info(
+        "installing",
+        current_version,
+        Some(update.version),
+        update.body,
+        Some(1.0),
+        None,
+    );
+    emit_launcher_update(&app, event);
+    app.restart();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -4153,9 +4336,7 @@ pub fn run() {
             {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(error) = install_launcher_update(handle).await {
-                        eprintln!("Launcher update failed: {error}");
-                    }
+                    let _ = check_launcher_update(handle).await;
                 });
             }
 
@@ -4218,6 +4399,8 @@ pub fn run() {
             start_microsoft_login,
             get_launcher_settings,
             save_launcher_settings,
+            check_launcher_update,
+            install_launcher_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

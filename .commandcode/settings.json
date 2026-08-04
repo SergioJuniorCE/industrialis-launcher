@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(cargo:*)",
+      "Shell(pnpm:*)",
+      "Shell(where:*)",
+      "Shell(cmd:*)",
+      "Shell(gh:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

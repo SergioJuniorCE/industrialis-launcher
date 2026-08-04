@@ -64,6 +64,7 @@ import { ReinstallInstanceDialog } from "./components/ReinstallInstanceDialog";
 import { PackVersionStatus } from "./components/PackVersionStatus";
 import { InstanceAvatar } from "./components/InstanceAvatar";
 import { InstanceGridCard } from "./components/InstanceGridCard";
+import { LauncherUpdateDialog, type LauncherUpdateState } from "./components/LauncherUpdateDialog";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
@@ -332,6 +333,10 @@ export default function App() {
     id: string;
     name: string;
   } | null>(null);
+  const [launcherUpdate, setLauncherUpdate] = useState<LauncherUpdateState>({
+    status: "idle",
+    current_version: "",
+  });
 
   const loadGroups = useCallback(() => {
     invoke<InstanceGroupsState>("get_instance_groups").then(setGroupsState).catch(() => {});
@@ -390,7 +395,35 @@ export default function App() {
     loadAccounts();
     void refreshJava();
     invoke<Record<string, GtnhVersion>>("get_versions").then(setGtnhVersions).catch(() => {});
+    void invoke<LauncherUpdateState>("check_launcher_update").then(setLauncherUpdate).catch(() => {});
   }, [loadAccounts, loadInstances, refreshJava]);
+
+  useEffect(() => {
+    const unlisten = listen<LauncherUpdateState>("launcher-update", (event) => {
+      setLauncherUpdate(event.payload);
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
+
+  const installLauncherUpdate = useCallback(() => {
+    void invoke<LauncherUpdateState>("install_launcher_update")
+      .then(setLauncherUpdate)
+      .catch((error) => setLauncherUpdate((current) => ({
+        ...current,
+        status: "failed",
+        error: String(error),
+      })));
+  }, []);
+
+  const retryLauncherUpdate = useCallback(() => {
+    void invoke<LauncherUpdateState>("check_launcher_update")
+      .then(setLauncherUpdate)
+      .catch((error) => setLauncherUpdate((current) => ({
+        ...current,
+        status: "failed",
+        error: String(error),
+      })));
+  }, []);
 
   useEffect(() => {
     if (!launcherSettingsLoaded || !accountsLoaded) return;
@@ -1450,6 +1483,13 @@ export default function App() {
           }}
         />
       )}
+
+      <LauncherUpdateDialog
+        state={launcherUpdate}
+        onInstall={installLauncherUpdate}
+        onDismiss={() => setLauncherUpdate((current) => ({ ...current, status: "idle" }))}
+        onRetry={retryLauncherUpdate}
+      />
 
       <ConfirmDialog
         open={deleteInstanceConfirm !== null}
