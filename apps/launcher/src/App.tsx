@@ -9,7 +9,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy, ExternalLink } from "lucide-react";
+import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy, ExternalLink, Pencil } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./components/ui/card";
 import { Input } from "./components/ui/input";
@@ -70,6 +70,13 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
 import { cn, keyedByOccurrence } from "./lib/utils";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "./components/ui/context-menu";
 import "./App.css";
 
 const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
@@ -98,6 +105,7 @@ interface InstanceGroupsState {
   collapsed: Record<string, boolean>;
   groups: string[];
   instance_order: Record<string, string[]>;
+  ungrouped_name: string;
 }
 
 interface JavaInfo {
@@ -320,6 +328,7 @@ export default function App() {
     collapsed: {},
     groups: [],
     instance_order: {},
+    ungrouped_name: "Ungrouped",
   });
   const [changeGroupInstanceId, setChangeGroupInstanceId] = useState<string | null>(null);
   const [renameInstanceId, setRenameInstanceId] = useState<string | null>(null);
@@ -1092,7 +1101,7 @@ export default function App() {
                         { label: "Pack version", value: instancePackVersion(sel) },
                         { label: "Instance ID", value: sel.id },
                         { label: "Size", value: formatInstanceSize(sel.size_bytes, sizesRefreshing) },
-                        { label: "Group", value: sel.group || "Ungrouped" },
+                        { label: "Group", value: sel.group || groupsState.ungrouped_name },
                         {
                           label: "Java",
                           value: mergeInstanceSettings(sel.settings).override_java_location
@@ -1478,6 +1487,7 @@ export default function App() {
           }
           currentGroup={instances.find((i) => i.id === changeGroupInstanceId)?.group ?? ""}
           existingGroups={groupsState.groups}
+          ungroupedName={groupsState.ungrouped_name}
           onClose={() => setChangeGroupInstanceId(null)}
           onSave={(group) => {
             handleSetInstanceGroup(changeGroupInstanceId, group);
@@ -1540,6 +1550,7 @@ function buildGroupSections(
   instances: InstanceInfo[],
   groupNames: string[],
   instanceOrder: Record<string, string[]>,
+  ungroupedName: string,
 ): GroupSection[] {
   const buckets = new Map<string, InstanceInfo[]>();
   for (const inst of instances) {
@@ -1579,7 +1590,7 @@ function buildGroupSections(
   if (ungrouped.length > 0) {
     sections.push({
       id: "",
-      label: "Ungrouped",
+      label: ungroupedName || "Ungrouped",
       items: orderInstancesInGroup(ungrouped, "", instanceOrder),
     });
   }
@@ -1645,8 +1656,8 @@ function InstanceGroupList({
   onIconError: (message: string) => void;
 }) {
   const sections = useMemo(
-    () => buildGroupSections(instances, groupsState.groups, groupsState.instance_order),
-    [instances, groupsState.groups, groupsState.instance_order],
+    () => buildGroupSections(instances, groupsState.groups, groupsState.instance_order, groupsState.ungrouped_name),
+    [instances, groupsState.groups, groupsState.instance_order, groupsState.ungrouped_name],
   );
 
   if (sections.length === 0) return null;
@@ -1660,8 +1671,9 @@ function InstanceGroupList({
           gridColumns={gridColumns}
           collapsed={groupsState.collapsed[section.id] ?? false}
           sizesRefreshing={sizesRefreshing}
+          ungroupedName={groupsState.ungrouped_name}
           onToggleCollapsed={(collapsed) => onToggleCollapsed(section.id, collapsed)}
-          onRenameGroup={section.id ? onRenameGroup : undefined}
+          onRenameGroup={onRenameGroup}
           onDeleteGroup={section.id ? onDeleteGroup : undefined}
           selectedInstanceId={selectedInstanceId}
           onSelect={onSelect}
@@ -1694,6 +1706,7 @@ function InstanceGroupSection({
   gridColumns,
   collapsed,
   sizesRefreshing,
+  ungroupedName,
   onToggleCollapsed,
   onRenameGroup,
   onDeleteGroup,
@@ -1722,6 +1735,7 @@ function InstanceGroupSection({
   gridColumns: number;
   collapsed: boolean;
   sizesRefreshing: boolean;
+  ungroupedName: string;
   onToggleCollapsed: (collapsed: boolean) => void;
   onRenameGroup?: (oldName: string, newName: string) => void;
   onDeleteGroup?: (name: string) => void;
@@ -1774,6 +1788,7 @@ function InstanceGroupSection({
   };
 
   const startRename = () => {
+    if (!onRenameGroup) return;
     setRenameDraft(section.label);
     setRenaming(true);
   };
@@ -1781,7 +1796,7 @@ function InstanceGroupSection({
   const commitRename = () => {
     setRenaming(false);
     const trimmed = renameDraft.trim();
-    if (!onRenameGroup || !section.id || !trimmed || trimmed === section.label) {
+    if (!onRenameGroup || !trimmed || trimmed === section.label) {
       return;
     }
     onRenameGroup(section.id, trimmed);
@@ -1821,13 +1836,45 @@ function InstanceGroupSection({
               autoFocus
             />
           ) : (
-            <h2 className="text-[11px] font-semibold uppercase truncate text-muted-foreground">{section.label}</h2>
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <h2
+                  className="cursor-text truncate text-[11px] font-semibold uppercase text-muted-foreground"
+                  onDoubleClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    startRename();
+                  }}
+                  title="Double-click or right-click to rename"
+                >
+                  {section.label}
+                </h2>
+              </ContextMenuTrigger>
+              <ContextMenuContent className="w-44">
+                <ContextMenuItem onSelect={startRename} disabled={!onRenameGroup}>
+                  <Pencil />
+                  Rename
+                </ContextMenuItem>
+                {section.id && onDeleteGroup && (
+                  <>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                      onSelect={() => setDeleteGroupOpen(true)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 />
+                      Delete
+                    </ContextMenuItem>
+                  </>
+                )}
+              </ContextMenuContent>
+            </ContextMenu>
           )}
           <Badge variant="secondary" className="shrink-0 h-5 rounded-md">
             {section.items.length}
           </Badge>
         </Button>
-        {section.id && onRenameGroup && onDeleteGroup && !renaming && (
+        {onRenameGroup && !renaming && (
           <div className="flex items-center gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity">
             <Button
               variant="ghost"
@@ -1837,14 +1884,16 @@ function InstanceGroupSection({
             >
               Rename
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs text-destructive hover:text-destructive"
-              onClick={() => setDeleteGroupOpen(true)}
-            >
-              Delete
-            </Button>
+            {section.id && onDeleteGroup && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                onClick={() => setDeleteGroupOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -1852,7 +1901,7 @@ function InstanceGroupSection({
         open={deleteGroupOpen}
         onOpenChange={setDeleteGroupOpen}
         title="Delete group?"
-        description={`Delete group "${section.label}"? Instances will be moved to Ungrouped.`}
+        description={`Delete group "${section.label}"? Instances will be moved to ${ungroupedName}.`}
         confirmLabel="Delete"
         destructive
         onConfirm={confirmDeleteGroup}
@@ -2063,12 +2112,14 @@ function ChangeGroupDialog({
   instanceName,
   currentGroup,
   existingGroups,
+  ungroupedName,
   onClose,
   onSave,
 }: {
   instanceName: string;
   currentGroup: string;
   existingGroups: string[];
+  ungroupedName: string;
   onClose: () => void;
   onSave: (group: string) => void;
 }) {
@@ -2106,7 +2157,7 @@ function ChangeGroupDialog({
                 ))}
               </datalist>
               <p className="text-xs text-muted-foreground">
-                Pick an existing group or type a new name. Leave empty for Ungrouped.
+                Pick an existing group or type a new name. Leave empty for {ungroupedName}.
               </p>
             </div>
             <div className="flex gap-2">

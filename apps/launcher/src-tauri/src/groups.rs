@@ -11,11 +11,27 @@ pub struct GroupFileEntry {
     pub instances: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UngroupedEntry {
     pub hidden: bool,
     #[serde(default)]
     pub instances: Vec<String>,
+    #[serde(default = "default_ungrouped_name")]
+    pub name: String,
+}
+
+fn default_ungrouped_name() -> String {
+    "Ungrouped".to_string()
+}
+
+impl Default for UngroupedEntry {
+    fn default() -> Self {
+        Self {
+            hidden: false,
+            instances: Vec::new(),
+            name: default_ungrouped_name(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,12 +49,14 @@ pub struct InstanceGroupsState {
     pub collapsed: HashMap<String, bool>,
     pub groups: Vec<String>,
     pub instance_order: HashMap<String, Vec<String>>,
+    pub ungrouped_name: String,
 }
 
 struct GroupData {
     instance_index: HashMap<String, String>,
     group_order: HashMap<String, Vec<String>>,
     collapsed: HashSet<String>,
+    ungrouped_name: String,
 }
 
 pub fn groups_file_path(instances_dir: &Path) -> PathBuf {
@@ -63,6 +81,12 @@ fn load_group_data(instances_dir: &Path, known_instances: &HashSet<String>) -> G
     if file.ungrouped.hidden {
         collapsed.insert(String::new());
     }
+
+    let ungrouped_name = if file.ungrouped.name.trim().is_empty() {
+        default_ungrouped_name()
+    } else {
+        file.ungrouped.name.trim().to_string()
+    };
 
     let mut ungrouped_order: Vec<String> = file
         .ungrouped
@@ -99,6 +123,7 @@ fn load_group_data(instances_dir: &Path, known_instances: &HashSet<String>) -> G
         instance_index,
         group_order,
         collapsed,
+        ungrouped_name,
     };
     reconcile_group_orders(&mut data, known_instances);
     data
@@ -197,6 +222,7 @@ fn save_group_data(
         ungrouped: UngroupedEntry {
             hidden: data.collapsed.contains(""),
             instances: ungrouped_ids,
+            name: data.ungrouped_name.clone(),
         },
     };
 
@@ -251,6 +277,7 @@ pub fn get_groups_state(
         collapsed,
         groups,
         instance_order: data.group_order,
+        ungrouped_name: data.ungrouped_name,
     }
 }
 
@@ -394,23 +421,38 @@ pub fn rename_group(
 ) -> Result<(), String> {
     let old_name = old_name.trim();
     let new_name = new_name.trim();
-    if old_name.is_empty() {
-        return Err("cannot rename ungrouped section".into());
-    }
     if new_name.is_empty() {
         return Err("group name cannot be empty".into());
     }
     if new_name.len() > 128 {
         return Err("group name too long".into());
     }
+
+    let mut data = load_group_data(instances_dir, known_instances);
+    if old_name.is_empty() {
+        if data.ungrouped_name.eq_ignore_ascii_case(new_name) {
+            return Ok(());
+        }
+        if data
+            .instance_index
+            .values()
+            .any(|group| group.eq_ignore_ascii_case(new_name))
+        {
+            return Err("a group with that name already exists".into());
+        }
+        data.ungrouped_name = new_name.to_string();
+        return save_group_data(instances_dir, &data, known_instances);
+    }
     if old_name.eq_ignore_ascii_case(new_name) {
         return Ok(());
     }
 
-    let mut data = load_group_data(instances_dir, known_instances);
     let has_old = data.instance_index.values().any(|g| g == old_name);
     if !has_old {
         return Err("group not found".into());
+    }
+    if data.ungrouped_name.eq_ignore_ascii_case(new_name) {
+        return Err("a group with that name already exists".into());
     }
     if data
         .instance_index
@@ -539,6 +581,22 @@ mod tests {
         set_instance_group(&dir, "inst-a", "Old", &known).unwrap();
         rename_group(&dir, "Old", "New", &known).unwrap();
         assert_eq!(get_instance_group(&dir, "inst-a", &known), "New");
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rename_ungrouped_section_updates_label_without_moving_instances() {
+        let dir = temp_instances_dir();
+        let known = HashSet::from(["inst-a".to_string(), "inst-b".to_string()]);
+
+        rename_group(&dir, "", "Favorites", &known).unwrap();
+
+        let state = get_groups_state(&dir, &known);
+        assert_eq!(state.ungrouped_name, "Favorites");
+        assert_eq!(state.groups, Vec::<String>::new());
+        assert_eq!(get_instance_group(&dir, "inst-a", &known), "");
+        assert_eq!(get_instance_group(&dir, "inst-b", &known), "");
 
         let _ = fs::remove_dir_all(dir);
     }
