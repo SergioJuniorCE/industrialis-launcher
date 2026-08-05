@@ -18,7 +18,7 @@ function accountLabel(account: LauncherAccount): string {
   return account.account_type === "offline" ? "Offline account" : "Microsoft account";
 }
 
-function SkinFace({ skin, className }: { skin: string; className: string }) {
+export function SkinFace({ skin, className }: { skin: string; className: string }) {
   const src = `data:image/png;base64,${skin}`;
 
   return (

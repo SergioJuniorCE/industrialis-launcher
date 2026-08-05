@@ -1063,12 +1063,12 @@ export default function App() {
                         <X />
                       </Button>
                     </div>
-                    <TabsList className="w-full min-w-0 justify-start overflow-x-auto h-8 rounded-lg border border-border/70 bg-background/50">
-                      <TabsTrigger value="info"><Info className="size-3 mr-0.5" />Info</TabsTrigger>
-                      <TabsTrigger value="files"><Files className="size-3 mr-0.5" />Files</TabsTrigger>
-                      <TabsTrigger value="mods"><Package className="size-3 mr-0.5" />Mods</TabsTrigger>
-                      <TabsTrigger value="settings"><SlidersHorizontal className="size-3 mr-0.5" />Settings</TabsTrigger>
-                      <TabsTrigger value="logs"><Terminal className="size-3 mr-0.5" />Logs</TabsTrigger>
+                    <TabsList className="w-full min-w-0 justify-start overflow-hidden h-8 rounded-lg border border-border/70 bg-background/50">
+                      <TabsTrigger value="info" className="flex-1"><Info className="size-3 mr-0.5" />Info</TabsTrigger>
+                      <TabsTrigger value="files" className="flex-1"><Files className="size-3 mr-0.5" />Files</TabsTrigger>
+                      <TabsTrigger value="mods" className="flex-1"><Package className="size-3 mr-0.5" />Mods</TabsTrigger>
+                      <TabsTrigger value="settings" className="flex-1"><SlidersHorizontal className="size-3 mr-0.5" />Settings</TabsTrigger>
+                      <TabsTrigger value="logs" className="flex-1"><Terminal className="size-3 mr-0.5" />Logs</TabsTrigger>
                     </TabsList>
                   </div>
 

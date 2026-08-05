@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 
-import type { LauncherAccount } from "./AccountSwitcher";
+import { SkinFace, type LauncherAccount } from "./AccountSwitcher";
 
 interface DeviceCodeInfo {
   user_code: string;
@@ -171,12 +171,7 @@ export function AccountsTab({
               }`}
             >
               {acc.skin_png_base64 ? (
-                <img
-                  src={`data:image/png;base64,${acc.skin_png_base64}`}
-                  alt=""
-                  className="size-6 rounded-sm shrink-0 image-pixelated"
-                  style={{ imageRendering: "pixelated" }}
-                />
+                <SkinFace skin={acc.skin_png_base64} className="size-6" />
               ) : (
                 <div className="size-6 rounded-sm bg-secondary flex items-center justify-center text-[10px] font-medium shrink-0">
                   {acc.username.charAt(0).toUpperCase() || "?"}
