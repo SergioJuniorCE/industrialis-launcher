@@ -1014,49 +1014,61 @@ export default function App() {
             {sel ? (
               <>
                 <Tabs value={detailTab} onValueChange={setDetailTab} className="flex-1 flex flex-col overflow-hidden">
-                  <div className="detail-header shrink-0 px-4 py-3 flex items-center gap-3 min-h-16">
-                    <InstanceAvatar
-                      instanceId={sel.id}
-                      name={instanceDisplayName(sel)}
-                      iconPath={sel.icon_path}
-                      size="md"
-                      loading={isDeletingSelected || isUpdatingSelected || isReinstallingSelected}
-                      onIconChanged={loadInstances}
-                      onError={(message) => setError(`Icon update failed: ${message}`)}
-                      onOpenFolder={() => handleOpenInstanceFolder(sel.id)}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-base font-semibold truncate leading-tight">{instanceDisplayName(sel)}</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground truncate leading-tight">
-                        {isDeletingSelected && selectedDeleteProcess ? (
-                          <>Deleting... {(selectedDeleteProcess.pct * 100).toFixed(0)}%</>
-                        ) : isReinstallingSelected && selectedReinstallProcess ? (
-                          <>{formatUpdateProgress(selectedReinstallProcess)}</>
-                        ) : isUpdatingSelected && selectedUpdateProcess ? (
-                          <>{formatUpdateProgress(selectedUpdateProcess)}</>
-                        ) : (
-                          <span className="inline-flex items-center gap-2 min-w-0">
-                            <span className="truncate">
-                              {instancePackVersion(sel)} / {formatInstanceSize(sel.size_bytes, sizesRefreshing)}
-                              {sel.group ? ` / ${sel.group}` : ""}
+                  <div className="detail-header shrink-0 px-4 py-3 flex flex-col gap-2 min-h-16">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <InstanceAvatar
+                        instanceId={sel.id}
+                        name={instanceDisplayName(sel)}
+                        iconPath={sel.icon_path}
+                        size="md"
+                        loading={isDeletingSelected || isUpdatingSelected || isReinstallingSelected}
+                        onIconChanged={loadInstances}
+                        onError={(message) => setError(`Icon update failed: ${message}`)}
+                        onOpenFolder={() => handleOpenInstanceFolder(sel.id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-base font-semibold leading-tight break-words">{instanceDisplayName(sel)}</div>
+                        <div className="mt-0.5 text-xs text-muted-foreground truncate leading-tight">
+                          {isDeletingSelected && selectedDeleteProcess ? (
+                            <>Deleting... {(selectedDeleteProcess.pct * 100).toFixed(0)}%</>
+                          ) : isReinstallingSelected && selectedReinstallProcess ? (
+                            <>{formatUpdateProgress(selectedReinstallProcess)}</>
+                          ) : isUpdatingSelected && selectedUpdateProcess ? (
+                            <>{formatUpdateProgress(selectedUpdateProcess)}</>
+                          ) : (
+                            <span className="inline-flex items-center gap-2 min-w-0">
+                              <span className="truncate">
+                                {instancePackVersion(sel)} / {formatInstanceSize(sel.size_bytes, sizesRefreshing)}
+                                {sel.group ? ` / ${sel.group}` : ""}
+                              </span>
+                              <PackVersionStatus
+                                currentVersion={instancePackVersion(sel)}
+                                versions={gtnhVersions}
+                                onUpdate={() => setUpdatePackInstanceId(selectedInstanceId!)}
+                                disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
+                                compact
+                              />
                             </span>
-                            <PackVersionStatus
-                              currentVersion={instancePackVersion(sel)}
-                              versions={gtnhVersions}
-                              onUpdate={() => setUpdatePackInstanceId(selectedInstanceId!)}
-                              disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
-                              compact
-                            />
-                          </span>
-                        )}
+                          )}
+                        </div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 shrink-0"
+                        title="Close instance details"
+                        aria-label="Close instance details"
+                        onClick={() => setSelectedInstanceId(null)}
+                      >
+                        <X />
+                      </Button>
                     </div>
-                    <TabsList className="shrink-0 h-8 rounded-lg border border-border/70 bg-background/50">
-                      <TabsTrigger value="info"><Info className="size-3 mr-0.5" />Info</TabsTrigger>
-                      <TabsTrigger value="files"><Files className="size-3 mr-0.5" />Files</TabsTrigger>
-                      <TabsTrigger value="mods"><Package className="size-3 mr-0.5" />Mods</TabsTrigger>
-                      <TabsTrigger value="settings"><SlidersHorizontal className="size-3 mr-0.5" />Settings</TabsTrigger>
-                      <TabsTrigger value="logs"><Terminal className="size-3 mr-0.5" />Logs</TabsTrigger>
+                    <TabsList className="w-full min-w-0 justify-start overflow-hidden h-8 rounded-lg border border-border/70 bg-background/50">
+                      <TabsTrigger value="info" className="flex-1"><Info className="size-3 mr-0.5" />Info</TabsTrigger>
+                      <TabsTrigger value="files" className="flex-1"><Files className="size-3 mr-0.5" />Files</TabsTrigger>
+                      <TabsTrigger value="mods" className="flex-1"><Package className="size-3 mr-0.5" />Mods</TabsTrigger>
+                      <TabsTrigger value="settings" className="flex-1"><SlidersHorizontal className="size-3 mr-0.5" />Settings</TabsTrigger>
+                      <TabsTrigger value="logs" className="flex-1"><Terminal className="size-3 mr-0.5" />Logs</TabsTrigger>
                     </TabsList>
                   </div>
 
