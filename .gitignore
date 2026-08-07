@@ -13,6 +13,7 @@ node_modules
 # Build outputs
 dist
 dist-ssr
+.vite
 .next
 .astro
 out
@@ -33,6 +34,3 @@ terminals/
 *.njsproj
 *.sln
 *.sw?
-
-# Rust
-apps/launcher/src-tauri/target

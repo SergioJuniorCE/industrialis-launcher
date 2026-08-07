@@ -59,10 +59,6 @@ export function applyTheme(
     }
   }
 
-  if (import.meta.env.DEV) {
-    const overrideCount = Object.values(overrides).filter(Boolean).length;
-    console.debug("[theme] applied", { mode, preset: preset.id, overrideCount });
-  }
 }
 
 export function readThemeCache(): ThemeCache | null {

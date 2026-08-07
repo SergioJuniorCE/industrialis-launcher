@@ -6,8 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isDesktop } from "../lib/desktop";
 import { Button } from "../components/ui/button";
 import {
   DEFAULT_LAUNCHER_SETTINGS,
@@ -111,7 +110,7 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
         saveTimerRef.current = null;
       }
       settingsRef.current = snapshot;
-      if (!isTauri()) return;
+      if (!isDesktop()) return;
       try {
         await invoke("save_launcher_settings", { settings: snapshot });
         clearSaveError();
@@ -204,7 +203,7 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
   );
 
   useEffect(() => {
-    if (!isTauri()) {
+    if (!isDesktop()) {
       const migrated = migrateSettingsFromLegacyStorage(settingsRef.current);
       const repaired = repairThemeSettings(migrated.settings, migrated.settings.custom_theme_presets);
       if (migrated.migrated || repaired.repaired) {

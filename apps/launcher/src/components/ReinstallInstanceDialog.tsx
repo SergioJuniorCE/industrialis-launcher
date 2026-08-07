@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Select } from "./ui/select";
+import { openUrl } from "../lib/desktop";
 import { compareVersionsByReleaseDate } from "../lib/pack-version-status";
 
 interface GtnhVersion {
@@ -70,7 +71,7 @@ export function ReinstallInstanceDialog({
               className="inline-flex items-center gap-1 text-primary hover:underline"
               onClick={(e) => {
                 e.preventDefault();
-                void import("@tauri-apps/plugin-opener").then(({ openUrl }) => openUrl(WIKI_URL));
+                void openUrl(WIKI_URL);
               }}
             >
               GTNH migration guide

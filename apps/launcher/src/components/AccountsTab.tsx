@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, listen } from "../lib/desktop";
 import { Check, Copy, Star } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";

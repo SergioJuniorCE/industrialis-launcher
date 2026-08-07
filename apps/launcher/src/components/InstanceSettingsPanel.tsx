@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/desktop";
 
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";

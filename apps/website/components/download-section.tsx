@@ -16,7 +16,7 @@ export function DownloadSection() {
               </h2>
               <p className="mt-3 text-muted-foreground">
                 Windows builds ship from this repo. macOS and Linux support is on
-                the roadmap — the launcher is Tauri, so ports are straightforward.
+                the roadmap - the launcher is built with Electron, so ports are straightforward.
               </p>
             </div>
 
@@ -48,7 +48,7 @@ export function DownloadSection() {
           </div>
 
           <p className="mt-8 border-t border-border pt-6 font-mono text-xs text-muted-foreground">
-            Requires Java 17+ to run GTNH instances · Microsoft account with
+            Requires Java 17+ to run GTNH instances - Microsoft account with
             Minecraft Java Edition for online play
           </p>
         </div>

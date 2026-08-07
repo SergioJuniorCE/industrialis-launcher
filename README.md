@@ -6,7 +6,7 @@ Turborepo monorepo for the Industrialis GT New Horizons launcher and website.
 
 | App | Package | Description |
 |-----|---------|-------------|
-| [Launcher](apps/launcher) | `@industrialis/launcher` | Tauri desktop app — install GTNH, manage Java, Microsoft auth, launch |
+| [Launcher](apps/launcher) | `@industrialis/launcher` | Electron desktop app - install GTNH, manage Java, Microsoft auth, launch |
 | [Website](apps/website) | `@industrialis/website` | Next.js marketing site |
 | [Server](apps/server) | `@industrialis/server` | Linux CLI + Docker daemon for hosting GTNH servers |
 | [Dashboard](apps/dashboard) | `@industrialis/dashboard` | Astro UI for managing hosted servers |
@@ -27,9 +27,11 @@ See [docs/server-hosting.md](docs/server-hosting.md) for Docker, systemd, and co
 |------|-------|
 | [Node.js](https://nodejs.org/) | LTS recommended |
 | [pnpm](https://pnpm.io/) | Package manager (`npm install -g pnpm`) |
-| [Rust](https://rustup.rs/) | Stable toolchain (launcher only) |
-| [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) | WebView2 on Windows |
+| [Electron](https://www.electronjs.org/) | Desktop runtime bundled by the launcher |
 | Java 17+ | Required to run GTNH instances |
+
+Launcher release packaging requires Node.js 22.x, matching the GitHub Actions
+release environment. Development, builds, and tests can use the current LTS.
 
 ## Development
 
@@ -46,7 +48,7 @@ pnpm dev
 Or run a single app:
 
 ```bash
-pnpm dev:launcher    # Tauri desktop app (Vite on :1420)
+pnpm dev:launcher    # Electron desktop app (Vite renderer on :5173)
 pnpm dev:website     # Next.js site on :3000
 pnpm dev:server      # GTNH server daemon on :4310
 pnpm dev:dashboard   # Astro server console on :3001
@@ -63,7 +65,7 @@ Launcher-only:
 ```bash
 pnpm build:launcher
 pnpm test --filter=@industrialis/launcher
-cd apps/launcher/src-tauri && cargo test
+pnpm --filter=@industrialis/launcher build
 ```
 
 Create release artifacts for the current OS (installers + portable):
@@ -76,16 +78,16 @@ The artifacts are written to `artifacts/launcher`.
 
 | Platform | Installer | Portable |
 |----------|-----------|----------|
-| Windows | NSIS (`.exe`), MSI (`.msi`) | ZIP of `.exe` |
+| Windows | Squirrel (`.exe`) | ZIP of packaged app |
 | macOS | DMG | ZIP of `.app` |
-| Linux | DEB | AppImage + ZIP of binary |
+| Linux | DEB/RPM | ZIP of packaged app |
 
 Build only one format with `pnpm build:launcher:installer` or
-`pnpm build:launcher:portable`. On Windows you can still target a single
-bundle with `powershell -File scripts/build-launcher.ps1 -Target msi`.
+`pnpm build:launcher:portable`. On Windows you can target the installer with
+`powershell -File scripts/build-launcher.ps1 -Target installer`.
 
 Pushes to `master` build Windows, macOS, and Linux in GitHub Actions and
-publish a GitHub Release (`build-<run number>`) with all artifacts.
+publish a GitHub Release (`launcher-v0.1.<run number>`) with all artifacts.
 
 ## Microsoft login
 
@@ -100,23 +102,23 @@ Use of the application ID is subject to the
 
 ```
 industrialis/
-├── apps/
-│   ├── launcher/          # Tauri + React desktop app
-│   ├── website/           # Next.js marketing site
-│   ├── server/            # industrialis CLI + Docker daemon
-│   └── dashboard/         # Astro server console
-├── packages/
-│   └── server-contracts/
-├── docs/server-hosting.md
-├── package.json
-├── pnpm-workspace.yaml
-└── turbo.json
+|-- apps/
+|   |-- launcher/          # Electron + React desktop app
+|   |-- website/           # Next.js marketing site
+|   |-- server/            # industrialis CLI + Docker daemon
+|   `-- dashboard/         # Astro server console
+|-- packages/
+|   `-- server-contracts/
+|-- docs/server-hosting.md
+|-- package.json
+|-- pnpm-workspace.yaml
+`-- turbo.json
 ```
 
 ## Tech stack
 
 - **Monorepo:** pnpm workspaces, Turborepo
-- **Launcher:** React 19, Vite, Tailwind CSS 4, Tauri 2, Rust
+- **Launcher:** Electron, React 19, TypeScript, Vite, Tailwind CSS 4, Electron Forge
 - **Website:** Next.js 16, React 19
 - **Server:** Node, Fastify, Dockerode, Commander
 - **Dashboard:** Astro 5, React islands, Tailwind CSS 4

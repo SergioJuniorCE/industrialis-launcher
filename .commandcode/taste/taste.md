@@ -22,6 +22,7 @@
 
 # communication
 - User is bilingual (English/Spanish) and may switch to Spanish mid-conversation. Respond in whichever language the user is currently using. Confidence: 0.7
+- When diagnosing project issues, user prefers the assistant to execute the relevant command and investigate the output directly rather than only ask them to provide error details. Confidence: 0.9
 
 # ux
 - Prefer global/default settings over per-instance configuration when both are possible (e.g., default Java version should be settable globally, not just per-instance). Confidence: 0.7

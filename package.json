@@ -6,7 +6,7 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "test": "turbo test",
-    "dev:launcher": "turbo dev --filter=@industrialis/launcher",
+    "dev:launcher": "pnpm --filter @industrialis/launcher dev",
     "dev:website": "turbo dev --filter=@industrialis/website",
     "dev:server": "turbo dev --filter=@industrialis/server",
     "dev:dashboard": "turbo dev --filter=@industrialis/dashboard",
@@ -20,7 +20,8 @@
     "pack:server": "node scripts/pack-server-release.mjs"
   },
   "devDependencies": {
-    "turbo": "^2.10.6"
+    "turbo": "^2.10.6",
+    "vite": "8.0.16"
   },
   "packageManager": "pnpm@9.15.9"
 }

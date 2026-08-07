@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "../lib/desktop";
 import { FolderOpen, ImagePlus, ImageOff, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import {

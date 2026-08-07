@@ -12,10 +12,6 @@
     },
     "test": {
       "dependsOn": ["^build"]
-    },
-    "tauri": {
-      "cache": false,
-      "persistent": true
     }
   }
 }

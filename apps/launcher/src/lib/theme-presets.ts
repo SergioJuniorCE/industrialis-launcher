@@ -242,7 +242,7 @@ export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
 
 export const DEFAULT_THEME_PRESET_ID: BuiltinThemePresetId = "industrialis";
 
-/** @deprecated Legacy localStorage key — migrated to Tauri settings on first load. */
+/** @deprecated Legacy localStorage key — migrated to desktop settings on first load. */
 export const LEGACY_CUSTOM_PRESETS_STORAGE_KEY = "industrialis-custom-theme-presets";
 
 export function tokensForPreset(preset: ThemePreset, mode: ThemeMode): ThemeTokens {

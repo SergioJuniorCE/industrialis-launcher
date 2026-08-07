@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/desktop";
 import { ChevronRight, FileText, Folder, Save, Undo2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
@@ -223,6 +223,7 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
                 {cwd && (
                   <button
                     type="button"
+                    aria-label="Go to parent directory"
                     className="flex h-auto w-full items-center justify-start gap-1.5 rounded-sm px-2 py-1 text-left text-xs font-normal hover:bg-primary/14"
                     onClick={() => {
                       const parent = cwd.includes("/") ? cwd.replace(/\/[^/]+$/, "") : "";

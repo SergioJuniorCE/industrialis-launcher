@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("all", "nsis", "msi", "portable", "installer")]
+    [ValidateSet("all", "installer", "portable")]
     [string]$Target = "all",
 
     [string]$OutputDirectory
@@ -11,8 +11,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $launcherDirectory = Join-Path $repoRoot "apps\launcher"
-$tauriDirectory = Join-Path $launcherDirectory "src-tauri"
-$releaseDirectory = Join-Path $tauriDirectory "target\release"
+$makeDirectory = Join-Path $launcherDirectory "out\make"
 
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repoRoot "artifacts\launcher"
@@ -29,22 +28,21 @@ New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 function Invoke-Pnpm {
     param([Parameter(Mandatory)][string[]]$Arguments)
 
-    & pnpm @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "pnpm exited with code $LASTEXITCODE."
+    Push-Location $launcherDirectory
+    try {
+        & pnpm @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "pnpm exited with code $LASTEXITCODE."
+        }
+    } finally {
+        Pop-Location
     }
 }
 
-function Copy-BundleArtifacts {
-    param(
-        [Parameter(Mandatory)][string]$BundleName,
-        [Parameter(Mandatory)][string]$Filter
-    )
-
-    $bundleDirectory = Join-Path $releaseDirectory "bundle\$BundleName"
-    $files = @(Get-ChildItem -LiteralPath $bundleDirectory -Filter $Filter -File -ErrorAction SilentlyContinue)
+function Copy-MakeArtifacts {
+    $files = @(Get-ChildItem -LiteralPath $makeDirectory -Recurse -File -ErrorAction SilentlyContinue)
     if ($files.Count -eq 0) {
-        throw "No $BundleName artifact was produced in $bundleDirectory."
+        throw "Electron Forge did not produce artifacts in $makeDirectory."
     }
 
     foreach ($file in $files) {
@@ -53,47 +51,30 @@ function Copy-BundleArtifacts {
 }
 
 function New-PortableArchive {
-    $portableExecutable = Join-Path $releaseDirectory "industrialis-launcher.exe"
-    if (-not (Test-Path -LiteralPath $portableExecutable -PathType Leaf)) {
-        throw "Portable executable was not produced at $portableExecutable."
+    $packageDirectory = Join-Path $launcherDirectory "out\industrialis-launcher-win32-x64"
+    if (-not (Test-Path -LiteralPath $packageDirectory -PathType Container)) {
+        throw "Electron package was not produced at $packageDirectory."
     }
 
     $package = Get-Content -LiteralPath (Join-Path $launcherDirectory "package.json") -Raw | ConvertFrom-Json
     $portableArchive = Join-Path $OutputDirectory "industrialis-launcher-$($package.version)-windows-portable.zip"
-    Compress-Archive -LiteralPath $portableExecutable -DestinationPath $portableArchive -Force
+    Compress-Archive -Path (Join-Path $packageDirectory "*") -DestinationPath $portableArchive -Force
 }
 
-Push-Location $launcherDirectory
-try {
-    switch ($Target) {
-        "all" {
-            # Preserve an unpatched executable before Tauri marks the binary for each installer type.
-            Invoke-Pnpm -Arguments @("tauri", "build", "--no-bundle")
-            New-PortableArchive
-            Invoke-Pnpm -Arguments @("tauri", "build", "--bundles", "nsis,msi")
-            Copy-BundleArtifacts -BundleName "nsis" -Filter "*.exe"
-            Copy-BundleArtifacts -BundleName "msi" -Filter "*.msi"
-        }
-        "installer" {
-            Invoke-Pnpm -Arguments @("tauri", "build", "--bundles", "nsis,msi")
-            Copy-BundleArtifacts -BundleName "nsis" -Filter "*.exe"
-            Copy-BundleArtifacts -BundleName "msi" -Filter "*.msi"
-        }
-        "nsis" {
-            Invoke-Pnpm -Arguments @("tauri", "build", "--bundles", "nsis")
-            Copy-BundleArtifacts -BundleName "nsis" -Filter "*.exe"
-        }
-        "msi" {
-            Invoke-Pnpm -Arguments @("tauri", "build", "--bundles", "msi")
-            Copy-BundleArtifacts -BundleName "msi" -Filter "*.msi"
-        }
-        "portable" {
-            Invoke-Pnpm -Arguments @("tauri", "build", "--no-bundle")
-            New-PortableArchive
-        }
+switch ($Target) {
+    "portable" {
+        Invoke-Pnpm -Arguments @("package")
+        New-PortableArchive
     }
-} finally {
-    Pop-Location
+    "all" {
+        Invoke-Pnpm -Arguments @("make")
+        Copy-MakeArtifacts
+        New-PortableArchive
+    }
+    "installer" {
+        Invoke-Pnpm -Arguments @("make")
+        Copy-MakeArtifacts
+    }
 }
 
 Write-Host "Launcher artifacts are available in $OutputDirectory"

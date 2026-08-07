@@ -7,8 +7,7 @@ import {
   useState,
   type SetStateAction,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { hideWindow, invoke, listen, openUrl } from "./lib/desktop";
 import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy, ExternalLink, Pencil } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./components/ui/card";
@@ -732,10 +731,9 @@ export default function App() {
 
     if (settings?.override_window && settings.close_after_launch) {
       try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        await getCurrentWindow().hide();
+        await hideWindow();
       } catch {
-        // not running inside Tauri (e.g. vite-only dev)
+        // Browser-only renderer preview has no native window bridge.
       }
     }
 
@@ -745,7 +743,7 @@ export default function App() {
         try {
           await invoke("exit_launcher");
         } catch {
-          // not running inside Tauri
+          // Browser-only renderer preview has no native window bridge.
         }
       }
       if (consoleCfg.autoClose) {
@@ -2538,14 +2536,13 @@ function SettingsTab({
         <CardHeader><CardTitle>About</CardTitle></CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-1">
           <p>Industrialis Launcher v0.1.0</p>
-          <p>GT New Horizons modpack manager built with Tauri.</p>
+          <p>GT New Horizons modpack manager built with Electron.</p>
           <a
             href={GITHUB_URL}
             className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
             onClick={(e) => {
               e.preventDefault();
-              void import("@tauri-apps/plugin-opener")
-                .then(({ openUrl }) => openUrl(GITHUB_URL))
+              void openUrl(GITHUB_URL)
                 .catch(() => undefined);
             }}
           >

@@ -5,7 +5,13 @@
       "Shell(pnpm:*)",
       "Shell(where:*)",
       "Shell(cmd:*)",
-      "Shell(gh:*)"
+      "Shell(gh:*)",
+      "Shell(bunx t3 serve --tailscale-serve)",
+      "Shell(tailscale:*)",
+      "Shell(bunx t3 --help)",
+      "Shell(kill:*)",
+      "Shell(Get-Process:*)",
+      "Shell(Select-Object:*)"
     ],
     "deny": [],
     "defaultMode": "default"
