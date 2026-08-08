@@ -4,6 +4,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  Menu,
   net,
   protocol,
   shell,
@@ -112,6 +113,7 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    Menu.setApplicationMenu(null);
     app.setAsDefaultProtocolClient("industrialislauncher");
     registerFileProtocol();
     registerIpcHandlers();
