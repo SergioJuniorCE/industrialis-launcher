@@ -10,13 +10,13 @@ export const versionsUrl = "https://raw.githubusercontent.com/GTNewHorizons/GTNe
 export type EmitProgress = (payload: Record<string, unknown>) => void;
 
 function progress(emit: EmitProgress, stage: string, pct: number, operation: string, id?: string, extra?: Record<string, unknown>): void {
-  emit({ stage, pct, operation, ...(id ? { id } : {}), ...(extra ?? {}) });
+  emit({ stage, pct, operation, ...(id ? { id } : {}), ...extra });
 }
 
 export async function fetchGtnhVersions(): Promise<Record<string, GtnhVersion>> {
   const response = await fetch(versionsUrl);
   if (!response.ok) throw new Error(`failed to fetch pack versions: HTTP ${response.status}`);
-  return await response.json() as Record<string, GtnhVersion>;
+  return (await response.json()) as Record<string, GtnhVersion>;
 }
 
 export function resolvePackDownloadUrl(version: GtnhVersion, javaType: string): string {
@@ -60,7 +60,9 @@ export function classifyModUpdates(oldMods: ModEntry[], newMods: ModEntry[]): { 
   };
 }
 
-export function persistentCustomModsDir(instance: string): string { return path.join(instance, "persistent-minecraft", "mods"); }
+export function persistentCustomModsDir(instance: string): string {
+  return path.join(instance, "persistent-minecraft", "mods");
+}
 
 export async function listCustomMods(instance: string): Promise<ModEntry[]> {
   return listMods(persistentCustomModsDir(instance));
@@ -196,7 +198,12 @@ async function moveInto(destinationRoot: string, source: string): Promise<void> 
     await fs.rm(destination, { recursive: true, force: true });
   }
   await fs.mkdir(path.dirname(destination), { recursive: true });
-  try { await fs.rename(source, destination); } catch { await copyTree(source, destination); await fs.rm(source, { recursive: true, force: true }); }
+  try {
+    await fs.rename(source, destination);
+  } catch {
+    await copyTree(source, destination);
+    await fs.rm(source, { recursive: true, force: true });
+  }
 }
 
 export async function flattenNestedPack(instance: string): Promise<void> {

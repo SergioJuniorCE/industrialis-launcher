@@ -10,8 +10,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  commitlint:
+    name: Validate commit messages
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate pushed commits
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: pnpm commitlint --from "$BEFORE_SHA" --to HEAD --verbose
+
   build:
     name: ${{ matrix.name }}
+    needs: commitlint
     permissions:
       contents: read
     strategy:

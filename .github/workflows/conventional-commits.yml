@@ -1,0 +1,59 @@
+name: Conventional commits
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    name: Validate commit messages
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate pull request commits
+        if: github.event_name == 'pull_request'
+        run: >-
+          pnpm commitlint
+          --from "${{ github.event.pull_request.base.sha }}"
+          --to "${{ github.event.pull_request.head.sha }}"
+          --verbose
+
+      - name: Validate pushed commits
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          from_sha="$BEFORE_SHA"
+          if [[ "$from_sha" == "0000000000000000000000000000000000000000" ]]; then
+            from_sha="$(git merge-base "origin/$DEFAULT_BRANCH" HEAD)"
+          fi
+
+          if [[ "$from_sha" == "$(git rev-parse HEAD)" ]]; then
+            echo "No new commits to validate."
+            exit 0
+          fi
+
+          pnpm commitlint --from "$from_sha" --to HEAD --verbose

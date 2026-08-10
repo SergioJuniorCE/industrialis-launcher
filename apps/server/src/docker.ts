@@ -2,16 +2,16 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import Docker from "dockerode";
 import type { CreateServerInput, GtnhServer, ServerStatus } from "@industrialis/server-contracts";
-import {
-  DEFAULT_SERVER_MEMORY_MB,
-  DEFAULT_SERVER_PORT,
-  DEFAULT_SERVER_VERSION,
-} from "@industrialis/server-contracts";
+import { DEFAULT_SERVER_MEMORY_MB, DEFAULT_SERVER_PORT, DEFAULT_SERVER_VERSION } from "@industrialis/server-contracts";
 import type { ServerConfig } from "./config.js";
 import { ServerRegistry } from "./registry.js";
 
 function slugify(value: string): string {
-  const slug = value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
   return slug || "gtnh-server";
 }
 
@@ -56,9 +56,7 @@ export class DockerServerManager {
     try {
       await this.docker.ping();
     } catch {
-      throw new Error(
-        `Docker Engine is unavailable at ${this.config.dockerSocket}. Verify the daemon is running and this user can access the socket.`,
-      );
+      throw new Error(`Docker Engine is unavailable at ${this.config.dockerSocket}. Verify the daemon is running and this user can access the socket.`);
     }
   }
 
@@ -75,7 +73,10 @@ export class DockerServerManager {
 
   async create(input: CreateServerInput): Promise<GtnhServer> {
     const result = this.createQueue.then(() => this.createServer(input));
-    this.createQueue = result.then(() => undefined, () => undefined);
+    this.createQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
     return result;
   }
 
@@ -112,11 +113,7 @@ export class DockerServerManager {
       const worldDir = join(serverDir, "world");
       const backupsDir = join(serverDir, "backups");
       const logsDir = join(serverDir, "logs");
-      await Promise.all([
-        mkdir(worldDir, { recursive: true }),
-        mkdir(backupsDir, { recursive: true }),
-        mkdir(logsDir, { recursive: true }),
-      ]);
+      await Promise.all([mkdir(worldDir, { recursive: true }), mkdir(backupsDir, { recursive: true }), mkdir(logsDir, { recursive: true })]);
       await this.docker.createVolume({
         Name: volumeName,
         Labels: { "dev.industrialis.managed": "true", "dev.industrialis.server-id": id },
@@ -198,6 +195,7 @@ export class DockerServerManager {
       tail,
       timestamps: true,
     });
+    // oxlint-disable-next-line no-control-regex -- Docker multiplexed logs may contain these control bytes.
     return decodeDockerLogs(output).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");
   }
 
@@ -236,11 +234,14 @@ export class DockerServerManager {
       Cmd: [
         "/bin/sh",
         "-c",
-        "for stat in /proc/[0-9]*/comm; do if [ \"$(cat \"$stat\")\" = java ]; then pid=${stat%/comm}; kill -TERM ${pid#/proc/}; exit 0; fi; done; exit 1",
+        'for stat in /proc/[0-9]*/comm; do if [ "$(cat "$stat")" = java ]; then pid=${stat%/comm}; kill -TERM ${pid#/proc/}; exit 0; fi; done; exit 1',
       ],
     });
     await exec.start({ Detach: false }).catch(() => undefined);
-    const exited = container.wait().then(() => true).catch(() => false);
+    const exited = container
+      .wait()
+      .then(() => true)
+      .catch(() => false);
     const timedOut = new Promise<false>((resolve) => setTimeout(() => resolve(false), 35_000));
     if (!(await Promise.race([exited, timedOut]))) await container.stop({ t: 15 });
   }

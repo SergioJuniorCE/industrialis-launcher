@@ -2,7 +2,9 @@
   "name": "@industrialis/server",
   "private": true,
   "version": "0.1.1",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "bin": {
     "industrialis": "./dist/cli.js"
@@ -11,7 +13,8 @@
     "build": "tsc",
     "dev": "tsx watch src/cli.ts daemon",
     "start": "node dist/cli.js daemon",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@industrialis/server-contracts": "workspace:*",

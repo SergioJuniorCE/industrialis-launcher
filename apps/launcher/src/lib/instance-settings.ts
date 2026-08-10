@@ -100,14 +100,12 @@ export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   env_vars: {},
 };
 
-export function mergeInstanceSettings(
-  disk: Partial<InstanceSettings> | null | undefined
-): InstanceSettings {
+export function mergeInstanceSettings(disk: Partial<InstanceSettings> | null | undefined): InstanceSettings {
   if (!disk) return { ...DEFAULT_INSTANCE_SETTINGS };
   return {
     ...DEFAULT_INSTANCE_SETTINGS,
     ...disk,
-    env_vars: { ...DEFAULT_INSTANCE_SETTINGS.env_vars, ...(disk.env_vars ?? {}) },
+    env_vars: { ...DEFAULT_INSTANCE_SETTINGS.env_vars, ...disk.env_vars },
   };
 }
 
