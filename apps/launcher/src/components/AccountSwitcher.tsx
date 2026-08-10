@@ -2,16 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, User, UserCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-
-export interface LauncherAccount {
-  id: string;
-  username: string;
-  uuid: string;
-  account_type: string;
-  skin_png_base64?: string;
-  owns_minecraft?: boolean;
-  can_play_minecraft?: boolean;
-}
+import type { LauncherAccount } from "../stores/launcher-store";
 
 function accountLabel(account: LauncherAccount): string {
   if (account.username.trim()) return account.username;
@@ -23,18 +14,8 @@ export function SkinFace({ skin, className }: { skin: string; className: string 
 
   return (
     <span className={`relative overflow-hidden rounded-sm shrink-0 ${className}`} aria-hidden="true">
-      <img
-        src={src}
-        alt=""
-        className="absolute -left-full -top-full w-[800%] max-w-none"
-        style={{ imageRendering: "pixelated" }}
-      />
-      <img
-        src={src}
-        alt=""
-        className="absolute left-[-500%] -top-full w-[800%] max-w-none"
-        style={{ imageRendering: "pixelated" }}
-      />
+      <img src={src} alt="" className="absolute -left-full -top-full w-[800%] max-w-none" style={{ imageRendering: "pixelated" }} />
+      <img src={src} alt="" className="absolute left-[-500%] -top-full w-[800%] max-w-none" style={{ imageRendering: "pixelated" }} />
     </span>
   );
 }
@@ -73,29 +54,21 @@ export function AccountSwitcher({
         className="gap-1.5 max-w-[180px]"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        title={
-          selected
-            ? `Default account: ${accountLabel(selected)}`
-            : "Set default account for launch"
-        }
+        title={selected ? `Default account: ${accountLabel(selected)}` : "Set default account for launch"}
       >
         {selected?.skin_png_base64 ? (
           <SkinFace skin={selected.skin_png_base64} className="size-5" />
         ) : (
           <UserCircle className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="text-xs truncate">
-          {selected ? accountLabel(selected) : "No default"}
-        </span>
+        <span className="text-xs truncate">{selected ? accountLabel(selected) : "No default"}</span>
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
       </Button>
 
       {open && (
         <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-border bg-popover p-1 shadow-lg">
           {accounts.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">
-              No accounts yet. Add one to launch instances.
-            </div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">No accounts yet. Add one to launch instances.</div>
           ) : (
             <div className="max-h-64 overflow-y-auto">
               {accounts.map((acc) => (
@@ -103,9 +76,7 @@ export function AccountSwitcher({
                   key={acc.id}
                   type="button"
                   variant="ghost"
-                  className={`h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs font-normal ${
-                    acc.id === defaultAccountId ? "bg-muted" : ""
-                  }`}
+                  className={`h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs font-normal ${acc.id === defaultAccountId ? "bg-muted" : ""}`}
                   onClick={() => {
                     onSelectDefaultAccount(acc.id);
                     setOpen(false);
@@ -118,9 +89,7 @@ export function AccountSwitcher({
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{accountLabel(acc)}</div>
-                    <div className="text-[10px] text-muted-foreground capitalize">
-                      {acc.account_type === "offline" ? "Offline" : "Microsoft"}
-                    </div>
+                    <div className="text-[10px] text-muted-foreground capitalize">{acc.account_type === "offline" ? "Offline" : "Microsoft"}</div>
                   </div>
                   {acc.id === defaultAccountId && (
                     <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">
