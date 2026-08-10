@@ -102,7 +102,7 @@ export async function getInstanceGroup(id: string, known: Set<string>): Promise<
 
 export async function getGroupsState(known: Set<string>): Promise<InstanceGroupsState> {
   const data = await loadData(known);
-  const groups = [...new Set([...data.instanceIndex.values()])].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  const groups = [...new Set(data.instanceIndex.values())].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   const collapsed: Record<string, boolean> = {};
   for (const group of groups) collapsed[group] = data.collapsed.has(group);
   collapsed[""] = data.collapsed.has("");
@@ -120,7 +120,8 @@ export async function setInstanceGroup(id: string, group: string, known: Set<str
   if (name.length > 128) throw new Error("group name too long");
   const data = await loadData(known);
   const old = data.instanceIndex.get(id) ?? "";
-  if (name) data.instanceIndex.set(id, name); else data.instanceIndex.delete(id);
+  if (name) data.instanceIndex.set(id, name);
+  else data.instanceIndex.delete(id);
   removeFromOrder(data, id, old);
   appendToOrder(data, id, name);
   await saveData(data, known);
@@ -166,7 +167,11 @@ export async function renameGroup(oldName: string, newName: string, known: Set<s
   }
   if (old.toLowerCase() === next.toLowerCase()) return;
   if (![...data.instanceIndex.values()].some((group) => group === old)) throw new Error("group not found");
-  if (data.ungroupedName.toLowerCase() === next.toLowerCase() || [...data.instanceIndex.values()].some((group) => group.toLowerCase() === next.toLowerCase() && group !== old)) throw new Error("a group with that name already exists");
+  if (
+    data.ungroupedName.toLowerCase() === next.toLowerCase() ||
+    [...data.instanceIndex.values()].some((group) => group.toLowerCase() === next.toLowerCase() && group !== old)
+  )
+    throw new Error("a group with that name already exists");
   for (const [id, group] of data.instanceIndex) if (group === old) data.instanceIndex.set(id, next);
   const order = data.groupOrder.get(old);
   if (order) data.groupOrder.set(next, order);
@@ -193,7 +198,8 @@ export async function deleteGroup(name: string, known: Set<string>): Promise<voi
 
 export async function setGroupCollapsed(group: string, collapsed: boolean, known: Set<string>): Promise<void> {
   const data = await loadData(known);
-  if (collapsed) data.collapsed.add(group); else data.collapsed.delete(group);
+  if (collapsed) data.collapsed.add(group);
+  else data.collapsed.delete(group);
   await saveData(data, known);
 }
 
@@ -207,7 +213,10 @@ export async function removeInstanceFromGroups(id: string, known: Set<string>): 
 }
 
 function removeFromOrder(data: GroupData, id: string, group: string): void {
-  data.groupOrder.set(group, (data.groupOrder.get(group) ?? []).filter((entry) => entry !== id));
+  data.groupOrder.set(
+    group,
+    (data.groupOrder.get(group) ?? []).filter((entry) => entry !== id),
+  );
 }
 
 function appendToOrder(data: GroupData, id: string, group: string): void {

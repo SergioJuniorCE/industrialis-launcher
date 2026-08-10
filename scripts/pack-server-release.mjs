@@ -75,11 +75,13 @@ async function main() {
   await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 
   await mkdir(join(stageDir, "bin"), { recursive: true });
+  // oxlint-disable no-useless-escape -- Keep shell variables literal until the generated script runs.
   const shim = `#!/usr/bin/env bash
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export INDUSTRIALIS_DASHBOARD_DIR="\${INDUSTRIALIS_DASHBOARD_DIR:-\$ROOT/dashboard}"
 exec node "\$ROOT/dist/cli.js" "$@"
 `;
+  // oxlint-enable no-useless-escape
   const shimPath = join(stageDir, "bin", "industrialis");
   await writeFile(shimPath, shim, { encoding: "utf8", mode: 0o755 });
   try {

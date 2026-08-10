@@ -1,18 +1,13 @@
 import { launcherSettingsPath, settingsPath } from "./paths";
 import { readJson, writeJson } from "./fs-utils";
-import {
-  defaultInstanceSettings,
-  defaultLauncherSettings,
-  type InstanceSettings,
-  type LauncherSettings,
-} from "./types";
+import { defaultInstanceSettings, defaultLauncherSettings, type InstanceSettings, type LauncherSettings } from "./types";
 
 export async function loadInstanceSettings(id: string): Promise<InstanceSettings> {
   const saved = await readJson<Partial<InstanceSettings>>(settingsPath(id));
   return {
     ...defaultInstanceSettings(),
-    ...(saved ?? {}),
-    env_vars: { ...(saved?.env_vars ?? {}) },
+    ...saved,
+    env_vars: { ...saved?.env_vars },
   };
 }
 
@@ -24,8 +19,8 @@ export async function loadLauncherSettings(): Promise<LauncherSettings> {
   const saved = await readJson<Partial<LauncherSettings>>(launcherSettingsPath());
   return {
     ...defaultLauncherSettings(),
-    ...(saved ?? {}),
-    theme_overrides: { ...(saved?.theme_overrides ?? {}) },
+    ...saved,
+    theme_overrides: { ...saved?.theme_overrides },
     custom_theme_presets: [...(saved?.custom_theme_presets ?? [])],
     default_account_id: saved?.default_account_id ?? null,
     default_java_path: saved?.default_java_path ?? null,
@@ -49,9 +44,12 @@ export function validateLauncherSettings(settings: LauncherSettings): void {
   for (const value of Object.values(settings.theme_overrides)) {
     if (value !== undefined) validateThemeValue(value, "theme override value too long");
   }
-  if (settings.theme_preset.startsWith("custom-") && !settings.custom_theme_presets.some((preset) => {
-    return typeof preset === "object" && preset !== null && "id" in preset && preset.id === settings.theme_preset;
-  })) {
+  if (
+    settings.theme_preset.startsWith("custom-") &&
+    !settings.custom_theme_presets.some((preset) => {
+      return typeof preset === "object" && preset !== null && "id" in preset && preset.id === settings.theme_preset;
+    })
+  ) {
     throw new Error("active custom theme preset not found");
   }
 }

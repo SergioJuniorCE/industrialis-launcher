@@ -11,6 +11,7 @@
     "build:frontend": "tsc -p tsconfig.json --noEmit && vite build --config vite.renderer.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit --incremental false",
     "package": "node ../../scripts/check-launcher-node.mjs && electron-forge package",
     "make": "node ../../scripts/check-launcher-node.mjs && electron-forge make"
   },

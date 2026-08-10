@@ -1,0 +1,19 @@
+pre-commit:
+  commands:
+    format:
+      priority: 1
+      glob:
+        - "*.{js,jsx,ts,tsx,mjs,cjs,json,jsonc,json5,yaml,yml,toml,html,css,scss,less,md,mdx,graphql}"
+      run: pnpm exec oxfmt --write {staged_files}
+      stage_fixed: true
+    lint:
+      priority: 2
+      run: pnpm lint
+    typecheck:
+      priority: 3
+      run: pnpm typecheck
+
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm commitlint --edit {1}
