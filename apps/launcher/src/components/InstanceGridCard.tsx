@@ -1,32 +1,14 @@
 import type { DragEvent } from "react";
-import {
-  Copy,
-  FolderOpen,
-  Loader2,
-  Pencil,
-  Play,
-  RefreshCw,
-  SlidersHorizontal,
-  Square,
-  Trash2,
-  X,
-  GripVertical,
-} from "lucide-react";
+import { Copy, FolderOpen, Loader2, Pencil, Play, RefreshCw, SlidersHorizontal, Square, Trash2, X, GripVertical } from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 import { InstanceAvatar } from "./InstanceAvatar";
 import { PackVersionStatus } from "./PackVersionStatus";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "./ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./ui/context-menu";
 import { cn } from "../lib/utils";
 import type { BackgroundProcess } from "../lib/background-processes";
-import { formatDownloadProgress, stageLabel } from "../lib/background-processes";
-import type { PackVersionMeta } from "../lib/pack-version-status";
+import { formatDownloadProgress, getInstanceProcess, isInstanceBusy, stageLabel } from "../lib/background-processes";
+import { useLauncherStore } from "../stores/launcher-store";
 
 export interface InstanceGridCardData {
   id: string;
@@ -36,6 +18,16 @@ export interface InstanceGridCardData {
     pack_version: string;
   };
   icon_path?: string | null;
+}
+
+export interface InstanceGridCardCommands {
+  launch: (id: string) => void;
+  kill: (id: string) => void;
+  openFolder: (id: string) => void;
+  delete: (id: string) => void;
+  cancelDelete: (id: string) => void;
+  iconChanged: () => void;
+  iconError: (message: string) => void;
 }
 
 function displayName(inst: InstanceGridCardData): string {
@@ -65,29 +57,7 @@ function formatRowUpdateProgress(proc: BackgroundProcess): string {
 
 export function InstanceGridCard({
   inst,
-  selected,
-  sizesRefreshing,
-  onSelect,
-  running,
-  starting,
-  busy,
-  onLaunch,
-  onKill,
-  onOpenSettings,
-  onOpenFolder,
-  onDelete,
-  isInstanceBusy,
-  deleteProcess,
-  updateProcess,
-  reinstallProcess,
-  onCancelDelete,
-  versions,
-  onUpdatePack,
-  onReinstall,
-  onCopy,
-  onRename,
-  onIconChanged,
-  onIconError,
+  commands,
   isDragging,
   isDragOver,
   onDragHandleStart,
@@ -97,29 +67,7 @@ export function InstanceGridCard({
   onDrop,
 }: {
   inst: InstanceGridCardData;
-  selected: boolean;
-  sizesRefreshing: boolean;
-  onSelect: () => void;
-  running: boolean;
-  starting: boolean;
-  busy: boolean;
-  onLaunch: () => void;
-  onKill: () => void;
-  onOpenSettings: () => void;
-  onOpenFolder: () => void;
-  onDelete: () => void;
-  isInstanceBusy: (id: string) => boolean;
-  deleteProcess?: BackgroundProcess;
-  updateProcess?: BackgroundProcess;
-  reinstallProcess?: BackgroundProcess;
-  onCancelDelete: () => void;
-  versions: Record<string, PackVersionMeta> | null;
-  onUpdatePack: () => void;
-  onReinstall: () => void;
-  onCopy: () => void;
-  onRename: () => void;
-  onIconChanged: () => void;
-  onIconError: (message: string) => void;
+  commands: InstanceGridCardCommands;
   isDragging?: boolean;
   isDragOver?: boolean;
   onDragHandleStart?: (event: DragEvent<HTMLDivElement>) => void;
@@ -128,6 +76,22 @@ export function InstanceGridCard({
   onDragLeave?: () => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
 }) {
+  const selected = useLauncherStore((state) => state.selectedInstanceId === inst.id);
+  const sizesRefreshing = useLauncherStore((state) => state.sizesRefreshing);
+  const running = useLauncherStore((state) => state.runningInstanceIds.has(inst.id));
+  const starting = useLauncherStore((state) => state.launching === inst.id);
+  const busy = useLauncherStore((state) => state.launching !== null);
+  const instanceBusy = useLauncherStore((state) => isInstanceBusy(state.processes, inst.id));
+  const deleteProcess = useLauncherStore((state) => getInstanceProcess(state.processes, "delete", inst.id));
+  const updateProcess = useLauncherStore((state) => getInstanceProcess(state.processes, "update-pack", inst.id));
+  const reinstallProcess = useLauncherStore((state) => getInstanceProcess(state.processes, "reinstall", inst.id));
+  const versions = useLauncherStore((state) => state.gtnhVersions);
+  const setSelectedInstanceId = useLauncherStore((state) => state.setSelectedInstanceId);
+  const openInstanceSettings = useLauncherStore((state) => state.openInstanceSettings);
+  const setUpdatePackInstanceId = useLauncherStore((state) => state.setUpdatePackInstanceId);
+  const setReinstallInstanceId = useLauncherStore((state) => state.setReinstallInstanceId);
+  const setCopyInstanceId = useLauncherStore((state) => state.setCopyInstanceId);
+  const setRenameInstanceId = useLauncherStore((state) => state.setRenameInstanceId);
   const name = displayName(inst);
   const deleting = deleteProcess?.status === "running";
   const updating = updateProcess?.status === "running";
@@ -143,9 +107,7 @@ export function InstanceGridCard({
             packBusy && "opacity-80",
             isDragging && "opacity-40",
             isDragOver && "bg-primary/15 ring-2 ring-primary/35",
-            selected
-              ? "instance-row-selected"
-              : "hover:bg-accent/70",
+            selected ? "instance-row-selected" : "hover:bg-accent/70",
           )}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -171,23 +133,16 @@ export function InstanceGridCard({
           )}
           <button
             type="button"
-            onClick={onSelect}
+            onClick={() => setSelectedInstanceId(inst.id)}
             onDoubleClick={() => {
-              if (!running && !starting && !busy && !packBusy && !isInstanceBusy(inst.id)) {
-                onLaunch();
+              if (!running && !starting && !busy && !packBusy && !instanceBusy) {
+                commands.launch(inst.id);
               }
             }}
             onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !running &&
-                !starting &&
-                !busy &&
-                !packBusy &&
-                !isInstanceBusy(inst.id)
-              ) {
+              if (event.key === "Enter" && !running && !starting && !busy && !packBusy && !instanceBusy) {
                 event.preventDefault();
-                onLaunch();
+                commands.launch(inst.id);
               }
             }}
             className="flex min-w-0 flex-1 flex-col items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
@@ -200,9 +155,9 @@ export function InstanceGridCard({
               iconPath={inst.icon_path}
               size="md"
               loading={packBusy}
-              onIconChanged={onIconChanged}
-              onError={onIconError}
-              onOpenFolder={onOpenFolder}
+              onIconChanged={commands.iconChanged}
+              onError={commands.iconError}
+              onOpenFolder={() => commands.openFolder(inst.id)}
               className="size-14 text-base rounded-xl"
             />
             <div className="w-full min-w-0 text-center">
@@ -232,7 +187,7 @@ export function InstanceGridCard({
                 title="Cancel deletion"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onCancelDelete();
+                  commands.cancelDelete(inst.id);
                 }}
               >
                 <X className="size-3.5" />
@@ -245,7 +200,7 @@ export function InstanceGridCard({
                 title="Stop"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onKill();
+                  commands.kill(inst.id);
                 }}
               >
                 <Square className="size-3.5 fill-current" />
@@ -259,84 +214,64 @@ export function InstanceGridCard({
               <PackVersionStatus
                 currentVersion={packVersion(inst)}
                 versions={versions}
-                onUpdate={onUpdatePack}
-                disabled={busy || running || starting || isInstanceBusy(inst.id)}
+                onUpdate={() => setUpdatePackInstanceId(inst.id)}
+                disabled={busy || running || starting || instanceBusy}
                 compact
               />
             )}
           </div>
 
-          {running && !packBusy && (
-            <span
-              className="status-running absolute right-2 top-2 size-2 rounded-full animate-pulse"
-              title="Running"
-            />
-          )}
+          {running && !packBusy && <span className="status-running absolute right-2 top-2 size-2 rounded-full animate-pulse" title="Running" />}
 
           {(deleting || updating || reinstalling) && (
             <div className="mt-2">
-              <Progress
-                value={
-                  (deleting
-                    ? deleteProcess!.pct
-                    : updating
-                      ? updateProcess!.pct
-                      : reinstallProcess!.pct) * 100
-                }
-                className="h-1"
-              />
+              <Progress value={(deleting ? deleteProcess!.pct : updating ? updateProcess!.pct : reinstallProcess!.pct) * 100} className="h-1" />
             </div>
           )}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-52">
-        <ContextMenuItem onSelect={onOpenFolder}>
+        <ContextMenuItem onSelect={() => commands.openFolder(inst.id)}>
           <FolderOpen />
           Open folder
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={onOpenSettings}>
+        <ContextMenuItem onSelect={() => openInstanceSettings(inst.id)}>
           <SlidersHorizontal />
           Settings
         </ContextMenuItem>
-        <ContextMenuItem onSelect={onRename} disabled={deleting}>
+        <ContextMenuItem onSelect={() => setRenameInstanceId(inst.id)} disabled={deleting}>
           <Pencil />
           Rename…
         </ContextMenuItem>
         {deleting ? (
-          <ContextMenuItem onSelect={onCancelDelete} className="text-destructive focus:text-destructive">
+          <ContextMenuItem onSelect={() => commands.cancelDelete(inst.id)} className="text-destructive focus:text-destructive">
             <X />
             Cancel deletion
           </ContextMenuItem>
         ) : running ? (
-          <ContextMenuItem onSelect={onKill} className="text-destructive focus:text-destructive">
+          <ContextMenuItem onSelect={() => commands.kill(inst.id)} className="text-destructive focus:text-destructive">
             <Square className="fill-current" />
             Stop
           </ContextMenuItem>
         ) : (
-          <ContextMenuItem onSelect={onLaunch} disabled={busy || starting || isInstanceBusy(inst.id)}>
+          <ContextMenuItem onSelect={() => commands.launch(inst.id)} disabled={busy || starting || instanceBusy}>
             <Play />
             {starting ? "Launching…" : "Launch"}
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
-        <ContextMenuItem
-          onSelect={onCopy}
-          disabled={running || starting || packBusy || isInstanceBusy(inst.id)}
-        >
+        <ContextMenuItem onSelect={() => setCopyInstanceId(inst.id)} disabled={running || starting || packBusy || instanceBusy}>
           <Copy />
           Copy instance…
         </ContextMenuItem>
-        <ContextMenuItem
-          onSelect={onReinstall}
-          disabled={running || starting || packBusy || isInstanceBusy(inst.id)}
-        >
+        <ContextMenuItem onSelect={() => setReinstallInstanceId(inst.id)} disabled={running || starting || packBusy || instanceBusy}>
           <RefreshCw />
           Clean reinstall…
         </ContextMenuItem>
         <ContextMenuItem
-          onSelect={onDelete}
-          disabled={running || starting || deleting || isInstanceBusy(inst.id)}
+          onSelect={() => commands.delete(inst.id)}
+          disabled={running || starting || deleting || instanceBusy}
           className="text-destructive focus:text-destructive"
         >
           <Trash2 />

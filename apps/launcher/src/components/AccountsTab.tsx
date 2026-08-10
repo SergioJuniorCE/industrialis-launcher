@@ -5,7 +5,8 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 
-import { SkinFace, type LauncherAccount } from "./AccountSwitcher";
+import { SkinFace } from "./AccountSwitcher";
+import { useLauncherStore, type LauncherAccount } from "../stores/launcher-store";
 
 interface DeviceCodeInfo {
   user_code: string;
@@ -39,19 +40,18 @@ function microsoftLicenseStatus(account: LauncherAccount): string | null {
 }
 
 export function AccountsTab({
-  onAccountsChanged,
   onSetDefaultAccount,
   defaultAccountId,
   launchRedirect,
   onDismissRedirect,
 }: {
-  onAccountsChanged?: () => void;
   onSetDefaultAccount: (id: string | null) => void;
   defaultAccountId: string | null;
   launchRedirect?: { instanceName: string } | null;
   onDismissRedirect?: () => void;
 }) {
-  const [accounts, setAccounts] = useState<LauncherAccount[]>([]);
+  const accounts = useLauncherStore((state) => state.accounts);
+  const setAccounts = useLauncherStore((state) => state.setAccounts);
   const [loggingIn, setLoggingIn] = useState(false);
   const [deviceCode, setDeviceCode] = useState<DeviceCodeInfo | null>(null);
   const [deviceCodeCopied, setDeviceCodeCopied] = useState(false);
@@ -61,12 +61,9 @@ export function AccountsTab({
 
   const load = useCallback(() => {
     invoke<LauncherAccount[]>("get_accounts")
-      .then((list) => {
-        setAccounts(list);
-        onAccountsChanged?.();
-      })
+      .then(setAccounts)
       .catch(() => {});
-  }, [onAccountsChanged]);
+  }, [setAccounts]);
   useEffect(() => load(), [load]);
 
   useEffect(() => {
@@ -80,7 +77,9 @@ export function AccountsTab({
           // copy button still lets the user copy from an explicit action.
         });
     });
-    return () => { unlisten.then((f) => f()); };
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, []);
 
   const handleCopyDeviceCode = async () => {
@@ -151,9 +150,7 @@ export function AccountsTab({
       {launchRedirect && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs">
           <p className="font-medium">Default account required to launch {launchRedirect.instanceName}</p>
-          <p className="text-muted-foreground mt-0.5">
-            Add an account below and click its star, then return to Instances.
-          </p>
+          <p className="text-muted-foreground mt-0.5">Add an account below and click its star, then return to Instances.</p>
         </div>
       )}
 
@@ -163,71 +160,52 @@ export function AccountsTab({
             const isDefault = acc.id === defaultAccountId;
             const licenseStatus = microsoftLicenseStatus(acc);
             return (
-            <div
-              key={acc.id}
-              className={`flex items-center gap-2 px-2.5 py-1.5 ${
-                isDefault ? "bg-muted/50" : "hover:bg-muted/30"
-              }`}
-            >
-              {acc.skin_png_base64 ? (
-                <SkinFace skin={acc.skin_png_base64} className="size-6" />
-              ) : (
-                <div className="size-6 rounded-sm bg-secondary flex items-center justify-center text-[10px] font-medium shrink-0">
-                  {acc.username.charAt(0).toUpperCase() || "?"}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-xs font-medium truncate">
-                    {acc.username || "(no username)"}
-                  </span>
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1 capitalize shrink-0">
-                    {acc.account_type === "offline" ? "Offline" : "Microsoft"}
-                  </Badge>
-                </div>
-                {acc.uuid && (
-                  <p className="font-mono text-[10px] text-muted-foreground truncate">{acc.uuid}</p>
+              <div key={acc.id} className={`flex items-center gap-2 px-2.5 py-1.5 ${isDefault ? "bg-muted/50" : "hover:bg-muted/30"}`}>
+                {acc.skin_png_base64 ? (
+                  <SkinFace skin={acc.skin_png_base64} className="size-6" />
+                ) : (
+                  <div className="size-6 rounded-sm bg-secondary flex items-center justify-center text-[10px] font-medium shrink-0">
+                    {acc.username.charAt(0).toUpperCase() || "?"}
+                  </div>
                 )}
-                {licenseStatus && (
-                  <p className={`text-[10px] ${
-                    acc.can_play_minecraft === false ? "text-amber-500" : "text-muted-foreground"
-                  }`}>
-                    {licenseStatus}
-                  </p>
-                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-medium truncate">{acc.username || "(no username)"}</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1 capitalize shrink-0">
+                      {acc.account_type === "offline" ? "Offline" : "Microsoft"}
+                    </Badge>
+                  </div>
+                  {acc.uuid && <p className="font-mono text-[10px] text-muted-foreground truncate">{acc.uuid}</p>}
+                  {licenseStatus && (
+                    <p className={`text-[10px] ${acc.can_play_minecraft === false ? "text-amber-500" : "text-muted-foreground"}`}>{licenseStatus}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 shrink-0"
+                    title={isDefault ? `${accountLabel(acc)} is the default account` : `Set ${accountLabel(acc)} as default`}
+                    aria-label={isDefault ? `${accountLabel(acc)} is the default account` : `Set ${accountLabel(acc)} as default`}
+                    aria-pressed={isDefault}
+                    onClick={() => {
+                      if (!isDefault) onSetDefaultAccount(acc.id);
+                    }}
+                  >
+                    <Star className={`size-3.5 ${isDefault ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-foreground"}`} />
+                  </Button>
+                  <Button size="sm" variant="destructive" className="h-6 px-2" onClick={() => void handleRemove(acc.id)}>
+                    Remove
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-0.5 shrink-0">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 shrink-0"
-                  title={isDefault ? `${accountLabel(acc)} is the default account` : `Set ${accountLabel(acc)} as default`}
-                  aria-label={isDefault ? `${accountLabel(acc)} is the default account` : `Set ${accountLabel(acc)} as default`}
-                  aria-pressed={isDefault}
-                  onClick={() => {
-                    if (!isDefault) onSetDefaultAccount(acc.id);
-                  }}
-                >
-                  <Star
-                    className={`size-3.5 ${
-                      isDefault ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  />
-                </Button>
-                <Button size="sm" variant="destructive" className="h-6 px-2" onClick={() => void handleRemove(acc.id)}>
-                  Remove
-                </Button>
-              </div>
-            </div>
             );
           })}
         </div>
       )}
 
-      {accounts.length === 0 && !launchRedirect && (
-        <p className="text-muted-foreground text-xs">No accounts yet.</p>
-      )}
+      {accounts.length === 0 && !launchRedirect && <p className="text-muted-foreground text-xs">No accounts yet.</p>}
 
       <div className="rounded-md border border-border p-3 space-y-2">
         <div>
@@ -236,12 +214,7 @@ export function AccountsTab({
             Sign in with your Microsoft account to play online. Ownership is verified via the Mojang API after login.
           </p>
         </div>
-        <Button
-          size="sm"
-          className="w-full"
-          onClick={() => void handleMicrosoftLogin()}
-          disabled={loggingIn}
-        >
+        <Button size="sm" className="w-full" onClick={() => void handleMicrosoftLogin()} disabled={loggingIn}>
           {loggingIn ? "Logging in…" : "Sign in with Microsoft"}
         </Button>
       </div>
@@ -249,9 +222,7 @@ export function AccountsTab({
       <div className="rounded-md border border-border p-3 space-y-2">
         <div>
           <p className="text-xs font-medium">Offline account</p>
-          <p className="text-[11px] text-muted-foreground">
-            Play without signing in. Letters, numbers, underscores (up to 16 characters).
-          </p>
+          <p className="text-[11px] text-muted-foreground">Play without signing in. Letters, numbers, underscores (up to 16 characters).</p>
         </div>
         <div className="flex gap-2">
           <Input
@@ -262,12 +233,7 @@ export function AccountsTab({
             className="font-mono h-8 text-xs flex-1"
             onKeyDown={(e) => e.key === "Enter" && void handleAddOffline()}
           />
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={addingOffline || !offlineUsername.trim()}
-            onClick={() => void handleAddOffline()}
-          >
+          <Button size="sm" variant="outline" disabled={addingOffline || !offlineUsername.trim()} onClick={() => void handleAddOffline()}>
             {addingOffline ? "Creating…" : "Create"}
           </Button>
         </div>
@@ -287,17 +253,9 @@ export function AccountsTab({
               className="flex min-w-0 flex-1 items-center justify-center rounded-md border border-border bg-muted/40 px-3 py-2"
               aria-label={`Microsoft device code ${deviceCode.user_code}`}
             >
-              <span className="select-all text-xl font-mono font-semibold tracking-widest">
-                {deviceCode.user_code}
-              </span>
+              <span className="select-all text-xl font-mono font-semibold tracking-widest">{deviceCode.user_code}</span>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-10 shrink-0 gap-1.5"
-              onClick={() => void handleCopyDeviceCode()}
-            >
+            <Button type="button" size="sm" variant="outline" className="h-10 shrink-0 gap-1.5" onClick={() => void handleCopyDeviceCode()}>
               {deviceCodeCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
               {deviceCodeCopied ? "Copied" : "Copy code"}
             </Button>

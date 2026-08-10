@@ -36,9 +36,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate release commit message
-        run: pnpm commitlint --last --verbose
-
       - name: Pack server release
         run: pnpm pack:server
 

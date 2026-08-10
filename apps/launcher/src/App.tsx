@@ -1,14 +1,30 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  type SetStateAction,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hideWindow, invoke, listen, openUrl } from "./lib/desktop";
-import { Plus, Settings, Users, Boxes, Play, Square, Trash2, FolderInput, Info, Terminal, SlidersHorizontal, ArrowUpCircle, Files, Package, Loader2, X, Activity, ChevronDown, ChevronRight, RefreshCw, Copy, ExternalLink, Pencil } from "lucide-react";
+import {
+  Plus,
+  Settings,
+  Users,
+  Boxes,
+  Play,
+  Square,
+  Trash2,
+  FolderInput,
+  Info,
+  Terminal,
+  SlidersHorizontal,
+  ArrowUpCircle,
+  Files,
+  Package,
+  Loader2,
+  X,
+  Activity,
+  ChevronDown,
+  ChevronRight,
+  RefreshCw,
+  Copy,
+  ExternalLink,
+  Pencil,
+} from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./components/ui/card";
 import { Input } from "./components/ui/input";
@@ -44,17 +60,8 @@ import {
   type DlProgressEvent,
   type ProcessOperation,
 } from "./lib/background-processes";
-import {
-  classifyLaunchLogLine,
-  formatLaunchLog,
-  launchLogLevelClass,
-  type LaunchLogLine,
-} from "./lib/launch-log";
-import {
-  formatPlayTime,
-  mergeInstanceSettings,
-  type InstanceSettings,
-} from "./lib/instance-settings";
+import { classifyLaunchLogLine, formatLaunchLog, launchLogLevelClass, type LaunchLogLine } from "./lib/launch-log";
+import { formatPlayTime, mergeInstanceSettings, type InstanceSettings } from "./lib/instance-settings";
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
 import { InstanceMinecraftEditor } from "./components/InstanceMinecraftEditor";
 import { CustomModsPanel } from "./components/CustomModsPanel";
@@ -62,50 +69,20 @@ import { UpdatePackDialog } from "./components/UpdatePackDialog";
 import { ReinstallInstanceDialog } from "./components/ReinstallInstanceDialog";
 import { PackVersionStatus } from "./components/PackVersionStatus";
 import { InstanceAvatar } from "./components/InstanceAvatar";
-import { InstanceGridCard } from "./components/InstanceGridCard";
+import { InstanceGridCard, type InstanceGridCardCommands } from "./components/InstanceGridCard";
 import { LauncherUpdateDialog, type LauncherUpdateState } from "./components/LauncherUpdateDialog";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
 import { cn, keyedByOccurrence } from "./lib/utils";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "./components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./components/ui/context-menu";
+import { useLauncherStore, type GtnhVersion, type InstanceGroupsState, type InstanceInfo, type LauncherAccount } from "./stores/launcher-store";
 import "./App.css";
 
 const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 
 // ── Types ──
-
-interface GtnhVersion {
-  title: string;
-  description: string;
-  releaseDate: string;
-  maxJavaVersion: number;
-  mmc: { java8Url: string; java17_2XUrl: string };
-  client: { java8Url: string };
-}
-
-interface InstanceInfo {
-  id: string;
-  installed: boolean;
-  size_bytes: number;
-  settings: InstanceSettings;
-  group: string;
-  icon_path?: string | null;
-}
-
-interface InstanceGroupsState {
-  collapsed: Record<string, boolean>;
-  groups: string[];
-  instance_order: Record<string, string[]>;
-  ungrouped_name: string;
-}
 
 interface JavaInfo {
   path: string;
@@ -114,16 +91,6 @@ interface JavaInfo {
 
 interface LaunchLogEvent extends LaunchLogLine {
   id: string;
-}
-
-interface AccountInfo {
-  id: string;
-  username: string;
-  uuid: string;
-  account_type: string;
-  skin_png_base64?: string;
-  owns_minecraft?: boolean;
-  can_play_minecraft?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -146,11 +113,7 @@ function instancePackVersion(inst: InstanceInfo): string {
   return inst.settings.pack_version || inst.id;
 }
 
-function orderInstancesInGroup(
-  items: InstanceInfo[],
-  groupKey: string,
-  instanceOrder: Record<string, string[]>,
-): InstanceInfo[] {
+function orderInstancesInGroup(items: InstanceInfo[], groupKey: string, instanceOrder: Record<string, string[]>): InstanceInfo[] {
   const order = instanceOrder[groupKey] ?? [];
   const byId = new Map(items.map((inst) => [inst.id, inst]));
   const result: InstanceInfo[] = [];
@@ -186,24 +149,20 @@ function makeInstanceId(name: string, packVersion: string, existing: Set<string>
   return candidate;
 }
 
-function accountDisplayName(account: AccountInfo): string {
+function accountDisplayName(account: LauncherAccount): string {
   if (account.username.trim()) return account.username;
   return account.account_type === "offline" ? "Offline account" : "Microsoft account";
 }
 
-function isInstanceActive(
-  id: string,
-  launching: string | null,
-  runningInstanceIds: Set<string>,
-): boolean {
+function isInstanceActive(id: string, launching: string | null, runningInstanceIds: Set<string>): boolean {
   return launching === id || runningInstanceIds.has(id);
 }
 
 function resolveLaunchAccount(
-  accountList: AccountInfo[],
+  accountList: LauncherAccount[],
   defaultAccountId: string | null | undefined,
   instanceSettings: InstanceSettings,
-): AccountInfo | null {
+): LauncherAccount | null {
   const merged = mergeInstanceSettings(instanceSettings);
   if (merged.override_account && merged.account_id) {
     return accountList.find((a) => a.id === merged.account_id) ?? null;
@@ -217,124 +176,66 @@ function resolveLaunchAccount(
   return null;
 }
 
-interface AppUiState {
-  tab: string;
-  selectedProcessKey: string | null;
-  selectedInstanceId: string | null;
-  showNewInstance: boolean;
-}
-
-type AppUiAction =
-  | { type: "tab"; value: SetStateAction<string> }
-  | { type: "process"; value: SetStateAction<string | null> }
-  | { type: "instance"; value: SetStateAction<string | null> }
-  | { type: "new-instance"; value: SetStateAction<boolean> };
-
-function resolveStateAction<T>(current: T, action: SetStateAction<T>): T {
-  return typeof action === "function"
-    ? (action as (value: T) => T)(current)
-    : action;
-}
-
-function appUiReducer(state: AppUiState, action: AppUiAction): AppUiState {
-  switch (action.type) {
-    case "tab":
-      return { ...state, tab: resolveStateAction(state.tab, action.value) };
-    case "process":
-      return {
-        ...state,
-        selectedProcessKey: resolveStateAction(state.selectedProcessKey, action.value),
-      };
-    case "instance":
-      return {
-        ...state,
-        selectedInstanceId: resolveStateAction(state.selectedInstanceId, action.value),
-      };
-    case "new-instance":
-      return {
-        ...state,
-        showNewInstance: resolveStateAction(state.showNewInstance, action.value),
-      };
-  }
-}
-
 function formatUpdateProgress(proc: BackgroundProcess): string {
   return `${stageLabel(proc.stage)} · ${formatDownloadProgress(proc)}`;
 }
-
-// ponytail: one file, no router, no zustand
 
 // eslint-disable-next-line react-doctor/no-giant-component -- Desktop orchestration remains centralized while tab views are extracted incrementally.
 export default function App() {
   const { settings: launcherSettings, loaded: launcherSettingsLoaded, updateSettings, saveSettingsNow } = useLauncherSettings();
   const defaultAccountId = resolveDefaultAccountId(launcherSettings);
-  const [ui, dispatchUi] = useReducer(appUiReducer, {
-    tab: "instances",
-    selectedProcessKey: null,
-    selectedInstanceId: null,
-    showNewInstance: false,
-  });
-  const { tab, selectedProcessKey, selectedInstanceId, showNewInstance } = ui;
-  const setTab = useCallback(
-    (value: SetStateAction<string>) => dispatchUi({ type: "tab", value }),
-    [],
-  );
-  const setSelectedProcessKey = useCallback(
-    (value: SetStateAction<string | null>) => dispatchUi({ type: "process", value }),
-    [],
-  );
-  const setSelectedInstanceId = useCallback(
-    (value: SetStateAction<string | null>) => dispatchUi({ type: "instance", value }),
-    [],
-  );
-  const setShowNewInstance = useCallback(
-    (value: SetStateAction<boolean>) => dispatchUi({ type: "new-instance", value }),
-    [],
-  );
-  const [instances, setInstances] = useState<InstanceInfo[]>([]);
-  const [sizesRefreshing, setSizesRefreshing] = useState(false);
-  const [processes, setProcesses] = useState<Map<string, BackgroundProcess>>(() => new Map());
-  const processesRef = useRef(processes);
+  const {
+    tab,
+    selectedProcessKey,
+    selectedInstanceId,
+    showNewInstance,
+    detailTab,
+    instances,
+    sizesRefreshing,
+    processes,
+    launching,
+    runningInstanceIds,
+    groupsState,
+    accounts,
+    accountsLoaded,
+    gtnhVersions,
+    updatePackInstanceId,
+    reinstallInstanceId,
+    copyInstanceId,
+    changeGroupInstanceId,
+    renameInstanceId,
+    setTab,
+    setSelectedProcessKey,
+    setSelectedInstanceId,
+    setShowNewInstance,
+    setDetailTab,
+    setInstances,
+    setSizesRefreshing,
+    setProcesses,
+    setLaunching,
+    setRunningInstanceIds,
+    setGroupsState,
+    setAccounts,
+    setAccountsLoaded,
+    setGtnhVersions,
+    setUpdatePackInstanceId,
+    setReinstallInstanceId,
+    setCopyInstanceId,
+    setChangeGroupInstanceId,
+    setRenameInstanceId,
+  } = useLauncherStore();
   const updateProcesses = useCallback(
     (updater: (current: Map<string, BackgroundProcess>) => Map<string, BackgroundProcess>) => {
-      const next = updater(processesRef.current);
-      processesRef.current = next;
-      setProcesses(next);
+      setProcesses(updater);
     },
-    [],
+    [setProcesses],
   );
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState("info");
   const [javaOptions, setJavaOptions] = useState<JavaInfo[]>([]);
   const [javaRefreshing, setJavaRefreshing] = useState(false);
   const [instanceLogs, setInstanceLogs] = useState<Record<string, LaunchLogLine[]>>({});
-  const [launching, setLaunching] = useState<string | null>(null);
-  const [runningInstanceIds, setRunningInstanceIds] = useState<Set<string>>(() => new Set());
-  const launchingRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    launchingRef.current = launching;
-  }, [launching]);
-
-  useEffect(() => {
-    processesRef.current = processes;
-  }, [processes]);
-  const [updatePackInstanceId, setUpdatePackInstanceId] = useState<string | null>(null);
-  const [reinstallInstanceId, setReinstallInstanceId] = useState<string | null>(null);
-  const [copyInstanceId, setCopyInstanceId] = useState<string | null>(null);
-  const [groupsState, setGroupsState] = useState<InstanceGroupsState>({
-    collapsed: {},
-    groups: [],
-    instance_order: {},
-    ungrouped_name: "Ungrouped",
-  });
-  const [changeGroupInstanceId, setChangeGroupInstanceId] = useState<string | null>(null);
-  const [renameInstanceId, setRenameInstanceId] = useState<string | null>(null);
   const [lastUsedGroup, setLastUsedGroup] = useState("");
-  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
-  const [accountsLoaded, setAccountsLoaded] = useState(false);
-  const [gtnhVersions, setGtnhVersions] = useState<Record<string, GtnhVersion> | null>(null);
   const [accountsLaunchRedirect, setAccountsLaunchRedirect] = useState<{
     instanceId: string;
     instanceName: string;
@@ -349,15 +250,17 @@ export default function App() {
   });
 
   const loadGroups = useCallback(() => {
-    invoke<InstanceGroupsState>("get_instance_groups").then(setGroupsState).catch(() => {});
-  }, []);
+    invoke<InstanceGroupsState>("get_instance_groups")
+      .then(setGroupsState)
+      .catch(() => {});
+  }, [setGroupsState]);
 
   const loadAccounts = useCallback(() => {
-    void invoke<AccountInfo[]>("get_accounts")
+    void invoke<LauncherAccount[]>("get_accounts")
       .then(setAccounts)
       .catch(() => setAccounts([]))
       .finally(() => setAccountsLoaded(true));
-  }, []);
+  }, [setAccounts, setAccountsLoaded]);
 
   const refreshJava = useCallback(async () => {
     setJavaRefreshing(true);
@@ -386,7 +289,7 @@ export default function App() {
       })
       .catch(() => {})
       .finally(() => setSizesRefreshing(false));
-  }, []);
+  }, [setInstances, setSizesRefreshing]);
 
   const loadInstances = useCallback(() => {
     invoke<InstanceInfo[]>("get_instances")
@@ -398,41 +301,51 @@ export default function App() {
         }
       })
       .catch(() => {});
-  }, [loadGroups, loadInstanceSizes]);
+  }, [loadGroups, loadInstanceSizes, setInstances]);
 
   useEffect(() => {
     loadInstances();
     loadAccounts();
     void refreshJava();
-    invoke<Record<string, GtnhVersion>>("get_versions").then(setGtnhVersions).catch(() => {});
-    void invoke<LauncherUpdateState>("check_launcher_update").then(setLauncherUpdate).catch(() => {});
-  }, [loadAccounts, loadInstances, refreshJava]);
+    invoke<Record<string, GtnhVersion>>("get_versions")
+      .then(setGtnhVersions)
+      .catch(() => {});
+    void invoke<LauncherUpdateState>("check_launcher_update")
+      .then(setLauncherUpdate)
+      .catch(() => {});
+  }, [loadAccounts, loadInstances, refreshJava, setGtnhVersions]);
 
   useEffect(() => {
     const unlisten = listen<LauncherUpdateState>("launcher-update", (event) => {
       setLauncherUpdate(event.payload);
     });
-    return () => { unlisten.then((f) => f()); };
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, []);
 
   const installLauncherUpdate = useCallback(() => {
     void invoke<LauncherUpdateState>("install_launcher_update")
       .then(setLauncherUpdate)
-      .catch((error) => setLauncherUpdate((current) => ({
-        ...current,
-        status: "failed",
-        error: String(error),
-      })));
+      .catch((error) =>
+        setLauncherUpdate((current) => ({
+          ...current,
+          status: "failed",
+          error: String(error),
+        })),
+      );
   }, []);
 
   const retryLauncherUpdate = useCallback(() => {
     void invoke<LauncherUpdateState>("check_launcher_update")
       .then(setLauncherUpdate)
-      .catch((error) => setLauncherUpdate((current) => ({
-        ...current,
-        status: "failed",
-        error: String(error),
-      })));
+      .catch((error) =>
+        setLauncherUpdate((current) => ({
+          ...current,
+          status: "failed",
+          error: String(error),
+        })),
+      );
   }, []);
 
   useEffect(() => {
@@ -485,23 +398,14 @@ export default function App() {
   );
 
   const startPackUpdate = useCallback(
-    (
-      id: string,
-      name: string,
-      packVersion: string,
-      javaType: string,
-      keepModIdentities: string[],
-    ) => {
+    (id: string, name: string, packVersion: string, javaType: string, keepModIdentities: string[]) => {
       const key = processKey("update-pack", id);
       setError(null);
       setNotice(`${name} is updating in the background. Follow its progress in Processes.`);
       setUpdatePackInstanceId(null);
       updateProcesses((prev) => {
         const next = new Map(prev);
-        next.set(
-          key,
-          createProcess("update-pack", id, name, `Preparing pack update to ${packVersion}...`),
-        );
+        next.set(key, createProcess("update-pack", id, name, `Preparing pack update to ${packVersion}...`));
         return next;
       });
       setTab("processes");
@@ -513,7 +417,7 @@ export default function App() {
         keepModIdentities,
       }).catch((e) => handleProcessFailed("update-pack", id, e));
     },
-    [handleProcessFailed, updateProcesses],
+    [handleProcessFailed, setSelectedProcessKey, setTab, setUpdatePackInstanceId, updateProcesses],
   );
 
   const startCleanReinstall = useCallback(
@@ -523,10 +427,7 @@ export default function App() {
       setReinstallInstanceId(null);
       updateProcesses((prev) => {
         const next = new Map(prev);
-        next.set(
-          key,
-          createProcess("reinstall", id, name, `Starting clean reinstall to ${packVersion}…`),
-        );
+        next.set(key, createProcess("reinstall", id, name, `Starting clean reinstall to ${packVersion}…`));
         return next;
       });
       setTab("processes");
@@ -537,13 +438,16 @@ export default function App() {
         javaType,
       }).catch((e) => handleProcessFailed("reinstall", id, e));
     },
-    [handleProcessFailed, updateProcesses],
+    [handleProcessFailed, setReinstallInstanceId, setSelectedProcessKey, setTab, updateProcesses],
   );
 
-  const handleDismissProcess = useCallback((key: string) => {
-    updateProcesses((prev) => dismissProcess(prev, key));
-    setSelectedProcessKey((current) => (current === key ? null : current));
-  }, [updateProcesses]);
+  const handleDismissProcess = useCallback(
+    (key: string) => {
+      updateProcesses((prev) => dismissProcess(prev, key));
+      setSelectedProcessKey((current) => (current === key ? null : current));
+    },
+    [setSelectedProcessKey, updateProcesses],
+  );
 
   const openProcesses = useCallback(
     (key?: string) => {
@@ -557,7 +461,7 @@ export default function App() {
         return sortedProcesses(processes)[0]?.key ?? null;
       });
     },
-    [processes],
+    [processes, setSelectedProcessKey, setTab],
   );
 
   useEffect(() => {
@@ -568,13 +472,14 @@ export default function App() {
         [id]: [...(prev[id] ?? []), { stream, line }],
       }));
     });
-    return () => { unlisten.then((f) => f()); };
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, []);
 
   useEffect(() => {
     const clearLaunching = (id: string) => {
-      if (launchingRef.current === id) {
-        launchingRef.current = null;
+      if (useLauncherStore.getState().launching === id) {
         setLaunching(null);
       }
     };
@@ -598,15 +503,14 @@ export default function App() {
       unlistenStarted.then((f) => f());
       unlistenStopped.then((f) => f());
     };
-  }, [loadInstances]);
+  }, [loadInstances, setLaunching, setRunningInstanceIds]);
 
   useEffect(() => {
     const unlisten = listen<DlProgressEvent>("dl-progress", (e) => {
       const p = e.payload;
-      const previous = processesRef.current;
+      const previous = useLauncherStore.getState().processes;
       const operation = resolveOperation(previous, p);
       const next = applyDlProgressEvent(previous, p);
-      processesRef.current = next;
       setProcesses(next);
 
       if (p.stage === "failed" && p.id && operation) {
@@ -627,13 +531,12 @@ export default function App() {
         loadInstances();
       }
     });
-    return () => { unlisten.then((f) => f()); };
-  }, [loadInstances]);
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [loadInstances, setProcesses, setSelectedInstanceId, setSelectedProcessKey, setShowNewInstance, setTab]);
 
-  const instanceBusy = useCallback(
-    (id: string) => isInstanceBusy(processes, id),
-    [processes],
-  );
+  const instanceBusy = useCallback((id: string) => isInstanceBusy(processes, id), [processes]);
 
   const handleSetInstanceGroup = async (id: string, group: string) => {
     try {
@@ -694,7 +597,7 @@ export default function App() {
     try {
       const persisted = await invoke<LaunchLogLine[]>("get_instance_console_log", { id });
       setInstanceLogs((prev) => {
-        if (launchingRef.current === id && (prev[id]?.length ?? 0) > 0) {
+        if (useLauncherStore.getState().launching === id && (prev[id]?.length ?? 0) > 0) {
           return prev;
         }
         return { ...prev, [id]: persisted };
@@ -708,65 +611,66 @@ export default function App() {
     if (selectedInstanceId) loadLogs(selectedInstanceId);
   }, [selectedInstanceId, loadLogs]);
 
-  const runLaunch = useCallback(async (id: string) => {
-    if (launchingRef.current !== null) return;
-    launchingRef.current = id;
-    setError(null);
-    setSelectedInstanceId(id);
-    setLaunching(id);
+  const runLaunch = useCallback(
+    async (id: string) => {
+      if (useLauncherStore.getState().launching !== null) return;
+      setError(null);
+      setSelectedInstanceId(id);
+      setLaunching(id);
 
-    const inst = instances.find((i) => i.id === id);
-    const settings = inst ? mergeInstanceSettings(inst.settings) : null;
-    const consoleCfg = settings?.override_console
-      ? {
-          showOnLaunch: settings.show_console_on_launch,
-          showOnError: settings.show_console_on_error,
-          autoClose: settings.auto_close_console,
-        }
-      : { showOnLaunch: false, showOnError: true, autoClose: false };
+      const inst = instances.find((i) => i.id === id);
+      const settings = inst ? mergeInstanceSettings(inst.settings) : null;
+      const consoleCfg = settings?.override_console
+        ? {
+            showOnLaunch: settings.show_console_on_launch,
+            showOnError: settings.show_console_on_error,
+            autoClose: settings.auto_close_console,
+          }
+        : { showOnLaunch: false, showOnError: true, autoClose: false };
 
-    if (consoleCfg.showOnLaunch) {
-      setDetailTab("logs");
-    }
-
-    if (settings?.override_window && settings.close_after_launch) {
-      try {
-        await hideWindow();
-      } catch {
-        // Browser-only renderer preview has no native window bridge.
+      if (consoleCfg.showOnLaunch) {
+        setDetailTab("logs");
       }
-    }
 
-    try {
-      await invoke("launch_instance", { id });
-      if (settings?.override_window && settings.quit_after_game_stop) {
+      if (settings?.override_window && settings.close_after_launch) {
         try {
-          await invoke("exit_launcher");
+          await hideWindow();
         } catch {
           // Browser-only renderer preview has no native window bridge.
         }
       }
-      if (consoleCfg.autoClose) {
-        setDetailTab("info");
+
+      try {
+        await invoke("launch_instance", { id });
+        if (settings?.override_window && settings.quit_after_game_stop) {
+          try {
+            await invoke("exit_launcher");
+          } catch {
+            // Browser-only renderer preview has no native window bridge.
+          }
+        }
+        if (consoleCfg.autoClose) {
+          setDetailTab("info");
+        }
+        loadInstances();
+      } catch (e) {
+        if (consoleCfg.showOnError) {
+          setDetailTab("logs");
+        }
+        setError(`Launch failed: ${e}`);
+      } finally {
+        setLaunching(null);
       }
-      loadInstances();
-    } catch (e) {
-      if (consoleCfg.showOnError) {
-        setDetailTab("logs");
-      }
-      setError(`Launch failed: ${e}`);
-    } finally {
-      launchingRef.current = null;
-      setLaunching(null);
-    }
-  }, [instances, loadInstances]);
+    },
+    [instances, loadInstances, setDetailTab, setLaunching, setSelectedInstanceId],
+  );
 
   const handleLaunch = async (id: string) => {
-    if (launchingRef.current !== null) return;
+    if (useLauncherStore.getState().launching !== null) return;
 
     let accountList = accounts;
     try {
-      accountList = await invoke<AccountInfo[]>("get_accounts");
+      accountList = await invoke<LauncherAccount[]>("get_accounts");
       setAccounts(accountList);
     } catch {
       accountList = accounts;
@@ -775,11 +679,7 @@ export default function App() {
     const inst = instances.find((i) => i.id === id);
     if (!inst) return;
 
-    const launchAccount = resolveLaunchAccount(
-      accountList,
-      resolveDefaultAccountId(launcherSettings),
-      inst.settings,
-    );
+    const launchAccount = resolveLaunchAccount(accountList, resolveDefaultAccountId(launcherSettings), inst.settings);
     if (!launchAccount) {
       setAccountsLaunchRedirect({
         instanceId: id,
@@ -804,16 +704,10 @@ export default function App() {
         next.delete(id);
         return next;
       });
-      if (launchingRef.current === id) {
-        launchingRef.current = null;
+      if (useLauncherStore.getState().launching === id) {
         setLaunching(null);
       }
     }
-  };
-
-  const handleOpenInstanceSettings = (id: string) => {
-    setSelectedInstanceId(id);
-    setDetailTab("settings");
   };
 
   const handleOpenInstanceFolder = async (id: string) => {
@@ -873,16 +767,17 @@ export default function App() {
     }).catch((e) => handleProcessFailed("copy", newId, e));
   };
 
-  const handleSaveSettings = useCallback(async (id: string, settings: InstanceSettings) => {
-    setInstances((current) =>
-      current.map((instance) => instance.id === id ? { ...instance, settings } : instance),
-    );
-    try {
-      await invoke("save_settings", { id, settings });
-    } catch (e) {
-      setError(`Save failed: ${e}`);
-    }
-  }, []);
+  const handleSaveSettings = useCallback(
+    async (id: string, settings: InstanceSettings) => {
+      setInstances((current) => current.map((instance) => (instance.id === id ? { ...instance, settings } : instance)));
+      try {
+        await invoke("save_settings", { id, settings });
+      } catch (e) {
+        setError(`Save failed: ${e}`);
+      }
+    },
+    [setInstances],
+  );
 
   const handleRenameInstance = async (id: string, newName: string) => {
     const inst = instances.find((i) => i.id === id);
@@ -905,27 +800,15 @@ export default function App() {
   };
 
   const sel = instances.find((i) => i.id === selectedInstanceId) ?? null;
-  const selectedDeleteProcess = selectedInstanceId
-    ? getInstanceProcess(processes, "delete", selectedInstanceId)
-    : undefined;
-  const selectedUpdateProcess = selectedInstanceId
-    ? getInstanceProcess(processes, "update-pack", selectedInstanceId)
-    : undefined;
-  const selectedReinstallProcess = selectedInstanceId
-    ? getInstanceProcess(processes, "reinstall", selectedInstanceId)
-    : undefined;
+  const selectedDeleteProcess = selectedInstanceId ? getInstanceProcess(processes, "delete", selectedInstanceId) : undefined;
+  const selectedUpdateProcess = selectedInstanceId ? getInstanceProcess(processes, "update-pack", selectedInstanceId) : undefined;
+  const selectedReinstallProcess = selectedInstanceId ? getInstanceProcess(processes, "reinstall", selectedInstanceId) : undefined;
   const isDeletingSelected = selectedDeleteProcess?.status === "running";
   const isUpdatingSelected = selectedUpdateProcess?.status === "running";
   const isReinstallingSelected = selectedReinstallProcess?.status === "running";
-  const selectedInstanceActive = selectedInstanceId
-    ? isInstanceActive(selectedInstanceId, launching, runningInstanceIds)
-    : false;
-  const selectedInstanceRunning = selectedInstanceId
-    ? runningInstanceIds.has(selectedInstanceId)
-    : false;
-  const selectedInstanceStarting = selectedInstanceId
-    ? launching === selectedInstanceId
-    : false;
+  const selectedInstanceActive = selectedInstanceId ? isInstanceActive(selectedInstanceId, launching, runningInstanceIds) : false;
+  const selectedInstanceRunning = selectedInstanceId ? runningInstanceIds.has(selectedInstanceId) : false;
+  const selectedInstanceStarting = selectedInstanceId ? launching === selectedInstanceId : false;
 
   return (
     <div className="app-shell h-screen flex flex-col overflow-hidden">
@@ -935,18 +818,23 @@ export default function App() {
           <span className="brand-mark size-5 rounded-md" aria-hidden="true" />
           <span className="font-semibold text-sm tracking-tight">Industrialis</span>
         </div>
-        <Button variant="default" size="sm" className="h-7" onClick={() => { setTab("instances"); setShowNewInstance(true); }}>
+        <Button
+          variant="default"
+          size="sm"
+          className="h-7"
+          onClick={() => {
+            setTab("instances");
+            setShowNewInstance(true);
+          }}
+        >
           <Plus className="size-3.5" /> Add
         </Button>
         <div className="w-px h-5 bg-border/80 mx-1" />
         <div className="inline-flex h-8 items-center rounded-lg border border-border/70 bg-muted/70 p-0.5 gap-0.5 shadow-inner">
-          <Button variant={tab === "instances" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("instances")}><Boxes className="size-3.5" /> Instances</Button>
-          <Button
-            variant={tab === "processes" ? "secondary" : "ghost"}
-            size="sm"
-            className="h-6 px-2"
-            onClick={() => openProcesses()}
-          >
+          <Button variant={tab === "instances" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("instances")}>
+            <Boxes className="size-3.5" /> Instances
+          </Button>
+          <Button variant={tab === "processes" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => openProcesses()}>
             <Activity className="size-3.5" /> Processes
             {runningProcessCount(processes) > 0 && (
               <Badge variant="secondary" className="h-4 min-w-4 justify-center px-1 text-[10px]">
@@ -954,8 +842,12 @@ export default function App() {
               </Badge>
             )}
           </Button>
-          <Button variant={tab === "settings" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("settings")}><Settings className="size-3.5" /> Settings</Button>
-          <Button variant={tab === "accounts" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("accounts")}><Users className="size-3.5" /> Accounts</Button>
+          <Button variant={tab === "settings" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("settings")}>
+            <Settings className="size-3.5" /> Settings
+          </Button>
+          <Button variant={tab === "accounts" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("accounts")}>
+            <Users className="size-3.5" /> Accounts
+          </Button>
         </div>
         <div className="ml-auto flex items-center gap-0.5">
           <AccountSwitcher
@@ -964,12 +856,7 @@ export default function App() {
             onSelectDefaultAccount={handleSetDefaultAccount}
             onManageAccounts={() => setTab("accounts")}
           />
-          <ProcessesDropdown
-            processes={processes}
-            onDismiss={handleDismissProcess}
-            onCancelDelete={handleCancelDelete}
-            onOpenProcesses={openProcesses}
-          />
+          <ProcessesDropdown processes={processes} onDismiss={handleDismissProcess} onCancelDelete={handleCancelDelete} onOpenProcesses={openProcesses} />
           <ThemeSwitcher />
         </div>
       </header>
@@ -985,33 +872,20 @@ export default function App() {
               </div>
             ) : (
               <InstanceGroupList
-                instances={instances}
-                groupsState={groupsState}
                 gridColumns={launcherSettings.instance_grid_columns ?? 3}
-                sizesRefreshing={sizesRefreshing}
-                onToggleCollapsed={handleToggleGroupCollapsed}
-                onRenameGroup={handleRenameGroup}
-                onDeleteGroup={handleDeleteGroup}
-                selectedInstanceId={selectedInstanceId}
-                onSelect={setSelectedInstanceId}
-                launching={launching}
-                runningInstanceIds={runningInstanceIds}
-                onLaunch={handleLaunch}
-                onKill={handleKill}
-                onOpenSettings={handleOpenInstanceSettings}
-                onOpenFolder={handleOpenInstanceFolder}
-                onDelete={handleDelete}
-                isInstanceBusy={instanceBusy}
-                processes={processes}
-                onCancelDelete={handleCancelDelete}
-                versions={gtnhVersions}
-                onUpdatePack={setUpdatePackInstanceId}
-                onReinstall={setReinstallInstanceId}
-                onCopy={setCopyInstanceId}
-                onRename={setRenameInstanceId}
-                onReorderInstances={handleReorderInstances}
-                onIconChanged={loadInstances}
-                onIconError={(message) => setError(`Icon update failed: ${message}`)}
+                commands={{
+                  launch: handleLaunch,
+                  kill: handleKill,
+                  openFolder: handleOpenInstanceFolder,
+                  delete: handleDelete,
+                  cancelDelete: handleCancelDelete,
+                  iconChanged: loadInstances,
+                  iconError: (message) => setError(`Icon update failed: ${message}`),
+                  toggleGroupCollapsed: handleToggleGroupCollapsed,
+                  renameGroup: handleRenameGroup,
+                  deleteGroup: handleDeleteGroup,
+                  reorderInstances: handleReorderInstances,
+                }}
               />
             )}
           </div>
@@ -1071,11 +945,26 @@ export default function App() {
                       </Button>
                     </div>
                     <TabsList className="w-full min-w-0 justify-start overflow-hidden h-8 rounded-lg border border-border/70 bg-background/50">
-                      <TabsTrigger value="info" className="flex-1"><Info className="size-3 mr-0.5" />Info</TabsTrigger>
-                      <TabsTrigger value="files" className="flex-1"><Files className="size-3 mr-0.5" />Files</TabsTrigger>
-                      <TabsTrigger value="mods" className="flex-1"><Package className="size-3 mr-0.5" />Mods</TabsTrigger>
-                      <TabsTrigger value="settings" className="flex-1"><SlidersHorizontal className="size-3 mr-0.5" />Settings</TabsTrigger>
-                      <TabsTrigger value="logs" className="flex-1"><Terminal className="size-3 mr-0.5" />Logs</TabsTrigger>
+                      <TabsTrigger value="info" className="flex-1">
+                        <Info className="size-3 mr-0.5" />
+                        Info
+                      </TabsTrigger>
+                      <TabsTrigger value="files" className="flex-1">
+                        <Files className="size-3 mr-0.5" />
+                        Files
+                      </TabsTrigger>
+                      <TabsTrigger value="mods" className="flex-1">
+                        <Package className="size-3 mr-0.5" />
+                        Mods
+                      </TabsTrigger>
+                      <TabsTrigger value="settings" className="flex-1">
+                        <SlidersHorizontal className="size-3 mr-0.5" />
+                        Settings
+                      </TabsTrigger>
+                      <TabsTrigger value="logs" className="flex-1">
+                        <Terminal className="size-3 mr-0.5" />
+                        Logs
+                      </TabsTrigger>
                     </TabsList>
                   </div>
 
@@ -1120,22 +1009,15 @@ export default function App() {
                         },
                         {
                           label: "RAM",
-                          value: sel.settings.override_memory
-                            ? `${sel.settings.min_ram_mb}-${sel.settings.max_ram_mb} MB`
-                            : "Default (4096-6144 MB)",
+                          value: sel.settings.override_memory ? `${sel.settings.min_ram_mb}-${sel.settings.max_ram_mb} MB` : "Default (4096-6144 MB)",
                         },
-                        ...(mergeInstanceSettings(sel.settings).show_game_time &&
-                        (sel.settings.override_game_time || sel.settings.total_play_seconds > 0)
+                        ...(mergeInstanceSettings(sel.settings).show_game_time && (sel.settings.override_game_time || sel.settings.total_play_seconds > 0)
                           ? [{ label: "Play time", value: formatPlayTime(sel.settings.total_play_seconds) }]
                           : []),
                         {
                           label: "Account",
                           value: (() => {
-                            const launchAccount = resolveLaunchAccount(
-                              accounts,
-                              defaultAccountId,
-                              sel.settings,
-                            );
+                            const launchAccount = resolveLaunchAccount(accounts, defaultAccountId, sel.settings);
                             if (launchAccount) {
                               const isOverride = mergeInstanceSettings(sel.settings).override_account;
                               const suffix = launchAccount.account_type === "offline" ? "offline" : "Microsoft";
@@ -1190,10 +1072,7 @@ export default function App() {
                         </div>
                         <Progress value={selectedReinstallProcess.pct * 100} className="h-1.5" />
                       </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => openProcesses(processKey("reinstall", selectedInstanceId!))}
-                      >
+                      <Button variant="outline" onClick={() => openProcesses(processKey("reinstall", selectedInstanceId!))}>
                         <Activity className="size-3.5" />
                         View log
                       </Button>
@@ -1207,10 +1086,7 @@ export default function App() {
                         </div>
                         <Progress value={selectedUpdateProcess.pct * 100} className="h-1.5" />
                       </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => openProcesses(processKey("update-pack", selectedInstanceId!))}
-                      >
+                      <Button variant="outline" onClick={() => openProcesses(processKey("update-pack", selectedInstanceId!))}>
                         <Activity className="size-3.5" />
                         View log
                       </Button>
@@ -1220,16 +1096,11 @@ export default function App() {
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-center gap-2 text-sm">
                           <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                          <span>
-                            Deleting... {(selectedDeleteProcess.pct * 100).toFixed(0)}%
-                          </span>
+                          <span>Deleting... {(selectedDeleteProcess.pct * 100).toFixed(0)}%</span>
                         </div>
                         <Progress value={selectedDeleteProcess.pct * 100} className="h-1.5" />
                       </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleCancelDelete(selectedInstanceId!)}
-                      >
+                      <Button variant="outline" onClick={() => handleCancelDelete(selectedInstanceId!)}>
                         <X className="size-3.5" />
                         Cancel
                       </Button>
@@ -1243,9 +1114,13 @@ export default function App() {
                         disabled={selectedInstanceStarting}
                       >
                         {selectedInstanceStarting ? (
-                          <><Loader2 className="animate-spin" /> Launching...</>
+                          <>
+                            <Loader2 className="animate-spin" /> Launching...
+                          </>
                         ) : (
-                          <><Square className="fill-current" /> Stop</>
+                          <>
+                            <Square className="fill-current" /> Stop
+                          </>
                         )}
                       </Button>
                       <Button
@@ -1329,9 +1204,7 @@ export default function App() {
                     <Boxes className="size-5 text-muted-foreground" />
                   </div>
                   <div className="font-medium">Select an instance</div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Pick a pack from the library to view files, mods, settings, and launch logs.
-                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Pick a pack from the library to view files, mods, settings, and launch logs.</p>
                 </div>
               </div>
             )}
@@ -1365,14 +1238,9 @@ export default function App() {
           )}
           {tab === "accounts" && (
             <AccountsTab
-              onAccountsChanged={loadAccounts}
               onSetDefaultAccount={handleSetDefaultAccount}
               defaultAccountId={defaultAccountId}
-              launchRedirect={
-                accountsLaunchRedirect
-                  ? { instanceName: accountsLaunchRedirect.instanceName }
-                  : null
-              }
+              launchRedirect={accountsLaunchRedirect ? { instanceName: accountsLaunchRedirect.instanceName } : null}
               onDismissRedirect={() => setAccountsLaunchRedirect(null)}
             />
           )}
@@ -1381,64 +1249,55 @@ export default function App() {
 
       {/* Status bar */}
       <footer className="h-6 shrink-0 border-t border-border/80 flex items-center px-3 gap-3 text-[11px] text-muted-foreground bg-card/80">
-        <span>{instances.length} instance{instances.length === 1 ? "" : "s"}</span>
+        <span>
+          {instances.length} instance{instances.length === 1 ? "" : "s"}
+        </span>
         {sel && <span className="truncate">{instanceDisplayName(sel)}</span>}
         {launching && <span>Launching {launching}…</span>}
-        {runningInstanceIds.size > 0 && (
-          <span>
-            Running {Array.from(runningInstanceIds).join(", ")}
-          </span>
-        )}
+        {runningInstanceIds.size > 0 && <span>Running {Array.from(runningInstanceIds).join(", ")}</span>}
         {runningProcessCount(processes) > 0 && (
-          <span>{runningProcessCount(processes)} background process{runningProcessCount(processes) === 1 ? "" : "es"}</span>
+          <span>
+            {runningProcessCount(processes)} background process{runningProcessCount(processes) === 1 ? "" : "es"}
+          </span>
         )}
       </footer>
 
-      {updatePackInstanceId && (() => {
-        const inst = instances.find((i) => i.id === updatePackInstanceId);
-        if (!inst) return null;
-        return (
-          <UpdatePackDialog
-            instanceId={updatePackInstanceId}
-            instanceName={instanceDisplayName(inst)}
-            currentPackVersion={instancePackVersion(inst)}
-            defaultJavaType={inst.settings.pack_java_type || "java17+"}
-            versions={gtnhVersions}
-            onClose={() => setUpdatePackInstanceId(null)}
-            onUpdate={(packVersion, javaType, keepModIdentities) => {
-              startPackUpdate(
-                updatePackInstanceId,
-                instanceDisplayName(inst),
-                packVersion,
-                javaType,
-                keepModIdentities,
-              );
-            }}
-          />
-        );
-      })()}
+      {updatePackInstanceId &&
+        (() => {
+          const inst = instances.find((i) => i.id === updatePackInstanceId);
+          if (!inst) return null;
+          return (
+            <UpdatePackDialog
+              instanceId={updatePackInstanceId}
+              instanceName={instanceDisplayName(inst)}
+              currentPackVersion={instancePackVersion(inst)}
+              defaultJavaType={inst.settings.pack_java_type || "java17+"}
+              versions={gtnhVersions}
+              onClose={() => setUpdatePackInstanceId(null)}
+              onUpdate={(packVersion, javaType, keepModIdentities) => {
+                startPackUpdate(updatePackInstanceId, instanceDisplayName(inst), packVersion, javaType, keepModIdentities);
+              }}
+            />
+          );
+        })()}
 
-      {reinstallInstanceId && (() => {
-        const inst = instances.find((i) => i.id === reinstallInstanceId);
-        if (!inst) return null;
-        return (
-          <ReinstallInstanceDialog
-            instanceName={instanceDisplayName(inst)}
-            currentPackVersion={instancePackVersion(inst)}
-            defaultJavaType={inst.settings.pack_java_type || "java17+"}
-            versions={gtnhVersions}
-            onClose={() => setReinstallInstanceId(null)}
-            onReinstall={(packVersion, javaType) => {
-              startCleanReinstall(
-                reinstallInstanceId,
-                instanceDisplayName(inst),
-                packVersion,
-                javaType,
-              );
-            }}
-          />
-        );
-      })()}
+      {reinstallInstanceId &&
+        (() => {
+          const inst = instances.find((i) => i.id === reinstallInstanceId);
+          if (!inst) return null;
+          return (
+            <ReinstallInstanceDialog
+              instanceName={instanceDisplayName(inst)}
+              currentPackVersion={instancePackVersion(inst)}
+              defaultJavaType={inst.settings.pack_java_type || "java17+"}
+              versions={gtnhVersions}
+              onClose={() => setReinstallInstanceId(null)}
+              onReinstall={(packVersion, javaType) => {
+                startCleanReinstall(reinstallInstanceId, instanceDisplayName(inst), packVersion, javaType);
+              }}
+            />
+          );
+        })()}
 
       {showNewInstance && (
         <NewInstanceDialog
@@ -1463,30 +1322,32 @@ export default function App() {
         />
       )}
 
-      {copyInstanceId && (() => {
-        const source = instances.find((i) => i.id === copyInstanceId);
-        if (!source) return null;
-        return (
-          <CopyInstanceDialog
-            source={source}
-            existingInstanceIds={new Set(instances.map((i) => i.id))}
-            onClose={() => setCopyInstanceId(null)}
-            onCopy={(newId, newName) => handleCopyInstance(copyInstanceId, newId, newName)}
-          />
-        );
-      })()}
+      {copyInstanceId &&
+        (() => {
+          const source = instances.find((i) => i.id === copyInstanceId);
+          if (!source) return null;
+          return (
+            <CopyInstanceDialog
+              source={source}
+              existingInstanceIds={new Set(instances.map((i) => i.id))}
+              onClose={() => setCopyInstanceId(null)}
+              onCopy={(newId, newName) => handleCopyInstance(copyInstanceId, newId, newName)}
+            />
+          );
+        })()}
 
-      {renameInstanceId && (() => {
-        const inst = instances.find((i) => i.id === renameInstanceId);
-        if (!inst) return null;
-        return (
-          <RenameInstanceDialog
-            instance={inst}
-            onClose={() => setRenameInstanceId(null)}
-            onSave={(newName) => handleRenameInstance(renameInstanceId, newName)}
-          />
-        );
-      })()}
+      {renameInstanceId &&
+        (() => {
+          const inst = instances.find((i) => i.id === renameInstanceId);
+          if (!inst) return null;
+          return (
+            <RenameInstanceDialog
+              instance={inst}
+              onClose={() => setRenameInstanceId(null)}
+              onSave={(newName) => handleRenameInstance(renameInstanceId, newName)}
+            />
+          );
+        })()}
 
       {changeGroupInstanceId && (
         <ChangeGroupDialog
@@ -1519,11 +1380,7 @@ export default function App() {
           if (!open) setDeleteInstanceConfirm(null);
         }}
         title="Delete instance?"
-        description={
-          deleteInstanceConfirm
-            ? `Delete "${deleteInstanceConfirm.name}"? This removes all instance files and cannot be undone.`
-            : ""
-        }
+        description={deleteInstanceConfirm ? `Delete "${deleteInstanceConfirm.name}"? This removes all instance files and cannot be undone.` : ""}
         confirmLabel="Delete"
         destructive
         onConfirm={confirmDeleteInstance}
@@ -1532,7 +1389,9 @@ export default function App() {
       {notice && (
         <div className="fixed bottom-10 right-4 z-50 max-w-sm rounded bg-secondary p-3 text-secondary-foreground shadow-lg">
           <p className="text-sm">{notice}</p>
-          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setNotice(null)}>Dismiss</Button>
+          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setNotice(null)}>
+            Dismiss
+          </Button>
         </div>
       )}
 
@@ -1540,10 +1399,11 @@ export default function App() {
       {error && (
         <div className="fixed bottom-10 right-4 bg-destructive text-destructive-foreground p-3 rounded shadow-lg max-w-sm z-50">
           <p className="text-sm">{error}</p>
-          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setError(null)}>Dismiss</Button>
+          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setError(null)}>
+            Dismiss
+          </Button>
         </div>
       )}
-
     </div>
   );
 }
@@ -1556,12 +1416,14 @@ interface GroupSection {
   items: InstanceInfo[];
 }
 
-function buildGroupSections(
-  instances: InstanceInfo[],
-  groupNames: string[],
-  instanceOrder: Record<string, string[]>,
-  ungroupedName: string,
-): GroupSection[] {
+interface InstanceListCommands extends InstanceGridCardCommands {
+  toggleGroupCollapsed: (group: string, collapsed: boolean) => void;
+  renameGroup: (oldName: string, newName: string) => void;
+  deleteGroup: (name: string) => void;
+  reorderInstances: (group: string, order: string[]) => void;
+}
+
+function buildGroupSections(instances: InstanceInfo[], groupNames: string[], instanceOrder: Record<string, string[]>, ungroupedName: string): GroupSection[] {
   const buckets = new Map<string, InstanceInfo[]>();
   for (const inst of instances) {
     const key = inst.group || "";
@@ -1570,9 +1432,7 @@ function buildGroupSections(
   }
 
   const sections: GroupSection[] = [];
-  const sortedNames = [...groupNames].sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: "base" }),
-  );
+  const sortedNames = [...groupNames].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
   for (const name of sortedNames) {
     const items = buckets.get(name);
@@ -1608,63 +1468,9 @@ function buildGroupSections(
   return sections;
 }
 
-function InstanceGroupList({
-  instances,
-  groupsState,
-  gridColumns,
-  sizesRefreshing,
-  onToggleCollapsed,
-  onRenameGroup,
-  onDeleteGroup,
-  selectedInstanceId,
-  onSelect,
-  launching,
-  runningInstanceIds,
-  onLaunch,
-  onKill,
-  onOpenSettings,
-  onOpenFolder,
-  onDelete,
-  isInstanceBusy,
-  processes,
-  onCancelDelete,
-  versions,
-  onUpdatePack,
-  onReinstall,
-  onCopy,
-  onRename,
-  onReorderInstances,
-  onIconChanged,
-  onIconError,
-}: {
-  instances: InstanceInfo[];
-  groupsState: InstanceGroupsState;
-  gridColumns: number;
-  sizesRefreshing: boolean;
-  onToggleCollapsed: (group: string, collapsed: boolean) => void;
-  onRenameGroup: (oldName: string, newName: string) => void;
-  onDeleteGroup: (name: string) => void;
-  selectedInstanceId: string | null;
-  onSelect: (id: string) => void;
-  launching: string | null;
-  runningInstanceIds: Set<string>;
-  onLaunch: (id: string) => void;
-  onKill: (id: string) => void;
-  onOpenSettings: (id: string) => void;
-  onOpenFolder: (id: string) => void;
-  onDelete: (id: string) => void;
-  isInstanceBusy: (id: string) => boolean;
-  processes: Map<string, BackgroundProcess>;
-  onCancelDelete: (id: string) => void;
-  versions: Record<string, GtnhVersion> | null;
-  onUpdatePack: (id: string) => void;
-  onReinstall: (id: string) => void;
-  onCopy: (id: string) => void;
-  onRename: (id: string) => void;
-  onReorderInstances: (group: string, order: string[]) => void;
-  onIconChanged: () => void;
-  onIconError: (message: string) => void;
-}) {
+function InstanceGroupList({ gridColumns, commands }: { gridColumns: number; commands: InstanceListCommands }) {
+  const instances = useLauncherStore((state) => state.instances);
+  const groupsState = useLauncherStore((state) => state.groupsState);
   const sections = useMemo(
     () => buildGroupSections(instances, groupsState.groups, groupsState.instance_order, groupsState.ungrouped_name),
     [instances, groupsState.groups, groupsState.instance_order, groupsState.ungrouped_name],
@@ -1675,109 +1481,16 @@ function InstanceGroupList({
   return (
     <div className="space-y-2 p-2">
       {sections.map((section) => (
-        <InstanceGroupSection
-          key={section.id || "__ungrouped__"}
-          section={section}
-          gridColumns={gridColumns}
-          collapsed={groupsState.collapsed[section.id] ?? false}
-          sizesRefreshing={sizesRefreshing}
-          ungroupedName={groupsState.ungrouped_name}
-          onToggleCollapsed={(collapsed) => onToggleCollapsed(section.id, collapsed)}
-          onRenameGroup={onRenameGroup}
-          onDeleteGroup={section.id ? onDeleteGroup : undefined}
-          selectedInstanceId={selectedInstanceId}
-          onSelect={onSelect}
-          launching={launching}
-          runningInstanceIds={runningInstanceIds}
-          onLaunch={onLaunch}
-          onKill={onKill}
-          onOpenSettings={onOpenSettings}
-          onOpenFolder={onOpenFolder}
-          onDelete={onDelete}
-          isInstanceBusy={isInstanceBusy}
-          processes={processes}
-          onCancelDelete={onCancelDelete}
-          versions={versions}
-          onUpdatePack={onUpdatePack}
-          onReinstall={onReinstall}
-          onCopy={onCopy}
-          onRename={onRename}
-          onReorderInstances={onReorderInstances}
-          onIconChanged={onIconChanged}
-          onIconError={onIconError}
-        />
+        <InstanceGroupSection key={section.id || "__ungrouped__"} section={section} gridColumns={gridColumns} commands={commands} />
       ))}
     </div>
   );
 }
 
-function InstanceGroupSection({
-  section,
-  gridColumns,
-  collapsed,
-  sizesRefreshing,
-  ungroupedName,
-  onToggleCollapsed,
-  onRenameGroup,
-  onDeleteGroup,
-  selectedInstanceId,
-  onSelect,
-  launching,
-  runningInstanceIds,
-  onLaunch,
-  onKill,
-  onOpenSettings,
-  onOpenFolder,
-  onDelete,
-  isInstanceBusy,
-  processes,
-  onCancelDelete,
-  versions,
-  onUpdatePack,
-  onReinstall,
-  onCopy,
-  onRename,
-  onReorderInstances,
-  onIconChanged,
-  onIconError,
-}: {
-  section: GroupSection;
-  gridColumns: number;
-  collapsed: boolean;
-  sizesRefreshing: boolean;
-  ungroupedName: string;
-  onToggleCollapsed: (collapsed: boolean) => void;
-  onRenameGroup?: (oldName: string, newName: string) => void;
-  onDeleteGroup?: (name: string) => void;
-  selectedInstanceId: string | null;
-  onSelect: (id: string) => void;
-  launching: string | null;
-  runningInstanceIds: Set<string>;
-  onLaunch: (id: string) => void;
-  onKill: (id: string) => void;
-  onOpenSettings: (id: string) => void;
-  onOpenFolder: (id: string) => void;
-  onDelete: (id: string) => void;
-  isInstanceBusy: (id: string) => boolean;
-  processes: Map<string, BackgroundProcess>;
-  onCancelDelete: (id: string) => void;
-  versions: Record<string, GtnhVersion> | null;
-  onUpdatePack: (id: string) => void;
-  onReinstall: (id: string) => void;
-  onCopy: (id: string) => void;
-  onRename: (id: string) => void;
-  onReorderInstances: (group: string, order: string[]) => void;
-  onIconChanged: () => void;
-  onIconError: (message: string) => void;
-}) {
-  const gridClass =
-    gridColumns <= 2
-      ? "grid-cols-2"
-      : gridColumns === 4
-        ? "grid-cols-4"
-        : gridColumns >= 5
-          ? "grid-cols-5"
-          : "grid-cols-3";
+function InstanceGroupSection({ section, gridColumns, commands }: { section: GroupSection; gridColumns: number; commands: InstanceListCommands }) {
+  const collapsed = useLauncherStore((state) => state.groupsState.collapsed[section.id] ?? false);
+  const ungroupedName = useLauncherStore((state) => state.groupsState.ungrouped_name);
+  const gridClass = gridColumns <= 2 ? "grid-cols-2" : gridColumns === 4 ? "grid-cols-4" : gridColumns >= 5 ? "grid-cols-5" : "grid-cols-3";
 
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
@@ -1794,11 +1507,10 @@ function InstanceGroupSection({
     const next = [...ids];
     next.splice(fromIndex, 1);
     next.splice(toIndex, 0, fromId);
-    void onReorderInstances(section.id, next);
+    commands.reorderInstances(section.id, next);
   };
 
   const startRename = () => {
-    if (!onRenameGroup) return;
     setRenameDraft(section.label);
     setRenaming(true);
   };
@@ -1806,15 +1518,15 @@ function InstanceGroupSection({
   const commitRename = () => {
     setRenaming(false);
     const trimmed = renameDraft.trim();
-    if (!onRenameGroup || !trimmed || trimmed === section.label) {
+    if (!trimmed || trimmed === section.label) {
       return;
     }
-    onRenameGroup(section.id, trimmed);
+    commands.renameGroup(section.id, trimmed);
   };
 
   const confirmDeleteGroup = () => {
-    if (!onDeleteGroup || !section.id) return;
-    onDeleteGroup(section.id);
+    if (!section.id) return;
+    commands.deleteGroup(section.id);
   };
 
   return (
@@ -1823,15 +1535,11 @@ function InstanceGroupSection({
         <Button
           type="button"
           variant="ghost"
-          onClick={() => onToggleCollapsed(!collapsed)}
+          onClick={() => commands.toggleGroupCollapsed(section.id, !collapsed)}
           className="flex h-7 flex-1 min-w-0 items-center gap-2 justify-start rounded-md px-2 py-1 font-normal hover:text-foreground"
           aria-expanded={!collapsed}
         >
-          {collapsed ? (
-            <ChevronRight className="size-3.5 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="size-3.5 text-muted-foreground" />
-          )}
+          {collapsed ? <ChevronRight className="size-3.5 text-muted-foreground" /> : <ChevronDown className="size-3.5 text-muted-foreground" />}
           {renaming ? (
             <Input
               value={renameDraft}
@@ -1861,17 +1569,14 @@ function InstanceGroupSection({
                 </h2>
               </ContextMenuTrigger>
               <ContextMenuContent className="w-44">
-                <ContextMenuItem onSelect={startRename} disabled={!onRenameGroup}>
+                <ContextMenuItem onSelect={startRename}>
                   <Pencil />
                   Rename
                 </ContextMenuItem>
-                {section.id && onDeleteGroup && (
+                {section.id && (
                   <>
                     <ContextMenuSeparator />
-                    <ContextMenuItem
-                      onSelect={() => setDeleteGroupOpen(true)}
-                      className="text-destructive focus:text-destructive"
-                    >
+                    <ContextMenuItem onSelect={() => setDeleteGroupOpen(true)} className="text-destructive focus:text-destructive">
                       <Trash2 />
                       Delete
                     </ContextMenuItem>
@@ -1884,23 +1589,13 @@ function InstanceGroupSection({
             {section.items.length}
           </Badge>
         </Button>
-        {onRenameGroup && !renaming && (
+        {!renaming && (
           <div className="flex items-center gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs"
-              onClick={startRename}
-            >
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={startRename}>
               Rename
             </Button>
-            {section.id && onDeleteGroup && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs text-destructive hover:text-destructive"
-                onClick={() => setDeleteGroupOpen(true)}
-              >
+            {section.id && (
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-destructive hover:text-destructive" onClick={() => setDeleteGroupOpen(true)}>
                 Delete
               </Button>
             )}
@@ -1922,27 +1617,7 @@ function InstanceGroupSection({
             <InstanceGridCard
               key={inst.id}
               inst={inst}
-              selected={selectedInstanceId === inst.id}
-              sizesRefreshing={sizesRefreshing}
-              onSelect={() => onSelect(inst.id)}
-              running={runningInstanceIds.has(inst.id)}
-              starting={launching === inst.id}
-              busy={launching !== null}
-              onLaunch={() => onLaunch(inst.id)}
-              onKill={() => onKill(inst.id)}
-              onOpenSettings={() => onOpenSettings(inst.id)}
-              onOpenFolder={() => onOpenFolder(inst.id)}
-              onDelete={() => onDelete(inst.id)}
-              isInstanceBusy={isInstanceBusy}
-              deleteProcess={getInstanceProcess(processes, "delete", inst.id)}
-              updateProcess={getInstanceProcess(processes, "update-pack", inst.id)}
-              reinstallProcess={getInstanceProcess(processes, "reinstall", inst.id)}
-              onCancelDelete={() => onCancelDelete(inst.id)}
-              versions={versions}
-              onUpdatePack={() => onUpdatePack(inst.id)}
-              onReinstall={() => onReinstall(inst.id)}
-              onCopy={() => onCopy(inst.id)}
-              onRename={() => onRename(inst.id)}
+              commands={commands}
               isDragging={draggingId === inst.id}
               isDragOver={dropTargetId === inst.id && draggingId !== inst.id}
               onDragHandleStart={(event) => {
@@ -1970,8 +1645,6 @@ function InstanceGroupSection({
                 setDraggingId(null);
                 setDropTargetId(null);
               }}
-              onIconChanged={onIconChanged}
-              onIconError={onIconError}
             />
           ))}
         </div>
@@ -1980,15 +1653,7 @@ function InstanceGroupSection({
   );
 }
 
-function RenameInstanceDialog({
-  instance,
-  onClose,
-  onSave,
-}: {
-  instance: InstanceInfo;
-  onClose: () => void;
-  onSave: (newName: string) => void;
-}) {
+function RenameInstanceDialog({ instance, onClose, onSave }: { instance: InstanceInfo; onClose: () => void; onSave: (newName: string) => void }) {
   const packVersion = instancePackVersion(instance);
   const placeholder = `GTNH ${packVersion}`;
   const [name, setName] = useState(instance.settings.name);
@@ -1996,7 +1661,12 @@ function RenameInstanceDialog({
   const unchanged = trimmed === (instance.settings.name ?? "");
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="max-w-sm p-0">
         <Card className="border-0 shadow-none">
           <CardHeader>
@@ -2006,9 +1676,7 @@ function RenameInstanceDialog({
                 <X className="size-3.5" />
               </Button>
             </div>
-            <CardDescription>
-              Change the display name shown in the launcher. The instance folder id stays the same.
-            </CardDescription>
+            <CardDescription>Change the display name shown in the launcher. The instance folder id stays the same.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -2031,7 +1699,9 @@ function RenameInstanceDialog({
               <Button className="flex-1" disabled={unchanged} onClick={() => onSave(name)}>
                 Save
               </Button>
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -2060,7 +1730,12 @@ function CopyInstanceDialog({
   const idConflict = existingInstanceIds.has(resolvedId);
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="max-w-sm p-0">
         <Card className="border-0 shadow-none">
           <CardHeader>
@@ -2070,9 +1745,7 @@ function CopyInstanceDialog({
                 <X className="size-3.5" />
               </Button>
             </div>
-            <CardDescription>
-              Create a duplicate of {sourceName} with a new name and folder.
-            </CardDescription>
+            <CardDescription>Create a duplicate of {sourceName} with a new name and folder.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -2094,22 +1767,16 @@ function CopyInstanceDialog({
               <p className="text-xs text-muted-foreground">
                 Folder: <span className="font-mono">{resolvedId}</span>
               </p>
-              {idConflict && (
-                <p className="text-xs text-destructive">An instance with this folder name already exists.</p>
-              )}
+              {idConflict && <p className="text-xs text-destructive">An instance with this folder name already exists.</p>}
             </div>
-            <p className="text-xs text-muted-foreground">
-              All files, mods, saves, and settings are copied. Only the name and folder id change.
-            </p>
+            <p className="text-xs text-muted-foreground">All files, mods, saves, and settings are copied. Only the name and folder id change.</p>
             <div className="flex gap-2">
-              <Button
-                className="flex-1"
-                disabled={idConflict || !resolvedName}
-                onClick={() => onCopy(resolvedId, resolvedName)}
-              >
+              <Button className="flex-1" disabled={idConflict || !resolvedName} onClick={() => onCopy(resolvedId, resolvedName)}>
                 Copy
               </Button>
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -2137,7 +1804,12 @@ function ChangeGroupDialog({
   const listId = "change-group-options";
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="max-w-sm p-0">
         <Card className="border-0 shadow-none">
           <CardHeader>
@@ -2166,13 +1838,15 @@ function ChangeGroupDialog({
                   <option key={g} value={g} />
                 ))}
               </datalist>
-              <p className="text-xs text-muted-foreground">
-                Pick an existing group or type a new name. Leave empty for {ungroupedName}.
-              </p>
+              <p className="text-xs text-muted-foreground">Pick an existing group or type a new name. Leave empty for {ungroupedName}.</p>
             </div>
             <div className="flex gap-2">
-              <Button className="flex-1" onClick={() => onSave(group.trim())}>Save</Button>
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button className="flex-1" onClick={() => onSave(group.trim())}>
+                Save
+              </Button>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -2181,29 +1855,13 @@ function ChangeGroupDialog({
   );
 }
 
-function GroupPicker({
-  value,
-  onChange,
-  existingGroups,
-  id,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  existingGroups: string[];
-  id: string;
-}) {
+function GroupPicker({ value, onChange, existingGroups, id }: { value: string; onChange: (value: string) => void; existingGroups: string[]; id: string }) {
   const listId = `${id}-list`;
 
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>Group</Label>
-      <Input
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="No group"
-        list={listId}
-      />
+      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder="No group" list={listId} />
       <datalist id={listId}>
         {existingGroups.map((g) => (
           <option key={g} value={g} />
@@ -2219,10 +1877,7 @@ function InfoGrid({ items }: { items: { label: string; value: string }[] }) {
   return (
     <div className="grid sm:grid-cols-2 gap-2 pt-1">
       {items.map((item) => (
-        <div
-          key={item.label}
-          className="flex min-w-0 justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2 text-xs"
-        >
+        <div key={item.label} className="flex min-w-0 justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2 text-xs">
           <span className="text-muted-foreground shrink-0">{item.label}</span>
           <span className="font-medium text-right truncate">{item.value}</span>
         </div>
@@ -2231,11 +1886,7 @@ function InfoGrid({ items }: { items: { label: string; value: string }[] }) {
   );
 }
 
-function LogView({ log, onClear, disableClear }: {
-  log: LaunchLogLine[];
-  onClear: () => void;
-  disableClear: boolean;
-}) {
+function LogView({ log, onClear, disableClear }: { log: LaunchLogLine[]; onClear: () => void; disableClear: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -2271,10 +1922,7 @@ function LogView({ log, onClear, disableClear }: {
           <div className="text-muted-foreground">No log output yet.</div>
         ) : (
           keyedByOccurrence(log, (entry) => `${entry.stream}:${entry.line}`).map(({ key, value: entry }) => (
-            <div
-              key={key}
-              className={launchLogLevelClass(classifyLaunchLogLine(entry))}
-            >
+            <div key={key} className={launchLogLevelClass(classifyLaunchLogLine(entry))}>
               {entry.line}
             </div>
           ))
@@ -2295,13 +1943,7 @@ function NewInstanceDialog({
   versions,
 }: {
   onClose: () => void;
-  onInstall: (
-    id: string,
-    packVersion: string,
-    javaType: string,
-    group: string,
-    name: string,
-  ) => void;
+  onInstall: (id: string, packVersion: string, javaType: string, group: string, name: string) => void;
   existingInstanceIds: Set<string>;
   existingGroups: string[];
   initialGroup: string;
@@ -2313,110 +1955,95 @@ function NewInstanceDialog({
   const [group, setGroup] = useState(initialGroup);
   const [instanceName, setInstanceName] = useState("");
 
-  const sorted = versions
-    ? Object.entries(versions).sort(([a], [b]) => compareVersionsByReleaseDate(a, b, versions))
-    : [];
+  const sorted = versions ? Object.entries(versions).sort(([a], [b]) => compareVersionsByReleaseDate(a, b, versions)) : [];
 
-  const filtered = filter === "stable"
-    ? sorted.filter(([, v]) => v.title === "Stable release")
-    : filter === "beta"
-      ? sorted.filter(([, v]) => v.title !== "Stable release")
-      : sorted;
+  const filtered =
+    filter === "stable"
+      ? sorted.filter(([, v]) => v.title === "Stable release")
+      : filter === "beta"
+        ? sorted.filter(([, v]) => v.title !== "Stable release")
+        : sorted;
 
   const resolvedName = instanceName.trim() || (sel ? `GTNH ${sel}` : "");
-  const resolvedId = sel
-    ? makeInstanceId(resolvedName, sel, existingInstanceIds)
-    : "";
+  const resolvedId = sel ? makeInstanceId(resolvedName, sel, existingInstanceIds) : "";
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="flex max-h-[85vh] max-w-lg flex-col overflow-hidden p-0">
         <Card className="flex max-h-[85vh] flex-col overflow-hidden border-0 shadow-none">
-        <CardHeader className="shrink-0 pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle>New Instance</CardTitle>
-            <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="Close">
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden pb-6">
-          <div className="flex gap-2 shrink-0">
-            <Select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
-              <option value="all">All versions</option>
-              <option value="stable">Stable only</option>
-              <option value="beta">Beta only</option>
-            </Select>
-            <Select value={javaType} onChange={(e) => setJavaType(e.target.value)}>
-              <option value="java17+">Java 17+</option>
-              <option value="java8">Java 8</option>
-            </Select>
-          </div>
+          <CardHeader className="shrink-0 pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle>New Instance</CardTitle>
+              <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="Close">
+                <X className="size-3.5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden pb-6">
+            <div className="flex gap-2 shrink-0">
+              <Select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
+                <option value="all">All versions</option>
+                <option value="stable">Stable only</option>
+                <option value="beta">Beta only</option>
+              </Select>
+              <Select value={javaType} onChange={(e) => setJavaType(e.target.value)}>
+                <option value="java17+">Java 17+</option>
+                <option value="java8">Java 8</option>
+              </Select>
+            </div>
 
-          <ScrollArea className="flex-1 min-h-0 rounded-md border border-border">
-            <div className="space-y-2 p-2">
-              {!versions && (
-                <p className="text-muted-foreground text-sm px-1 py-2">Loading versions...</p>
-              )}
-              {versions && filtered.length === 0 && (
-                <p className="text-muted-foreground text-sm px-1 py-2">No versions match this filter.</p>
-              )}
-              {filtered.map(([key, v]) => (
-                <Button
-                  key={key}
-                  type="button"
-                  variant={sel === key ? "secondary" : "outline"}
-                  className="h-auto w-full justify-between p-3 text-left font-normal"
-                  onClick={() => setSel(key)}
-                >
-                  <div>
-                    <div className="font-medium">{key}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {v.releaseDate} / Max Java {v.maxJavaVersion}
+            <ScrollArea className="flex-1 min-h-0 rounded-md border border-border">
+              <div className="space-y-2 p-2">
+                {!versions && <p className="text-muted-foreground text-sm px-1 py-2">Loading versions...</p>}
+                {versions && filtered.length === 0 && <p className="text-muted-foreground text-sm px-1 py-2">No versions match this filter.</p>}
+                {filtered.map(([key, v]) => (
+                  <Button
+                    key={key}
+                    type="button"
+                    variant={sel === key ? "secondary" : "outline"}
+                    className="h-auto w-full justify-between p-3 text-left font-normal"
+                    onClick={() => setSel(key)}
+                  >
+                    <div>
+                      <div className="font-medium">{key}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {v.releaseDate} / Max Java {v.maxJavaVersion}
+                      </div>
                     </div>
-                  </div>
-                  <Badge variant={v.title === "Stable release" ? "success" : "warning"}>
-                    {v.title === "Stable release" ? "Stable" : "Beta"}
-                  </Badge>
-                </Button>
-              ))}
+                    <Badge variant={v.title === "Stable release" ? "success" : "warning"}>{v.title === "Stable release" ? "Stable" : "Beta"}</Badge>
+                  </Button>
+                ))}
+              </div>
+            </ScrollArea>
+
+            <div className="shrink-0 space-y-4 border-t border-border pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-instance-name">Instance name</Label>
+                <Input
+                  id="new-instance-name"
+                  value={instanceName}
+                  onChange={(e) => setInstanceName(e.target.value)}
+                  placeholder={sel ? `GTNH ${sel}` : "Name this instance"}
+                />
+                {sel && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Folder: <span className="font-mono">{resolvedId}</span>
+                  </p>
+                )}
+              </div>
+
+              <GroupPicker value={group} onChange={setGroup} existingGroups={existingGroups} id="new-instance-group-options" />
+
+              <Button className="w-full" disabled={!sel} onClick={() => sel && onInstall(resolvedId, sel, javaType, group.trim(), resolvedName)}>
+                Install {sel || ""}
+              </Button>
             </div>
-          </ScrollArea>
-
-          <div className="shrink-0 space-y-4 border-t border-border pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-instance-name">Instance name</Label>
-              <Input
-                id="new-instance-name"
-                value={instanceName}
-                onChange={(e) => setInstanceName(e.target.value)}
-                placeholder={sel ? `GTNH ${sel}` : "Name this instance"}
-              />
-              {sel && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Folder: <span className="font-mono">{resolvedId}</span>
-                </p>
-              )}
-            </div>
-
-            <GroupPicker
-              value={group}
-              onChange={setGroup}
-              existingGroups={existingGroups}
-              id="new-instance-group-options"
-            />
-
-            <Button
-              className="w-full"
-              disabled={!sel}
-              onClick={() =>
-                sel && onInstall(resolvedId, sel, javaType, group.trim(), resolvedName)
-              }
-            >
-              Install {sel || ""}
-            </Button>
-          </div>
-        </CardContent>
+          </CardContent>
         </Card>
       </DialogContent>
     </Dialog>
@@ -2446,8 +2073,7 @@ function SettingsTab({
     const picked = await invoke<string | null>("browse_java_executable");
     if (picked) onDefaultJavaChange(picked);
   };
-  const selectedJavaIsDetected =
-    defaultJavaPath !== null && javaOptions.some((java) => java.path === defaultJavaPath);
+  const selectedJavaIsDetected = defaultJavaPath !== null && javaOptions.some((java) => java.path === defaultJavaPath);
 
   return (
     <div className="space-y-4">
@@ -2461,32 +2087,20 @@ function SettingsTab({
         </CardHeader>
         <CardContent className="space-y-2">
           <Label htmlFor="instance-grid-columns">Grid columns</Label>
-          <Select
-            id="instance-grid-columns"
-            value={String(gridColumns)}
-            onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}
-          >
+          <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
             <option value="2">2 columns</option>
             <option value="3">3 columns</option>
             <option value="4">4 columns</option>
             <option value="5">5 columns</option>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            Drag instance cards to reorder them within a group. Order is saved per group.
-          </p>
+          <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-2">
           <CardTitle>Java Detection</CardTitle>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={javaRefreshing}
-            onClick={() => void onRefreshJava()}
-          >
+          <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
             <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
             {javaRefreshing ? "Scanning..." : "Refresh"}
           </Button>
@@ -2495,16 +2109,9 @@ function SettingsTab({
           <div className="space-y-2">
             <Label htmlFor="default-java">Default Java installation</Label>
             <div className="flex gap-2">
-              <Select
-                id="default-java"
-                className="flex-1"
-                value={defaultJavaPath ?? ""}
-                onChange={(e) => onDefaultJavaChange(e.target.value || null)}
-              >
+              <Select id="default-java" className="flex-1" value={defaultJavaPath ?? ""} onChange={(e) => onDefaultJavaChange(e.target.value || null)}>
                 <option value="">Auto-detect (JAVA_HOME / PATH)</option>
-                {!selectedJavaIsDetected && defaultJavaPath && (
-                  <option value={defaultJavaPath}>{defaultJavaPath}</option>
-                )}
+                {!selectedJavaIsDetected && defaultJavaPath && <option value={defaultJavaPath}>{defaultJavaPath}</option>}
                 {javaOptions.map((java) => (
                   <option key={java.path} value={java.path}>
                     Java {java.version} — {java.path}
@@ -2515,9 +2122,7 @@ function SettingsTab({
                 Browse
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Used by every instance unless that instance has a Java location override.
-            </p>
+            <p className="text-xs text-muted-foreground">Used by every instance unless that instance has a Java location override.</p>
           </div>
           <p className="text-sm text-muted-foreground mb-2">Detected Java installations:</p>
           {javaOptions.length === 0 && <p className="text-xs text-muted-foreground">None found</p>}
@@ -2533,7 +2138,9 @@ function SettingsTab({
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>About</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>About</CardTitle>
+        </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-1">
           <p>Industrialis Launcher v0.1.0</p>
           <p>GT New Horizons modpack manager built with Electron.</p>
@@ -2542,8 +2149,7 @@ function SettingsTab({
             className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
             onClick={(e) => {
               e.preventDefault();
-              void openUrl(GITHUB_URL)
-                .catch(() => undefined);
+              void openUrl(GITHUB_URL).catch(() => undefined);
             }}
           >
             <ExternalLink className="size-3.5" />
