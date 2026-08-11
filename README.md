@@ -1,7 +1,6 @@
-# Industrialis
-
 <img width="1086" height="743" alt="image" src="https://github.com/user-attachments/assets/f2ee98ce-3847-4c94-978f-eb56dd53640d" />
 
+# Industrialis
 
 Turborepo monorepo for the Industrialis GT New Horizons launcher and website.
 
