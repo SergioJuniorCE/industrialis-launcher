@@ -18,6 +18,7 @@
     "build:launcher:release": "node scripts/run-build-launcher.mjs",
     "build:launcher:installer": "node scripts/run-build-launcher.mjs installer",
     "build:launcher:portable": "node scripts/run-build-launcher.mjs portable",
+    "test:launcher:linux": "node scripts/test-launcher-linux.mjs",
     "build:website": "turbo build --filter=@industrialis/website",
     "build:server": "turbo build --filter=@industrialis/server",
     "build:dashboard": "turbo build --filter=@industrialis/dashboard",

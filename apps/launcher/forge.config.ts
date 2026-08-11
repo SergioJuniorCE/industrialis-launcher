@@ -10,6 +10,7 @@ import MakerSquirrel from "@electron-forge/maker-squirrel";
 import MakerZip from "@electron-forge/maker-zip";
 
 const executableName = "industrialis-launcher";
+const packageLicense = "UNLICENSED";
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -45,6 +46,7 @@ const config: ForgeConfig = {
       options: {
         name: executableName,
         bin: executableName,
+        license: packageLicense,
       },
     }),
   ],

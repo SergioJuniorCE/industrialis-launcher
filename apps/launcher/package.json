@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Industrialis Minecraft launcher",
+  "license": "UNLICENSED",
   "productName": "Industrialis Launcher",
   "type": "commonjs",
   "main": ".vite/build/main.js",

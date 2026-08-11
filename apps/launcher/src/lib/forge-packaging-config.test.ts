@@ -8,17 +8,17 @@ type ConfiguredMaker = {
 };
 
 describe("Forge packaging config", () => {
-  it.each(["deb", "rpm"])("uses the packaged executable for the %s maker", async (makerName) => {
+  it.each([
+    ["deb", { name: "industrialis-launcher", bin: "industrialis-launcher" }],
+    ["rpm", { name: "industrialis-launcher", bin: "industrialis-launcher", license: "UNLICENSED" }],
+  ])("configures package metadata for the %s maker", async (makerName, expectedOptions) => {
     const makers = forgeConfig.makers as ConfiguredMaker[];
     const maker = makers.find(({ name }) => name === makerName);
 
     expect(maker).toBeDefined();
     await maker!.prepareConfig("x64");
     expect(maker!.config).toMatchObject({
-      options: {
-        name: "industrialis-launcher",
-        bin: "industrialis-launcher",
-      },
+      options: expectedOptions,
     });
   });
 });
