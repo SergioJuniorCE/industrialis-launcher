@@ -9,11 +9,13 @@ import MakerRpm from "@electron-forge/maker-rpm";
 import MakerSquirrel from "@electron-forge/maker-squirrel";
 import MakerZip from "@electron-forge/maker-zip";
 
+const executableName = "industrialis-launcher";
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    name: "industrialis-launcher",
-    executableName: "industrialis-launcher",
+    name: executableName,
+    executableName,
     icon: path.resolve(__dirname, "electron/assets/icon"),
     extraResource: [path.resolve(__dirname, "electron/config")],
     protocols: [
@@ -33,8 +35,18 @@ const config: ForgeConfig = {
     }),
     new MakerZip({}, ["win32", "darwin", "linux"]),
     new MakerDmg({ format: "ULFO" }),
-    new MakerDeb({}),
-    new MakerRpm({}),
+    new MakerDeb({
+      options: {
+        name: executableName,
+        bin: executableName,
+      },
+    }),
+    new MakerRpm({
+      options: {
+        name: executableName,
+        bin: executableName,
+      },
+    }),
   ],
   plugins: [
     new VitePlugin({

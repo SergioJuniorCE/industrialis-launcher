@@ -30,10 +30,6 @@ jobs:
             platform: macos-14
             target: darwin
             arch: arm64
-          - name: macOS Intel
-            platform: macos-13
-            target: darwin
-            arch: x64
 
     runs-on: ${{ matrix.platform }}
     steps:
