@@ -33,7 +33,6 @@ import { Progress } from "./components/ui/progress";
 import { Select } from "./components/ui/select";
 import { ScrollArea } from "./components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
-import { ThemeEditor } from "./components/ThemeEditor";
 import { ThemePresetPicker } from "./components/ThemePresetPicker";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { AccountSwitcher } from "./components/AccountSwitcher";
@@ -2077,26 +2076,6 @@ function SettingsTab({
 
   return (
     <div className="space-y-4">
-      <ThemePresetPicker />
-      <ThemeEditor />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Instance Library</CardTitle>
-          <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="instance-grid-columns">Grid columns</Label>
-          <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
-            <option value="2">2 columns</option>
-            <option value="3">3 columns</option>
-            <option value="4">4 columns</option>
-            <option value="5">5 columns</option>
-          </Select>
-          <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-2">
           <CardTitle>Java Detection</CardTitle>
@@ -2136,6 +2115,25 @@ function SettingsTab({
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Instance Library</CardTitle>
+          <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="instance-grid-columns">Grid columns</Label>
+          <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
+            <option value="2">2 columns</option>
+            <option value="3">3 columns</option>
+            <option value="4">4 columns</option>
+            <option value="5">5 columns</option>
+          </Select>
+          <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
+        </CardContent>
+      </Card>
+
+      <ThemePresetPicker />
 
       <Card>
         <CardHeader>

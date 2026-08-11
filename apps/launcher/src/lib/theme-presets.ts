@@ -205,7 +205,7 @@ export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
   {
     id: "monochrome",
     name: "Monochrome",
-    description: "Neutral dark UI — the original launcher look.",
+    description: "Neutral dark UI with the original launcher look.",
     builtin: true,
     background_effect: "none",
     dark: MONOCHROME_DARK,
@@ -214,7 +214,7 @@ export const BUILTIN_THEME_PRESETS: ThemePreset[] = [
   {
     id: "industrialis",
     name: "Industrialis",
-    description: "Website design — charcoal base with bronze highlights.",
+    description: "Charcoal base with bronze highlights.",
     builtin: true,
     background_effect: "grid",
     dark: INDUSTRIALIS_DARK,
@@ -257,19 +257,13 @@ export function isBuiltinPresetId(id: string): id is BuiltinThemePresetId {
   return findBuiltinPreset(id) !== undefined;
 }
 
-export function resolveThemePreset(
-  id: string,
-  customPresets: SavedThemePreset[] = []
-): ThemePreset | undefined {
+export function resolveThemePreset(id: string, customPresets: SavedThemePreset[] = []): ThemePreset | undefined {
   const builtin = findBuiltinPreset(id);
   if (builtin) return builtin;
   return customPresets.find((p) => p.id === id);
 }
 
-export function resolveThemePresetOrDefault(
-  id: string,
-  customPresets: SavedThemePreset[] = []
-): ThemePreset {
+export function resolveThemePresetOrDefault(id: string, customPresets: SavedThemePreset[] = []): ThemePreset {
   return resolveThemePreset(id, customPresets) ?? findBuiltinPreset(DEFAULT_THEME_PRESET_ID)!;
 }
 
