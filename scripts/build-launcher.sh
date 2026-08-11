@@ -19,6 +19,11 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" != "arm64" ]]; then
+  echo "macOS Intel is not supported; build the launcher on Apple Silicon." >&2
+  exit 1
+fi
+
 mkdir -p "$OUTPUT_DIRECTORY"
 
 copy_make_artifacts() {
@@ -35,7 +40,6 @@ make_portable_archive() {
   local package_directory="$LAUNCHER_DIRECTORY/out/industrialis-launcher-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
   if [[ "$(uname -s)" == "Darwin" ]]; then
     package_directory="$LAUNCHER_DIRECTORY/out/industrialis-launcher-darwin-arm64"
-    [[ -d "$package_directory" ]] || package_directory="$LAUNCHER_DIRECTORY/out/industrialis-launcher-darwin-x64"
   elif [[ "$(uname -s)" == "Linux" ]]; then
     package_directory="$LAUNCHER_DIRECTORY/out/industrialis-launcher-linux-x64"
   fi
