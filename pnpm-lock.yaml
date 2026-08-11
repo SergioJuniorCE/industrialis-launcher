@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@electron/packager>extract-zip': file:./scripts/extract-zip-node24
+
 importers:
 
   .:
@@ -3605,6 +3608,9 @@ packages:
     engines: {node: '>= 10.17.0'}
     hasBin: true
 
+  extract-zip@file:scripts/extract-zip-node24:
+    resolution: {directory: scripts/extract-zip-node24, type: directory}
+
   fast-decode-uri-component@1.0.1:
     resolution: {integrity: sha512-WKgKWg5eUxvRZGwW8FvfbaH7AXSh2cL+3j5fMGzUMCxWBJ3dV3a7Wz8y2f/uQ0e3B6WmodD3oS54jTQ9HVTIIg==}
 
@@ -7123,7 +7129,7 @@ snapshots:
       '@electron/windows-sign': 1.2.2(supports-color@8.1.1)
       '@malept/cross-spawn-promise': 2.0.0
       debug: 4.4.3(supports-color@8.1.1)
-      extract-zip: 2.0.1(supports-color@8.1.1)
+      extract-zip: file:scripts/extract-zip-node24
       filenamify: 4.3.0
       fs-extra: 11.4.0
       galactus: 1.0.0(supports-color@8.1.1)
@@ -9822,6 +9828,10 @@ snapshots:
       '@types/yauzl': 2.10.3
     transitivePeerDependencies:
       - supports-color
+
+  extract-zip@file:scripts/extract-zip-node24:
+    dependencies:
+      '@electron-internal/extract-zip': 1.0.5
 
   fast-decode-uri-component@1.0.1: {}
 

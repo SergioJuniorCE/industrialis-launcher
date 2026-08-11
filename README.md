@@ -4,12 +4,12 @@ Turborepo monorepo for the Industrialis GT New Horizons launcher and website.
 
 ## Apps
 
-| App | Package | Description |
-|-----|---------|-------------|
-| [Launcher](apps/launcher) | `@industrialis/launcher` | Electron desktop app - install GTNH, manage Java, Microsoft auth, launch |
-| [Website](apps/website) | `@industrialis/website` | Next.js marketing site |
-| [Server](apps/server) | `@industrialis/server` | Linux CLI + Docker daemon for hosting GTNH servers |
-| [Dashboard](apps/dashboard) | `@industrialis/dashboard` | Astro UI for managing hosted servers |
+| App                         | Package                   | Description                                                              |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------ |
+| [Launcher](apps/launcher)   | `@industrialis/launcher`  | Electron desktop app - install GTNH, manage Java, Microsoft auth, launch |
+| [Website](apps/website)     | `@industrialis/website`   | Next.js marketing site                                                   |
+| [Server](apps/server)       | `@industrialis/server`    | Linux CLI + Docker daemon for hosting GTNH servers                       |
+| [Dashboard](apps/dashboard) | `@industrialis/dashboard` | Astro UI for managing hosted servers                                     |
 
 ### Host a GTNH server (Linux)
 
@@ -23,14 +23,14 @@ See [docs/server-hosting.md](docs/server-hosting.md) for Docker, systemd, and co
 
 ## Prerequisites
 
-| Tool | Notes |
-|------|-------|
-| [Node.js](https://nodejs.org/) | LTS recommended |
-| [pnpm](https://pnpm.io/) | Package manager (`npm install -g pnpm`) |
+| Tool                                    | Notes                                   |
+| --------------------------------------- | --------------------------------------- |
+| [Node.js](https://nodejs.org/)          | LTS recommended                         |
+| [pnpm](https://pnpm.io/)                | Package manager (`npm install -g pnpm`) |
 | [Electron](https://www.electronjs.org/) | Desktop runtime bundled by the launcher |
-| Java 17+ | Required to run GTNH instances |
+| Java 17+                                | Required to run GTNH instances          |
 
-Launcher release packaging requires Node.js 22.x, matching the GitHub Actions
+Launcher release packaging requires Node.js 24.x, matching the GitHub Actions
 release environment. Development, builds, and tests can use the current LTS.
 
 ## Development
@@ -76,11 +76,11 @@ pnpm build:launcher:release
 
 The artifacts are written to `artifacts/launcher`.
 
-| Platform | Installer | Portable |
-|----------|-----------|----------|
-| Windows | Squirrel (`.exe`) | ZIP of packaged app |
-| macOS | DMG | ZIP of `.app` |
-| Linux | DEB/RPM | ZIP of packaged app |
+| Platform | Installer         | Portable            |
+| -------- | ----------------- | ------------------- |
+| Windows  | Squirrel (`.exe`) | ZIP of packaged app |
+| macOS    | DMG               | ZIP of `.app`       |
+| Linux    | DEB/RPM           | ZIP of packaged app |
 
 Build only one format with `pnpm build:launcher:installer` or
 `pnpm build:launcher:portable`. On Windows you can target the installer with

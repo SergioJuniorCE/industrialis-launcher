@@ -1,0 +1,10 @@
+{
+  "name": "extract-zip",
+  "version": "2.0.1-node24.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "type": "commonjs",
+  "dependencies": {
+    "@electron-internal/extract-zip": "1.0.5"
+  }
+}

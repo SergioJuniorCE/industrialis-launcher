@@ -36,7 +36,16 @@
   "packageManager": "pnpm@9.15.9",
   "pnpm": {
     "onlyBuiltDependencies": [
-      "lefthook"
-    ]
+      "electron-winstaller",
+      "esbuild",
+      "fs-xattr",
+      "lefthook",
+      "macos-alias",
+      "protobufjs",
+      "sharp"
+    ],
+    "overrides": {
+      "@electron/packager>extract-zip": "file:./scripts/extract-zip-node24"
+    }
   }
 }
