@@ -13,7 +13,8 @@ export default defineConfig({
       fileName: () => "main.js",
     },
     rollupOptions: {
-      external: ["electron", "electron-squirrel-startup", ...nodeBuiltins],
+      // Keep runtime packages inside the ASAR; pnpm workspace links are not portable.
+      external: ["electron", ...nodeBuiltins],
     },
   },
 });

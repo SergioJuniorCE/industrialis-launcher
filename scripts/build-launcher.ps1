@@ -58,7 +58,26 @@ function New-PortableArchive {
 
     $package = Get-Content -LiteralPath (Join-Path $launcherDirectory "package.json") -Raw | ConvertFrom-Json
     $portableArchive = Join-Path $OutputDirectory "industrialis-launcher-$($package.version)-windows-portable.zip"
-    Compress-Archive -Path (Join-Path $packageDirectory "*") -DestinationPath $portableArchive -Force
+    # Electron's Windows runtime files can have pre-1980 timestamps, which the ZIP DOS format cannot encode.
+    $stagingDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "industrialis-launcher-portable-$([guid]::NewGuid().ToString('N'))"
+    $zipSafeTimestamp = [datetime]::SpecifyKind([datetime]'2000-01-01T00:00:00', [DateTimeKind]::Local)
+
+    New-Item -ItemType Directory -Path $stagingDirectory -Force | Out-Null
+    try {
+        Copy-Item -Path (Join-Path $packageDirectory "*") -Destination $stagingDirectory -Recurse -Force
+
+        foreach ($entry in @(Get-ChildItem -LiteralPath $stagingDirectory -Recurse -Force)) {
+            $entry.CreationTime = $zipSafeTimestamp
+            $entry.LastAccessTime = $zipSafeTimestamp
+            $entry.LastWriteTime = $zipSafeTimestamp
+        }
+
+        Compress-Archive -Path (Join-Path $stagingDirectory "*") -DestinationPath $portableArchive -Force
+    } finally {
+        if (Test-Path -LiteralPath $stagingDirectory) {
+            [System.IO.Directory]::Delete($stagingDirectory, $true)
+        }
+    }
 }
 
 switch ($Target) {

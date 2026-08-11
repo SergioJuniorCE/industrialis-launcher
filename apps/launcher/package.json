@@ -2,6 +2,8 @@
   "name": "@industrialis/launcher",
   "private": true,
   "version": "0.1.0",
+  "description": "Industrialis Minecraft launcher",
+  "productName": "Industrialis Launcher",
   "type": "commonjs",
   "main": ".vite/build/main.js",
   "scripts": {
