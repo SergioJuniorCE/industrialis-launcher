@@ -61,7 +61,7 @@ export function AccountSwitcher({
         ) : (
           <UserCircle className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="text-xs truncate">{selected ? accountLabel(selected) : "No default"}</span>
+        <span className="toolbar-account-label text-xs truncate">{selected ? accountLabel(selected) : "No default"}</span>
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
       </Button>
 

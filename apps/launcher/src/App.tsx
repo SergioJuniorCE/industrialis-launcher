@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { hideWindow, invoke, listen, openUrl } from "./lib/desktop";
+import { desktopPlatform, hideWindow, invoke, listen, openUrl } from "./lib/desktop";
 import {
   Plus,
   Settings,
@@ -70,6 +70,7 @@ import { PackVersionStatus } from "./components/PackVersionStatus";
 import { InstanceAvatar } from "./components/InstanceAvatar";
 import { InstanceGridCard, type InstanceGridCardCommands } from "./components/InstanceGridCard";
 import { LauncherUpdateDialog, type LauncherUpdateState } from "./components/LauncherUpdateDialog";
+import { WindowControls } from "./components/WindowControls";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
@@ -810,45 +811,75 @@ export default function App() {
   const selectedInstanceStarting = selectedInstanceId ? launching === selectedInstanceId : false;
 
   return (
-    <div className="app-shell h-screen flex flex-col overflow-hidden">
+    <div className={cn("app-shell h-screen flex flex-col overflow-hidden", desktopPlatform() === "darwin" && "app-shell-macos")}>
       {/* Toolbar */}
       <header className="app-toolbar h-11 shrink-0 flex items-center px-3 gap-1.5">
         <div className="flex items-center gap-2 pr-1.5">
           <span className="brand-mark size-5 rounded-md" aria-hidden="true" />
-          <span className="font-semibold text-sm tracking-tight">Industrialis</span>
+          <span className="toolbar-brand-name font-semibold text-sm tracking-tight">Industrialis</span>
         </div>
         <Button
           variant="default"
           size="sm"
           className="h-7"
+          aria-label="Add instance"
+          title="Add instance"
           onClick={() => {
             setTab("instances");
             setShowNewInstance(true);
           }}
         >
-          <Plus className="size-3.5" /> Add
+          <Plus className="size-3.5" /> <span className="toolbar-label">Add</span>
         </Button>
         <div className="w-px h-5 bg-border/80 mx-1" />
         <div className="inline-flex h-8 items-center rounded-lg border border-border/70 bg-muted/70 p-0.5 gap-0.5 shadow-inner">
-          <Button variant={tab === "instances" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("instances")}>
-            <Boxes className="size-3.5" /> Instances
+          <Button
+            variant={tab === "instances" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-6 px-2"
+            aria-label="Instances"
+            title="Instances"
+            onClick={() => setTab("instances")}
+          >
+            <Boxes className="size-3.5" /> <span className="toolbar-label">Instances</span>
           </Button>
-          <Button variant={tab === "processes" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => openProcesses()}>
-            <Activity className="size-3.5" /> Processes
+          <Button
+            variant={tab === "processes" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-6 px-2"
+            aria-label="Processes"
+            title="Processes"
+            onClick={() => openProcesses()}
+          >
+            <Activity className="size-3.5" /> <span className="toolbar-label">Processes</span>
             {runningProcessCount(processes) > 0 && (
               <Badge variant="secondary" className="h-4 min-w-4 justify-center px-1 text-[10px]">
                 {runningProcessCount(processes)}
               </Badge>
             )}
           </Button>
-          <Button variant={tab === "settings" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("settings")}>
-            <Settings className="size-3.5" /> Settings
+          <Button
+            variant={tab === "settings" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-6 px-2"
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => setTab("settings")}
+          >
+            <Settings className="size-3.5" /> <span className="toolbar-label">Settings</span>
           </Button>
-          <Button variant={tab === "accounts" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("accounts")}>
-            <Users className="size-3.5" /> Accounts
+          <Button
+            variant={tab === "accounts" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-6 px-2"
+            aria-label="Accounts"
+            title="Accounts"
+            onClick={() => setTab("accounts")}
+          >
+            <Users className="size-3.5" /> <span className="toolbar-label">Accounts</span>
           </Button>
         </div>
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="app-toolbar-actions ml-auto flex items-center gap-0.5">
           <AccountSwitcher
             accounts={accounts}
             defaultAccountId={defaultAccountId}
@@ -858,6 +889,7 @@ export default function App() {
           <ProcessesDropdown processes={processes} onDismiss={handleDismissProcess} onCancelDelete={handleCancelDelete} onOpenProcesses={openProcesses} />
           <ThemeSwitcher />
         </div>
+        <WindowControls />
       </header>
 
       {tab === "instances" ? (
