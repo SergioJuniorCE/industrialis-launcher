@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { unzipSync } from "fflate";
-import { copyTree, exists } from "./fs-utils";
+import { copyTree, exists, readJson } from "./fs-utils";
 import { lookupPackCache, copyCachedPackToStaging, storePackCache } from "./pack-cache";
 import type { GtnhVersion, ModEntry, ModPreviewEntry, UpdateModPreview } from "./types";
 
@@ -41,12 +41,16 @@ export function modIdentityFromFilename(filename: string): string {
 
 export async function listMods(dir: string): Promise<ModEntry[]> {
   if (!(await exists(dir))) return [];
-  const mods: ModEntry[] = [];
-  for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-    if (!entry.isFile() || !/\.(jar|zip)$/iu.test(entry.name)) continue;
-    const stat = await fs.stat(path.join(dir, entry.name));
-    mods.push({ filename: entry.name, identity: modIdentityFromFilename(entry.name), size_bytes: stat.size });
-  }
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const mods = (
+    await Promise.all(
+      entries.map(async (entry) => {
+        if (!entry.isFile() || !/\.(jar|zip)$/iu.test(entry.name)) return null;
+        const stat = await fs.stat(path.join(dir, entry.name));
+        return { filename: entry.name, identity: modIdentityFromFilename(entry.name), size_bytes: stat.size };
+      }),
+    )
+  ).filter((mod): mod is ModEntry => mod !== null);
   return mods.sort((a, b) => a.identity.localeCompare(b.identity));
 }
 
@@ -191,7 +195,8 @@ async function moveInto(destinationRoot: string, source: string): Promise<void> 
     const srcStat = await fs.stat(source);
     const dstStat = await fs.stat(destination);
     if (srcStat.isDirectory() && dstStat.isDirectory()) {
-      for (const entry of await fs.readdir(source)) await moveInto(destination, path.join(source, entry));
+      const entries = await fs.readdir(source);
+      await Promise.all(entries.map((entry) => moveInto(destination, path.join(source, entry))));
       await fs.rm(source, { recursive: true, force: true });
       return;
     }
@@ -208,14 +213,17 @@ async function moveInto(destinationRoot: string, source: string): Promise<void> 
 
 export async function flattenNestedPack(instance: string): Promise<void> {
   if (await exists(path.join(instance, "mmc-pack.json"))) return;
-  const candidates = (await fs.readdir(instance, { withFileTypes: true }).catch(() => []))
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(instance, entry.name));
-  const nested: string[] = [];
-  for (const candidate of candidates) if (await exists(path.join(candidate, "mmc-pack.json"))) nested.push(candidate);
+  const candidates = (await fs.readdir(instance, { withFileTypes: true }).catch(() => [])).reduce<string[]>((result, entry) => {
+    if (entry.isDirectory()) result.push(path.join(instance, entry.name));
+    return result;
+  }, []);
+  const nested = (await Promise.all(candidates.map(async (candidate) => ((await exists(path.join(candidate, "mmc-pack.json"))) ? candidate : null)))).filter(
+    (candidate): candidate is string => candidate !== null,
+  );
   const source = nested.sort()[0];
   if (!source) return;
-  for (const entry of await fs.readdir(source)) await moveInto(instance, path.join(source, entry));
+  const entries = await fs.readdir(source);
+  await Promise.all(entries.map((entry) => moveInto(instance, path.join(source, entry))));
   await fs.rm(source, { recursive: true, force: true });
   if (!(await exists(path.join(instance, "mmc-pack.json")))) throw new Error(`failed to flatten instance pack in ${instance}`);
 }
@@ -300,7 +308,8 @@ export async function downloadAndExtractToStaging(
 }
 
 export async function buildUpdatePreview(instance: string, targetVersion: string, javaType: string, emit: EmitProgress): Promise<UpdateModPreview> {
-  const settings = JSON.parse(await fs.readFile(path.join(instance, "instance.json"), "utf8")) as { pack_version?: string };
+  const settings = await readJson<{ pack_version?: string }>(path.join(instance, "instance.json"));
+  if (!settings) throw new Error("instance settings are invalid");
   const currentVersion = settings.pack_version ?? "";
   const oldMods = await listMods(await resolveModsDir(instance));
   const stagingParent = path.join(instance, ".update-preview");

@@ -51,18 +51,16 @@ async function patchGadomancy(instance: string): Promise<void> {
 export async function applyConfigPreset(id: string, instance: string, enabled: boolean): Promise<void> {
   if (id !== "aditya") throw new Error(`unknown config preset: ${id}`);
   if (enabled) {
-    for (const rel of adityaFiles) await copyBundledToGame(instance, rel);
+    await Promise.all(adityaFiles.map((rel) => copyBundledToGame(instance, rel)));
     await patchGadomancy(instance);
-    for (const rel of adityaFiles) await copyGameToPersistent(instance, rel);
+    await Promise.all(adityaFiles.map((rel) => copyGameToPersistent(instance, rel)));
     if (await exists(gamePath(instance, "config/gadomancy.cfg"))) {
       await patchGadomancy(instance);
       await copyGameToPersistent(instance, "config/gadomancy.cfg");
     }
     return;
   }
-  for (const rel of [...adityaFiles, "config/gadomancy.cfg"]) {
-    await fs.rm(path.join(persistentMinecraftDir(instance), rel), { force: true });
-  }
+  await Promise.all([...adityaFiles, "config/gadomancy.cfg"].map((rel) => fs.rm(path.join(persistentMinecraftDir(instance), rel), { force: true })));
 }
 
 export async function getConfigPresetStatus(id: string, instance: string): Promise<boolean> {

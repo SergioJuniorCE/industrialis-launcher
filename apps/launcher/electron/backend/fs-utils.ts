@@ -24,30 +24,32 @@ export async function writeJson(target: string, value: unknown): Promise<void> {
 }
 
 export async function dirSize(target: string): Promise<number> {
-  let total = 0;
   let entries;
   try {
     entries = await fs.readdir(target, { withFileTypes: true });
   } catch {
     return 0;
   }
-  for (const entry of entries) {
-    const child = path.join(target, entry.name);
-    if (entry.isDirectory()) total += await dirSize(child);
-    else {
-      try { total += (await fs.stat(child)).size; } catch { /* file disappeared */ }
-    }
-  }
-  return total;
+  const sizes = await Promise.all(
+    entries.map(async (entry) => {
+      const child = path.join(target, entry.name);
+      if (entry.isDirectory()) return dirSize(child);
+      try {
+        return (await fs.stat(child)).size;
+      } catch {
+        return 0;
+      }
+    }),
+  );
+  return sizes.reduce((sum, size) => sum + size, 0);
 }
 
 export async function copyTree(source: string, destination: string): Promise<void> {
   const stat = await fs.stat(source);
   if (stat.isDirectory()) {
     await fs.mkdir(destination, { recursive: true });
-    for (const entry of await fs.readdir(source, { withFileTypes: true })) {
-      await copyTree(path.join(source, entry.name), path.join(destination, entry.name));
-    }
+    const entries = await fs.readdir(source, { withFileTypes: true });
+    await Promise.all(entries.map((entry) => copyTree(path.join(source, entry.name), path.join(destination, entry.name))));
     return;
   }
   await fs.mkdir(path.dirname(destination), { recursive: true });
@@ -61,16 +63,15 @@ export async function removeIfExists(target: string): Promise<void> {
 export async function listFiles(target: string): Promise<string[]> {
   const result: string[] = [];
   async function visit(dir: string): Promise<void> {
-    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-      const child = path.join(dir, entry.name);
-      if (entry.isDirectory()) await visit(child);
-      else result.push(child);
-    }
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    await Promise.all(
+      entries.map(async (entry) => {
+        const child = path.join(dir, entry.name);
+        if (entry.isDirectory()) await visit(child);
+        else result.push(child);
+      }),
+    );
   }
   if (await exists(target)) await visit(target);
   return result;
-}
-
-export function parseNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }

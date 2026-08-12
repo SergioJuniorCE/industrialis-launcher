@@ -1,4 +1,5 @@
 import { Server, Terminal } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 const commands = [
@@ -17,24 +18,18 @@ export function ServerHosting() {
             <Server className="size-3.5" />
             Host a GTNH server
           </p>
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Spin up GregTech servers from the CLI.
-          </h2>
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Spin up GregTech servers from the CLI.</h2>
           <p className="mt-3 text-muted-foreground">
-            Industrialis ships a Linux daemon, lightweight dashboard, and Docker
-            integration for hosting GT New Horizons. Install once on your VPS,
-            then create worlds from the browser UI.
+            Industrialis ships a Linux daemon, lightweight dashboard, and Docker integration for hosting GT New Horizons. Install once on your VPS, then create
+            worlds from the browser UI.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
-            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              Install
-            </p>
+            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-muted-foreground">Install</p>
             <p className="mb-4 text-sm text-muted-foreground">
-              Requires Linux, Docker Engine, and Node.js 22+. Prefer inspecting
-              the script before piping to bash.
+              Requires Linux, Docker Engine, and Node.js 22+. Prefer inspecting the script before piping to bash.
             </p>
             <pre
               className={cn(
@@ -42,19 +37,13 @@ export function ServerHosting() {
                 "font-mono text-xs leading-relaxed text-foreground sm:text-sm",
               )}
             >
-              <code>
-                curl -fsSL https://industrialislauncher.yoggan.dev/install.sh |
-                bash
-              </code>
+              <code>curl -fsSL https://industrialislauncher.yoggan.dev/install.sh | bash</code>
             </pre>
             <p className="mt-3 font-mono text-[11px] text-muted-foreground">
               Script:{" "}
-              <a
-                href="/install.sh"
-                className="text-primary underline-offset-2 hover:underline"
-              >
+              <Link href="/install.sh" className="text-primary underline-offset-2 hover:underline">
                 /install.sh
-              </a>
+              </Link>
             </p>
           </div>
 
@@ -75,10 +64,8 @@ export function ServerHosting() {
               ))}
             </ul>
             <p className="mt-5 text-sm text-muted-foreground">
-              After <code className="text-foreground">up</code>, open{" "}
-              <code className="text-foreground">http://127.0.0.1:3001</code>{" "}
-              (loopback). Create, start, and stop GTNH containers from the
-              dashboard.
+              After <code className="text-foreground">up</code>, open <code className="text-foreground">http://127.0.0.1:3001</code> (loopback). Create, start,
+              and stop GTNH containers from the dashboard.
             </p>
           </div>
         </div>

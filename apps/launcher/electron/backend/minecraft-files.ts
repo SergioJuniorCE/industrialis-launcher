@@ -38,11 +38,15 @@ async function persistentPaths(instance: string): Promise<Set<string>> {
   const overlay = persistentMinecraftDir(instance);
   const result = new Set<string>();
   async function visit(dir: string): Promise<void> {
-    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-      const child = path.join(dir, entry.name);
-      const rel = path.relative(overlay, child).replaceAll("\\", "/");
-      if (entry.isDirectory()) await visit(child); else result.add(rel);
-    }
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    await Promise.all(
+      entries.map(async (entry) => {
+        const child = path.join(dir, entry.name);
+        const rel = path.relative(overlay, child).replaceAll("\\", "/");
+        if (entry.isDirectory()) await visit(child);
+        else result.add(rel);
+      }),
+    );
   }
   if (await exists(overlay)) await visit(overlay);
   return result;
@@ -99,7 +103,7 @@ export async function deletePersistentFile(instance: string, relPath: string): P
 }
 
 export async function listPersistentFiles(instance: string): Promise<string[]> {
-  return [...await persistentPaths(instance)].sort();
+  return [...(await persistentPaths(instance))].sort();
 }
 
 export async function applyPersistentMinecraft(instance: string): Promise<void> {

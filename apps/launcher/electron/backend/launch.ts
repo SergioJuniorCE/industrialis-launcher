@@ -2,9 +2,9 @@ import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { exists } from "./fs-utils";
+import { exists, readJson } from "./fs-utils";
 import { flattenNestedPack } from "./pack";
-import type { LaunchConfig, LaunchLogLine, PatchAssetIndex } from "./types";
+import type { LaunchConfig, PatchAssetIndex } from "./types";
 
 const defaultLibraryRepo = "https://libraries.minecraft.net/";
 
@@ -96,9 +96,13 @@ async function downloadToFile(url: string, destination: string): Promise<void> {
   await fs.writeFile(destination, Buffer.from(await response.arrayBuffer()));
 }
 
-function sha1File(content: Buffer): string { return crypto.createHash("sha1").update(content).digest("hex"); }
+function sha1File(content: Buffer): string {
+  return crypto.createHash("sha1").update(content).digest("hex");
+}
 
-function assetDigest(hash: string): string { return hash.replace(/^sha1:/u, ""); }
+function assetDigest(hash: string): string {
+  return hash.replace(/^sha1:/u, "");
+}
 function assetPath(assetsDir: string, hash: string): string {
   const digest = assetDigest(hash);
   return path.join(assetsDir, "objects", digest.slice(0, 2), digest);
@@ -124,23 +128,28 @@ async function ensureAssets(assetsDir: string, index: PatchAssetIndex, id: strin
   }
   const parsed = JSON.parse(indexBuffer.toString("utf8")) as { objects?: Record<string, { hash: string; size: number }> };
   const objects = Object.values(parsed.objects ?? {});
-  const missing = [];
-  for (const object of objects) {
-    const target = assetPath(assetsDir, object.hash);
-    const stat = await fs.stat(target).catch(() => null);
-    if (!stat || stat.size !== object.size) missing.push(object);
-  }
+  const missing = (
+    await Promise.all(
+      objects.map(async (object) => {
+        const target = assetPath(assetsDir, object.hash);
+        const stat = await fs.stat(target).catch(() => null);
+        return !stat || stat.size !== object.size ? object : null;
+      }),
+    )
+  ).filter((object): object is (typeof objects)[number] => object !== null);
   if (!missing.length) {
     emit(id, "system", `Assets up to date (${objects.length} objects)`);
     return;
   }
   emit(id, "system", `Downloading ${missing.length} of ${objects.length} asset objects…`);
-  await Promise.all(missing.map(async (object) => {
-    const target = assetPath(assetsDir, object.hash);
-    await downloadToFile(assetUrl(object.hash), target);
-    const stat = await fs.stat(target).catch(() => null);
-    if (!stat || stat.size !== object.size) throw new Error(`asset object ${assetDigest(object.hash)} did not verify after download`);
-  }));
+  await Promise.all(
+    missing.map(async (object) => {
+      const target = assetPath(assetsDir, object.hash);
+      await downloadToFile(assetUrl(object.hash), target);
+      const stat = await fs.stat(target).catch(() => null);
+      if (!stat || stat.size !== object.size) throw new Error(`asset object ${assetDigest(object.hash)} did not verify after download`);
+    }),
+  );
   emit(id, "system", "Asset sync complete");
 }
 
@@ -158,7 +167,13 @@ async function ensureLibrary(packDir: string, entry: PatchLibraryEntry, id: stri
   return destination;
 }
 
-async function ensureMainJar(packDir: string, jar: NonNullable<PatchJson["mainJar"]>, minecraftVersion: string, id: string, emit: EmitLaunchLog): Promise<string> {
+async function ensureMainJar(
+  packDir: string,
+  jar: NonNullable<PatchJson["mainJar"]>,
+  minecraftVersion: string,
+  id: string,
+  emit: EmitLaunchLog,
+): Promise<string> {
   const destination = path.join(packDir, ".minecraft", "versions", minecraftVersion, `${minecraftVersion}.jar`);
   if (await exists(destination)) return destination;
   const url = jar.downloads.artifact?.url;
@@ -175,13 +190,19 @@ function effectiveVersion(component: MmcPackJson["components"][number]): string 
 export async function buildLaunchConfig(instance: string, id: string, emit: EmitLaunchLog): Promise<LaunchConfig> {
   await flattenNestedPack(instance);
   const mmcPath = path.join(instance, "mmc-pack.json");
-  const mmc = JSON.parse(await fs.readFile(mmcPath, "utf8")) as MmcPackJson;
-  const patches: Array<{ order: number; uid: string; patch: PatchJson }> = [];
-  for (const component of mmc.components) {
-    const patchPath = path.join(instance, "patches", `${component.uid}.json`);
-    if (!(await exists(patchPath))) continue;
-    patches.push({ order: Number((JSON.parse(await fs.readFile(patchPath, "utf8")) as PatchJson).order ?? 0), uid: component.uid, patch: JSON.parse(await fs.readFile(patchPath, "utf8")) as PatchJson });
-  }
+  const mmc = await readJson<MmcPackJson>(mmcPath);
+  if (!mmc) throw new Error(`invalid Minecraft pack metadata: ${mmcPath}`);
+  const patches = (
+    await Promise.all(
+      mmc.components.map(async (component) => {
+        const patchPath = path.join(instance, "patches", `${component.uid}.json`);
+        if (!(await exists(patchPath))) return null;
+        const patch = await readJson<PatchJson>(patchPath);
+        if (!patch) throw new Error(`invalid Minecraft patch metadata: ${patchPath}`);
+        return { order: Number(patch.order ?? 0), uid: component.uid, patch };
+      }),
+    )
+  ).filter((patch): patch is { order: number; uid: string; patch: PatchJson } => patch !== null);
   patches.sort((a, b) => a.order - b.order);
   let mainClass = "net.minecraft.launchwrapper.Launch";
   let minecraftVersion = "1.12.2";
@@ -192,6 +213,7 @@ export async function buildLaunchConfig(instance: string, id: string, emit: Emit
   let minecraftArgumentsTemplate: string | undefined;
   let assetIndex: PatchAssetIndex | undefined;
   let mainJar: NonNullable<PatchJson["mainJar"]> | undefined;
+  const componentByUid = new Map(mmc.components.map((component) => [component.uid, component]));
 
   for (const loaded of patches) {
     const { patch } = loaded;
@@ -200,25 +222,36 @@ export async function buildLaunchConfig(instance: string, id: string, emit: Emit
     for (const tweaker of patch["+tweakers"] ?? []) programArgs.push("--tweakClass", tweaker);
     const extraArgs = patch["+args"] ?? [];
     for (let i = 0; i < extraArgs.length; i += 1) {
-      if (extraArgs[i] === "--tweakClass" && extraArgs[i + 1]) { programArgs.push("--tweakClass", extraArgs[i + 1]); i += 1; }
-      else if (extraArgs[i].startsWith("--tweakClass=")) programArgs.push(extraArgs[i]);
+      if (extraArgs[i] === "--tweakClass" && extraArgs[i + 1]) {
+        programArgs.push("--tweakClass", extraArgs[i + 1]);
+        i += 1;
+      } else if (extraArgs[i].startsWith("--tweakClass=")) programArgs.push(extraArgs[i]);
       else jvmArgs.push(extraArgs[i]);
     }
     if (loaded.uid === "net.minecraft") {
-      const component = mmc.components.find((entry) => entry.uid === loaded.uid);
+      const component = componentByUid.get(loaded.uid);
       if (component) minecraftVersion = effectiveVersion(component);
       mainJar = patch.mainJar;
       minecraftArgumentsTemplate = patch.minecraftArguments;
       assetIndex = patch.assetIndex;
     }
-    for (const entry of patch.libraries ?? []) {
-      const resolved = await ensureLibrary(instance, entry, id, emit);
-      const spec = parseGradleSpec(entry.name);
-      if (!resolved || !spec) continue;
+    const resolvedLibraries = await Promise.all(
+      (patch.libraries ?? []).map(async (entry) => {
+        const resolved = await ensureLibrary(instance, entry, id, emit);
+        const spec = parseGradleSpec(entry.name);
+        if (!resolved || !spec) return null;
+        return { resolved, spec };
+      }),
+    );
+    for (const library of resolvedLibraries) {
+      if (!library) continue;
+      const { resolved, spec } = library;
       const key = `${spec.group}:${spec.artifact}`;
       const previous = index.get(key);
-      if (previous === undefined) { index.set(key, libraries.length); libraries.push({ path: resolved, version: spec.version, key }); }
-      else if (spec.version > libraries[previous].version) libraries[previous] = { path: resolved, version: spec.version, key };
+      if (previous === undefined) {
+        index.set(key, libraries.length);
+        libraries.push({ path: resolved, version: spec.version, key });
+      } else if (spec.version > libraries[previous].version) libraries[previous] = { path: resolved, version: spec.version, key };
     }
   }
   if (mainJar) {
@@ -227,8 +260,10 @@ export async function buildLaunchConfig(instance: string, id: string, emit: Emit
     if (spec) {
       const key = `${spec.group}:${spec.artifact}`;
       const previous = index.get(key);
-      if (previous === undefined) { index.set(key, libraries.length); libraries.push({ path: resolved, version: minecraftVersion, key }); }
-      else libraries[previous] = { path: resolved, version: minecraftVersion, key };
+      if (previous === undefined) {
+        index.set(key, libraries.length);
+        libraries.push({ path: resolved, version: minecraftVersion, key });
+      } else libraries[previous] = { path: resolved, version: minecraftVersion, key };
     } else libraries.push({ path: resolved, version: minecraftVersion, key: mainJar.name });
   }
   if (!libraries.length) throw new Error("no libraries resolved for launch");
@@ -237,7 +272,17 @@ export async function buildLaunchConfig(instance: string, id: string, emit: Emit
   const nativesDir = path.join(instance, "natives");
   await fs.mkdir(nativesDir, { recursive: true });
   jvmArgs.push(`-Djava.library.path=${nativesDir}`);
-  return { mainClass, minecraftVersion, libraries: libraries.map((entry) => entry.path), gameDir, assetsDir, jvmArgs, programArgs, minecraftArgumentsTemplate, assetIndex };
+  return {
+    mainClass,
+    minecraftVersion,
+    libraries: libraries.map((entry) => entry.path),
+    gameDir,
+    assetsDir,
+    jvmArgs,
+    programArgs,
+    minecraftArgumentsTemplate,
+    assetIndex,
+  };
 }
 
 export async function syncAssets(config: LaunchConfig, id: string, emit: EmitLaunchLog): Promise<void> {
@@ -249,7 +294,10 @@ export function buildClasspath(libraries: string[]): string {
 }
 
 export function expandMinecraftArguments(template: string, tokens: Record<string, string>): string[] {
-  return template.split(/\s+/u).filter(Boolean).map((part) => part.replace(/\$\{([^}]+)\}/gu, (_match, key: string) => tokens[key] ?? ""));
+  return template
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((part) => part.replace(/\$\{([^}]+)\}/gu, (_match, key: string) => tokens[key] ?? ""));
 }
 
 export function splitCommandArgs(command: string): string[] {
@@ -258,8 +306,12 @@ export function splitCommandArgs(command: string): string[] {
   let quoted = false;
   for (const char of command) {
     if (char === '"') quoted = !quoted;
-    else if ((char === " " || char === "\t") && !quoted) { if (current) { args.push(current); current = ""; } }
-    else current += char;
+    else if ((char === " " || char === "\t") && !quoted) {
+      if (current) {
+        args.push(current);
+        current = "";
+      }
+    } else current += char;
   }
   if (current) args.push(current);
   return args;
@@ -280,7 +332,7 @@ export async function runShellCommand(command: string, cwd: string, env: Record<
   await new Promise<void>((resolve, reject) => {
     const child = spawn(shellName, shellArgs, { cwd, env: { ...process.env, ...env }, stdio: "ignore", windowsHide: true });
     child.once("error", (error) => reject(new Error(`failed to run command (${command}): ${error.message}`)));
-    child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`command failed (${command}): exit ${code}`)));
+    child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`command failed (${command}): exit ${code}`))));
   });
 }
 
@@ -304,9 +356,15 @@ export function javaPath(): string | null {
 export async function detectJava(): Promise<Array<{ path: string; version: number }>> {
   const { execFile } = await import("node:child_process");
   const candidates = new Set<string>();
-  const addHome = (home: string | undefined) => { if (home) { const candidate = javaFromHome(home); if (candidate) candidates.add(candidate); } };
+  const addHome = (home: string | undefined) => {
+    if (home) {
+      const candidate = javaFromHome(home);
+      if (candidate) candidates.add(candidate);
+    }
+  };
   addHome(process.env.JAVA_HOME);
-  const pathJava = javaPath(); if (pathJava) candidates.add(pathJava);
+  const pathJava = javaPath();
+  if (pathJava) candidates.add(pathJava);
   if (process.platform === "win32") {
     for (const root of [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LOCALAPPDATA]) {
       if (!root) continue;
@@ -351,5 +409,3 @@ export function javaGuiExecutable(java: string): string {
 export function instanceCommandVars(id: string, name: string, instance: string, java: string): Record<string, string> {
   return { INST_NAME: name, INST_ID: id, INST_DIR: instance, INST_MC_DIR: path.join(instance, ".minecraft"), INST_JAVA: java };
 }
-
-export function makeLaunchLog(stream: string, line: string): LaunchLogLine { return { stream, line }; }

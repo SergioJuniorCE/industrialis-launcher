@@ -2,15 +2,7 @@ import crypto from "node:crypto";
 import { shell } from "electron";
 import { accountsPath } from "./paths";
 import { readJson, writeJson } from "./fs-utils";
-import type {
-  AccountData,
-  AccountInfo,
-  DeviceCodeInfo,
-  MinecraftEntitlement,
-  MinecraftProfile,
-  MsaToken,
-  StoredToken,
-} from "./types";
+import type { AccountData, AccountInfo, DeviceCodeInfo, MinecraftEntitlement, MinecraftProfile, MsaToken, StoredToken } from "./types";
 
 const clientId = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb";
 const scopes = "XboxLive.SignIn XboxLive.offline_access";
@@ -20,8 +12,12 @@ const refreshWindowSeconds = 12 * 60 * 60;
 
 let pendingOauth: { state: string; resolve: (code: string) => void; reject: (error: Error) => void } | null = null;
 
-function now(): number { return Math.floor(Date.now() / 1000); }
-function expiresIn(seconds: number): number { return now() + seconds; }
+function now(): number {
+  return Math.floor(Date.now() / 1000);
+}
+function expiresIn(seconds: number): number {
+  return now() + seconds;
+}
 
 export async function loadAccounts(): Promise<AccountData[]> {
   const raw = await readJson<unknown>(accountsPath());
@@ -52,17 +48,27 @@ function accountInfo(account: AccountData): AccountInfo {
     uuid: account.minecraft_profile?.id ?? "",
     account_type: account.account_type,
     ...(account.skin_png_base64 ? { skin_png_base64: account.skin_png_base64 } : {}),
-    ...(account.minecraft_entitlement ? {
-      owns_minecraft: account.minecraft_entitlement.owns_minecraft,
-      can_play_minecraft: account.minecraft_entitlement.can_play_minecraft,
-    } : {}),
+    ...(account.minecraft_entitlement
+      ? {
+          owns_minecraft: account.minecraft_entitlement.owns_minecraft,
+          can_play_minecraft: account.minecraft_entitlement.can_play_minecraft,
+        }
+      : {}),
   };
 }
 
-function isOffline(account: AccountData): boolean { return account.account_type === "offline"; }
-function accessToken(account: AccountData): string { return account.yggdrasil_token?.token ?? ""; }
-function profileName(account: AccountData): string { return account.minecraft_profile?.name ?? ""; }
-function profileId(account: AccountData): string { return account.minecraft_profile?.id ?? ""; }
+function isOffline(account: AccountData): boolean {
+  return account.account_type === "offline";
+}
+function accessToken(account: AccountData): string {
+  return account.yggdrasil_token?.token ?? "";
+}
+function profileName(account: AccountData): string {
+  return account.minecraft_profile?.name ?? "";
+}
+function profileId(account: AccountData): string {
+  return account.minecraft_profile?.id ?? "";
+}
 
 async function upsertAccount(account: AccountData): Promise<void> {
   const accounts = await loadAccounts();
@@ -106,10 +112,25 @@ export async function createOfflineAccount(usernameRaw: string): Promise<Account
 
 async function requestJson(url: string, init: RequestInit): Promise<{ status: number; body: any }> {
   const response = await fetch(url, init);
+  const status = response.status;
+  if (!response.ok) {
+    const text = await response.text();
+    let body: any = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = { raw: text };
+    }
+    return { status, body };
+  }
   const text = await response.text();
   let body: any = {};
-  try { body = text ? JSON.parse(text) : {}; } catch { body = { raw: text }; }
-  return { status: response.status, body };
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = { raw: text };
+  }
+  return { status, body };
 }
 
 async function requestDeviceCode(): Promise<any> {
@@ -153,11 +174,17 @@ async function pollDeviceCode(device: any): Promise<MsaToken> {
       };
     }
     switch (result.body.error) {
-      case "authorization_pending": continue;
-      case "slow_down": interval += 5; continue;
-      case "expired_token": throw new Error("device code expired — try again");
-      case "access_denied": throw new Error("login denied");
-      default: throw new Error(`device code poll failed (${result.body.error ?? "unknown"}): ${result.body.error_description ?? ""}`);
+      case "authorization_pending":
+        continue;
+      case "slow_down":
+        interval += 5;
+        continue;
+      case "expired_token":
+        throw new Error("device code expired — try again");
+      case "access_denied":
+        throw new Error("login denied");
+      default:
+        throw new Error(`device code poll failed (${result.body.error ?? "unknown"}): ${result.body.error_description ?? ""}`);
     }
   }
   throw new Error("device code login timed out");
@@ -176,8 +203,13 @@ function parseXboxExpiry(value: unknown): number {
 
 async function xboxUserAuth(msaAccess: string): Promise<any> {
   const result = await requestJson("https://user.auth.xboxlive.com/user/authenticate", {
-    method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ Properties: { AuthMethod: "RPS", SiteName: "user.auth.xboxlive.com", RpsTicket: `d=${msaAccess}` }, RelyingParty: "http://auth.xboxlive.com", TokenType: "JWT" }),
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      Properties: { AuthMethod: "RPS", SiteName: "user.auth.xboxlive.com", RpsTicket: `d=${msaAccess}` },
+      RelyingParty: "http://auth.xboxlive.com",
+      TokenType: "JWT",
+    }),
   });
   if (!result.body.Token) throw new Error(`Xbox user auth failed: ${JSON.stringify(result.body)}`);
   return result.body;
@@ -191,8 +223,13 @@ function xblUhs(body: any): string {
 
 async function xstsAuth(userToken: StoredToken): Promise<any> {
   const result = await requestJson("https://xsts.auth.xboxlive.com/xsts/authorize", {
-    method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", "x-xbl-contract-version": "1" },
-    body: JSON.stringify({ Properties: { SandboxId: "RETAIL", UserTokens: [userToken.token] }, RelyingParty: "rp://api.minecraftservices.com/", TokenType: "JWT" }),
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json", "x-xbl-contract-version": "1" },
+    body: JSON.stringify({
+      Properties: { SandboxId: "RETAIL", UserTokens: [userToken.token] },
+      RelyingParty: "rp://api.minecraftservices.com/",
+      TokenType: "JWT",
+    }),
   });
   if (result.status < 200 || result.status >= 300 || !result.body.Token) {
     const code = Number(result.body.XErr);
@@ -208,13 +245,15 @@ async function xstsAuth(userToken: StoredToken): Promise<any> {
 async function minecraftLogin(uhs: string, xstsToken: string): Promise<any> {
   const identity = `XBL3.0 x=${uhs};${xstsToken}`;
   const primary = await requestJson("https://api.minecraftservices.com/launcher/login", {
-    method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify({ xtoken: identity, platform: "PC_LAUNCHER" }),
   });
   if (primary.body.access_token) return primary.body;
   if (primary.body.error !== "FORBIDDEN") throw new Error(`Minecraft launcher login failed: ${JSON.stringify(primary.body)}`);
   const fallback = await requestJson("https://api.minecraftservices.com/authentication/login_with_xbox", {
-    method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify({ identityToken: identity }),
   });
   if (fallback.body.access_token) return fallback.body;
@@ -222,9 +261,12 @@ async function minecraftLogin(uhs: string, xstsToken: string): Promise<any> {
 }
 
 async function checkEntitlements(token: string): Promise<MinecraftEntitlement> {
-  const result = await requestJson("https://api.minecraftservices.com/entitlements/license?requestId=00000000-0000-0000-0000-000000000000", { headers: { Authorization: `Bearer ${token}` } });
+  const result = await requestJson("https://api.minecraftservices.com/entitlements/license?requestId=00000000-0000-0000-0000-000000000000", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (result.status < 200 || result.status >= 300) throw new Error(`entitlements check failed: ${JSON.stringify(result.body)}`);
-  let owns = false; let canPlay = false;
+  let owns = false;
+  let canPlay = false;
   for (const item of result.body.items ?? []) {
     if (["product_minecraft", "game_minecraft"].includes(item.name)) owns = true;
     if (["product_minecraft", "game_minecraft", "product_game_pass_pc"].includes(item.name)) canPlay = true;
@@ -276,11 +318,16 @@ export async function ensureFreshToken(account: AccountData): Promise<string> {
   const msa = account.msa_token;
   if (!msa || msa.expires_at - now() > refreshWindowSeconds) return accessToken(account);
   const result = await requestJson(msaTokenUrl, {
-    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: clientId, refresh_token: msa.refresh_token, grant_type: "refresh_token", scope: scopes }),
   });
   if (!result.body.access_token) throw new Error(`MSA refresh failed: ${JSON.stringify(result.body)}`);
-  const refreshed = await runPipeline({ access_token: result.body.access_token, refresh_token: result.body.refresh_token ?? msa.refresh_token, expires_at: expiresIn(Number(result.body.expires_in ?? 3600)) });
+  const refreshed = await runPipeline({
+    access_token: result.body.access_token,
+    refresh_token: result.body.refresh_token ?? msa.refresh_token,
+    expires_at: expiresIn(Number(result.body.expires_in ?? 3600)),
+  });
   refreshed.id = account.id;
   await upsertAccount(refreshed);
   return accessToken(refreshed);
@@ -288,7 +335,11 @@ export async function ensureFreshToken(account: AccountData): Promise<string> {
 
 export function handleOauthCallback(url: string): void {
   let parsed: URL;
-  try { parsed = new URL(url); } catch { return; }
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
   if (parsed.protocol !== "industrialislauncher:" || parsed.hostname !== "oauth" || !/^\/microsoft\/?$/u.test(parsed.pathname)) return;
   if (!pendingOauth) return;
   const current = pendingOauth;
@@ -299,4 +350,6 @@ export function handleOauthCallback(url: string): void {
   else current.resolve(parsed.searchParams.get("code") ?? "");
 }
 
-export function accountToInfo(account: AccountData): AccountInfo { return accountInfo(account); }
+export function accountToInfo(account: AccountData): AccountInfo {
+  return accountInfo(account);
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/react-doctor@latest/schema.json",
+  "ignore": {
+    "files": [".vite/**"],
+    "overrides": [
+      {
+        "files": ["electron/preload.ts"],
+        "rules": ["deslop/unused-file"]
+      },
+      {
+        "files": ["package.json"],
+        "rules": ["deslop/unused-dependency", "deslop/unused-dev-dependency"]
+      }
+    ]
+  }
+}
