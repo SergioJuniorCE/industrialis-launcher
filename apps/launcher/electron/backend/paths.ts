@@ -9,6 +9,10 @@ export function instancesDir(): string {
   return path.join(dataDir(), "instances");
 }
 
+export function iconsDir(): string {
+  return path.join(dataDir(), "icons");
+}
+
 export function instanceDir(id: string): string {
   return path.join(instancesDir(), sanitizeName(id));
 }
@@ -38,7 +42,7 @@ export function packCacheRoot(): string {
 }
 
 export function sanitizeName(value: string): string {
-  return [...value].map((char) => /[\s/\\:*?"<>|]/u.test(char) ? "_" : char).join("");
+  return [...value].map((char) => (/[\s/\\:*?"<>|]/u.test(char) ? "_" : char)).join("");
 }
 
 export function validateInstanceId(raw: string): string {
