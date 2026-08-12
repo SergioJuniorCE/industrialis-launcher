@@ -16,6 +16,7 @@ import {
   setInstanceGroup,
 } from "./groups";
 import { copyTree, dirSize, exists, listFiles, removeIfExists } from "./fs-utils";
+import { defaultInstanceIconPath, ensureInstanceIconLibrary, importInstanceIcon, instanceIconLibraryPath, listInstanceIcons } from "./instance-icons";
 import {
   buildClasspath,
   buildLaunchConfig,
@@ -51,7 +52,7 @@ import {
   removeCustomModsExcept,
 } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
-import { consoleLogPath, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
+import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
 import { killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
 import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
@@ -80,6 +81,7 @@ interface LaunchArgs {
   content?: string;
   persist?: boolean;
   sourcePath?: string;
+  iconId?: string;
   identity?: string;
   oldName?: string;
   order?: string[];
@@ -242,6 +244,14 @@ export class LauncherBackend {
         return removeCustomMod(instanceDir(sanitizeName(args.id)), String(args.identity));
       case "browse_instance_icon_file":
         return this.pickFile("Choose an instance icon", [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico"] }]);
+      case "list_instance_icons":
+        return listInstanceIcons();
+      case "import_instance_icon":
+        return importInstanceIcon(String(args.sourcePath ?? ""));
+      case "set_instance_icon_from_library":
+        return this.setInstanceIconFromLibrary(args);
+      case "open_instance_icons_folder":
+        return this.openInstanceIconsFolder();
       case "set_instance_icon":
         return this.setInstanceIcon(args);
       case "clear_instance_icon":
@@ -348,6 +358,7 @@ export class LauncherBackend {
       await copyTree(source, destination);
       const settings = await loadInstanceSettings(newId);
       settings.name = newName;
+      if (!(await this.resolveIconPath(newId, settings))) settings.custom_icon = await installDefaultInstanceIcon(destination);
       settings.cached_size_bytes = await dirSize(destination);
       await saveInstanceSettings(newId, settings);
       const group = await getInstanceGroup(sourceId, known);
@@ -391,11 +402,13 @@ export class LauncherBackend {
     await removeIfExists(staging);
     await flattenNestedPack(instance);
     await prepareInstanceConfigs(instance, true);
+    const customIcon = await installDefaultInstanceIcon(instance);
     const settings = {
       ...defaultSettings(),
       name: String(args.name ?? "").trim() || `GTNH ${packVersion}`,
       pack_version: packVersion,
       pack_java_type: javaType,
+      custom_icon: customIcon,
     };
     await this.saveAndRefreshSize(id, settings);
     if (args.group) await setInstanceGroup(id, args.group, await this.knownInstanceIds());
@@ -512,6 +525,17 @@ export class LauncherBackend {
     const settings = await loadInstanceSettings(id);
     settings.custom_icon = filename;
     await saveInstanceSettings(id, settings);
+  }
+
+  private async setInstanceIconFromLibrary(args: LaunchArgs): Promise<void> {
+    const sourcePath = await instanceIconLibraryPath(String(args.iconId ?? ""));
+    await this.setInstanceIcon({ ...args, sourcePath });
+  }
+
+  private async openInstanceIconsFolder(): Promise<void> {
+    await ensureInstanceIconLibrary();
+    const error = await shell.openPath(iconsDir());
+    if (error) throw new Error(`failed to open icons folder: ${error}`);
   }
 
   private async clearInstanceIcon(rawId: string): Promise<void> {
@@ -733,6 +757,14 @@ export class LauncherBackend {
   dispose(): void {
     /* detached game processes intentionally remain alive when Electron exits */
   }
+}
+
+const defaultInstanceIconFilename = "instance-icon.png";
+
+async function installDefaultInstanceIcon(instance: string): Promise<string> {
+  const source = await defaultInstanceIconPath();
+  await fs.copyFile(source, path.join(instance, defaultInstanceIconFilename));
+  return defaultInstanceIconFilename;
 }
 
 function defaultSettings(): InstanceSettings {

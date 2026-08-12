@@ -18,7 +18,7 @@ const config: ForgeConfig = {
     name: executableName,
     executableName,
     icon: path.resolve(__dirname, "electron/assets/icon"),
-    extraResource: [path.resolve(__dirname, "electron/config")],
+    extraResource: [path.resolve(__dirname, "electron/config"), path.resolve(__dirname, "electron/icons")],
     protocols: [
       {
         name: "Industrialis Launcher",
