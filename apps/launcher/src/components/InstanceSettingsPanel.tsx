@@ -9,16 +9,11 @@ import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Textarea } from "./ui/textarea";
-import {
-  DEFAULT_INSTANCE_SETTINGS,
-  formatPlayTime,
-  mergeInstanceSettings,
-  type InstanceSettings,
-} from "../lib/instance-settings";
+import { DEFAULT_INSTANCE_SETTINGS, formatPlayTime, mergeInstanceSettings, type InstanceSettings } from "../lib/instance-settings";
 
 interface JavaInfo {
   path: string;
-  version: number;
+  version: string;
 }
 
 interface AccountOption {
@@ -60,9 +55,7 @@ function SettingsSection({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className={enabled ? "space-y-2" : "space-y-2 opacity-50 pointer-events-none"}>
-        {children}
-      </CardContent>
+      <CardContent className={enabled ? "space-y-2" : "space-y-2 opacity-50 pointer-events-none"}>{children}</CardContent>
     </Card>
   );
 }
@@ -76,13 +69,7 @@ function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: stri
   );
 }
 
-function EnvVarEditor({
-  value,
-  onChange,
-}: {
-  value: Record<string, string>;
-  onChange: (next: Record<string, string>) => void;
-}) {
+function EnvVarEditor({ value, onChange }: { value: Record<string, string>; onChange: (next: Record<string, string>) => void }) {
   const entries = Object.entries(value);
   const rows = entries.length > 0 ? entries : [["", ""]];
 
@@ -113,18 +100,8 @@ function EnvVarEditor({
     <div className="space-y-2">
       {rows.map(([key, val], index) => (
         <div key={key || "new-variable"} className="flex gap-2">
-          <Input
-            value={key}
-            onChange={(e) => updateRow(index, e.target.value, val)}
-            placeholder="VAR_NAME"
-            className="font-mono text-xs"
-          />
-          <Input
-            value={val}
-            onChange={(e) => updateRow(index, key, e.target.value)}
-            placeholder="value"
-            className="font-mono text-xs flex-1"
-          />
+          <Input value={key} onChange={(e) => updateRow(index, e.target.value, val)} placeholder="VAR_NAME" className="font-mono text-xs" />
+          <Input value={val} onChange={(e) => updateRow(index, key, e.target.value)} placeholder="value" className="font-mono text-xs flex-1" />
           <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(index)}>
             ✕
           </Button>
@@ -137,13 +114,7 @@ function EnvVarEditor({
   );
 }
 
-function AdvancedSettingsTabs({
-  settings,
-  update,
-}: {
-  settings: InstanceSettings;
-  update: (patch: Partial<InstanceSettings>) => void;
-}) {
+function AdvancedSettingsTabs({ settings, update }: { settings: InstanceSettings; update: (patch: Partial<InstanceSettings>) => void }) {
   return (
     <>
       <TabsContent value="commands" className="space-y-2 mt-2">
@@ -172,22 +143,13 @@ function AdvancedSettingsTabs({
             value={settings.post_exit_command}
             onChange={(event) => update({ post_exit_command: event.target.value })}
           />
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Available variables: $INST_NAME, $INST_ID, $INST_DIR, $INST_MC_DIR, $INST_JAVA
-          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">Available variables: $INST_NAME, $INST_ID, $INST_DIR, $INST_MC_DIR, $INST_JAVA</p>
         </SettingsSection>
       </TabsContent>
 
       <TabsContent value="environment" className="space-y-2 mt-2">
-        <SettingsSection
-          title="Environment variables"
-          override={settings.override_env}
-          onOverrideChange={(value) => update({ override_env: value })}
-        >
-          <EnvVarEditor
-            value={settings.env_vars}
-            onChange={(env_vars) => update({ env_vars })}
-          />
+        <SettingsSection title="Environment variables" override={settings.override_env} onOverrideChange={(value) => update({ override_env: value })}>
+          <EnvVarEditor value={settings.env_vars} onChange={(env_vars) => update({ env_vars })} />
         </SettingsSection>
       </TabsContent>
     </>
@@ -275,15 +237,18 @@ export function InstanceSettingsPanel({
     };
   }, [flushPendingSave, instanceId]);
 
-  const update = useCallback((patch: Partial<InstanceSettings>) => {
-    loadVersionRef.current += 1;
-    const next = { ...settingsRef.current, ...patch };
-    settingsRef.current = next;
-    setSettings(next);
-    pendingSaveRef.current = { id: instanceId, settings: next };
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(flushPendingSave, 250);
-  }, [flushPendingSave, instanceId]);
+  const update = useCallback(
+    (patch: Partial<InstanceSettings>) => {
+      loadVersionRef.current += 1;
+      const next = { ...settingsRef.current, ...patch };
+      settingsRef.current = next;
+      setSettings(next);
+      pendingSaveRef.current = { id: instanceId, settings: next };
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(flushPendingSave, 250);
+    },
+    [flushPendingSave, instanceId],
+  );
 
   const browseJava = async () => {
     const picked = await invoke<string | null>("browse_java_executable");
@@ -328,25 +293,12 @@ export function InstanceSettingsPanel({
             </CardHeader>
             <CardContent>
               <FieldLabel>Display name</FieldLabel>
-              <Input
-                className="mt-1"
-                value={settings.name}
-                onChange={(e) => update({ name: e.target.value })}
-                placeholder={`GTNH ${packVersion}`}
-              />
+              <Input className="mt-1" value={settings.name} onChange={(e) => update({ name: e.target.value })} placeholder={`GTNH ${packVersion}`} />
             </CardContent>
           </Card>
 
-          <SettingsSection
-            title="Game window"
-            override={settings.override_window}
-            onOverrideChange={(v) => update({ override_window: v })}
-          >
-            <Checkbox
-              checked={settings.launch_maximized}
-              onChange={(e) => update({ launch_maximized: e.target.checked })}
-              label="Start Minecraft maximized"
-            />
+          <SettingsSection title="Game window" override={settings.override_window} onOverrideChange={(v) => update({ override_window: v })}>
+            <Checkbox checked={settings.launch_maximized} onChange={(e) => update({ launch_maximized: e.target.checked })} label="Start Minecraft maximized" />
             {!settings.launch_maximized && (
               <div className="flex items-center gap-2 flex-wrap">
                 <FieldLabel hint="Passed as --width / --height at launch">Window size</FieldLabel>
@@ -401,11 +353,7 @@ export function InstanceSettingsPanel({
             />
           </SettingsSection>
 
-          <SettingsSection
-            title="Play time"
-            override={settings.override_game_time}
-            onOverrideChange={(v) => update({ override_game_time: v })}
-          >
+          <SettingsSection title="Play time" override={settings.override_game_time} onOverrideChange={(v) => update({ override_game_time: v })}>
             <Checkbox
               checked={settings.show_game_time}
               onChange={(e) => update({ show_game_time: e.target.checked })}
@@ -416,26 +364,12 @@ export function InstanceSettingsPanel({
               onChange={(e) => update({ record_game_time: e.target.checked })}
               label="Record time spent playing this instance"
             />
-            {settings.total_play_seconds > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Total recorded: {formatPlayTime(settings.total_play_seconds)}
-              </p>
-            )}
+            {settings.total_play_seconds > 0 && <p className="text-xs text-muted-foreground">Total recorded: {formatPlayTime(settings.total_play_seconds)}</p>}
           </SettingsSection>
 
-          <SettingsSection
-            title="Override default account"
-            override={settings.override_account}
-            onOverrideChange={(v) => update({ override_account: v })}
-          >
-            <FieldLabel hint="Leave empty to use the launcher default account for every launch.">
-              Account
-            </FieldLabel>
-            <Select
-              className="mt-1"
-              value={settings.account_id ?? ""}
-              onChange={(e) => update({ account_id: e.target.value || null })}
-            >
+          <SettingsSection title="Override default account" override={settings.override_account} onOverrideChange={(v) => update({ override_account: v })}>
+            <FieldLabel hint="Leave empty to use the launcher default account for every launch.">Account</FieldLabel>
+            <Select className="mt-1" value={settings.account_id ?? ""} onChange={(e) => update({ account_id: e.target.value || null })}>
               <option value="">Use launcher default account</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -451,9 +385,7 @@ export function InstanceSettingsPanel({
             onOverrideChange={(v) => update({ join_server_on_launch: v })}
             overrideLabel="Enable"
           >
-            <FieldLabel hint="Connects on launch when supported (1.7.10: passes --server).">
-              Server address
-            </FieldLabel>
+            <FieldLabel hint="Connects on launch when supported (1.7.10: passes --server).">Server address</FieldLabel>
             <Input
               className="mt-1 font-mono text-sm"
               value={settings.join_server_address}
@@ -464,11 +396,7 @@ export function InstanceSettingsPanel({
         </TabsContent>
 
         <TabsContent value="java" className="space-y-2 mt-2">
-          <SettingsSection
-            title="Java installation"
-            override={settings.override_java_location}
-            onOverrideChange={(v) => update({ override_java_location: v })}
-          >
+          <SettingsSection title="Java installation" override={settings.override_java_location} onOverrideChange={(v) => update({ override_java_location: v })}>
             <FieldLabel>Java executable</FieldLabel>
             <Input
               className="mt-1 font-mono text-xs"
@@ -487,9 +415,7 @@ export function InstanceSettingsPanel({
                 {testingJava ? "Testing…" : "Test settings"}
               </Button>
             </div>
-            {javaTestResult ? (
-              <pre className="text-xs bg-muted rounded p-2 whitespace-pre-wrap font-mono">{javaTestResult}</pre>
-            ) : null}
+            {javaTestResult ? <pre className="text-xs bg-muted rounded p-2 whitespace-pre-wrap font-mono">{javaTestResult}</pre> : null}
             <Checkbox
               checked={settings.skip_java_compat}
               onChange={(e) => update({ skip_java_compat: e.target.checked })}
@@ -497,11 +423,7 @@ export function InstanceSettingsPanel({
             />
           </SettingsSection>
 
-          <SettingsSection
-            title="Memory"
-            override={settings.override_memory}
-            onOverrideChange={(v) => update({ override_memory: v })}
-          >
+          <SettingsSection title="Memory" override={settings.override_memory} onOverrideChange={(v) => update({ override_memory: v })}>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <FieldLabel hint="-Xms">Minimum memory (MiB)</FieldLabel>
@@ -533,11 +455,7 @@ export function InstanceSettingsPanel({
             </div>
           </SettingsSection>
 
-          <SettingsSection
-            title="Java arguments"
-            override={settings.override_java_args}
-            onOverrideChange={(v) => update({ override_java_args: v })}
-          >
+          <SettingsSection title="Java arguments" override={settings.override_java_args} onOverrideChange={(v) => update({ override_java_args: v })}>
             <Textarea
               value={settings.jvm_args}
               onChange={(e) => update({ jvm_args: e.target.value })}
@@ -549,7 +467,6 @@ export function InstanceSettingsPanel({
 
         <AdvancedSettingsTabs settings={settings} update={update} />
       </Tabs>
-
     </div>
   );
 }

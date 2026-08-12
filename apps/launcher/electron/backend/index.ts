@@ -20,18 +20,15 @@ import { defaultInstanceIconPath, ensureInstanceIconLibrary, importInstanceIcon,
 import {
   buildClasspath,
   buildLaunchConfig,
-  detectJava,
   expandMinecraftArguments,
   instanceCommandVars,
-  javaGuiExecutable,
-  javaPath,
   runShellCommand,
   splitCommandArgs,
   substituteCommandVars,
   syncAssets,
-  testJava,
   writeLaunchArgfile,
 } from "./launch";
+import { detectJava, javaGuiExecutable, javaPath, testJava } from "./java";
 import { backupPlayerData, preserveDirName, restorePlayerData, wipeInstanceForReinstall } from "./migration";
 import {
   applyPersistentMinecraft,

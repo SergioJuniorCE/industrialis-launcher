@@ -126,7 +126,10 @@ export interface InstanceInfo {
 
 export interface JavaInfo {
   path: string;
-  version: number;
+  version: string;
+  majorVersion: number;
+  architecture: string;
+  vendor: string;
 }
 
 export interface InstanceGroupsState {

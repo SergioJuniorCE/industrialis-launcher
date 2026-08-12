@@ -71,11 +71,13 @@ import { InstanceAvatar } from "./components/InstanceAvatar";
 import { InstanceGridCard, type InstanceGridCardCommands } from "./components/InstanceGridCard";
 import { LauncherUpdateDialog, type LauncherUpdateState } from "./components/LauncherUpdateDialog";
 import { WindowControls } from "./components/WindowControls";
+import { JavaInstallationPicker } from "./components/JavaInstallationPicker";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
 import { cn, keyedByOccurrence } from "./lib/utils";
+import type { JavaInfo } from "./lib/java-installations";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./components/ui/context-menu";
 import { useLauncherStore, type GtnhVersion, type InstanceGroupsState, type InstanceInfo, type LauncherAccount } from "./stores/launcher-store";
 import "./App.css";
@@ -83,11 +85,6 @@ import "./App.css";
 const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 
 // ── Types ──
-
-interface JavaInfo {
-  path: string;
-  version: number;
-}
 
 interface LaunchLogEvent extends LaunchLogLine {
   id: string;
@@ -1255,25 +1252,29 @@ export default function App() {
           }}
         />
       ) : (
-        <main className="flex-1 overflow-auto p-4 max-w-2xl">
+        <main className="min-w-0 flex-1 overflow-auto">
           {tab === "settings" && (
-            <SettingsTab
-              javaOptions={javaOptions}
-              javaRefreshing={javaRefreshing}
-              onRefreshJava={refreshJava}
-              defaultJavaPath={launcherSettings.default_java_path ?? null}
-              onDefaultJavaChange={handleSetDefaultJava}
-              gridColumns={launcherSettings.instance_grid_columns ?? 3}
-              onGridColumnsChange={(columns) => updateSettings({ instance_grid_columns: columns })}
-            />
+            <div className="w-full max-w-5xl p-4">
+              <SettingsTab
+                javaOptions={javaOptions}
+                javaRefreshing={javaRefreshing}
+                onRefreshJava={refreshJava}
+                defaultJavaPath={launcherSettings.default_java_path ?? null}
+                onDefaultJavaChange={handleSetDefaultJava}
+                gridColumns={launcherSettings.instance_grid_columns ?? 3}
+                onGridColumnsChange={(columns) => updateSettings({ instance_grid_columns: columns })}
+              />
+            </div>
           )}
           {tab === "accounts" && (
-            <AccountsTab
-              onSetDefaultAccount={handleSetDefaultAccount}
-              defaultAccountId={defaultAccountId}
-              launchRedirect={accountsLaunchRedirect ? { instanceName: accountsLaunchRedirect.instanceName } : null}
-              onDismissRedirect={() => setAccountsLaunchRedirect(null)}
-            />
+            <div className="w-full max-w-2xl p-4">
+              <AccountsTab
+                onSetDefaultAccount={handleSetDefaultAccount}
+                defaultAccountId={defaultAccountId}
+                launchRedirect={accountsLaunchRedirect ? { instanceName: accountsLaunchRedirect.instanceName } : null}
+                onDismissRedirect={() => setAccountsLaunchRedirect(null)}
+              />
+            </div>
           )}
         </main>
       )}
@@ -2100,93 +2101,95 @@ function SettingsTab({
   gridColumns: number;
   onGridColumnsChange: (columns: number) => void;
 }) {
+  const [settingsTab, setSettingsTab] = useState("java");
+
   const browseDefaultJava = async () => {
     const picked = await invoke<string | null>("browse_java_executable");
     if (picked) onDefaultJavaChange(picked);
   };
-  const selectedJavaIsDetected = defaultJavaPath !== null && javaOptions.some((java) => java.path === defaultJavaPath);
-
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2">
-          <CardTitle>Java Detection</CardTitle>
-          <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
-            <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
-            {javaRefreshing ? "Scanning..." : "Refresh"}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="default-java">Default Java installation</Label>
-            <div className="flex gap-2">
-              <Select id="default-java" className="flex-1" value={defaultJavaPath ?? ""} onChange={(e) => onDefaultJavaChange(e.target.value || null)}>
-                <option value="">Auto-detect (JAVA_HOME / PATH)</option>
-                {!selectedJavaIsDetected && defaultJavaPath && <option value={defaultJavaPath}>{defaultJavaPath}</option>}
-                {javaOptions.map((java) => (
-                  <option key={java.path} value={java.path}>
-                    Java {java.version} — {java.path}
-                  </option>
-                ))}
-              </Select>
-              <Button type="button" variant="outline" onClick={() => void browseDefaultJava()}>
-                Browse
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">Used by every instance unless that instance has a Java location override.</p>
-          </div>
-          <p className="text-sm text-muted-foreground mb-2">Detected Java installations:</p>
-          {javaOptions.length === 0 && <p className="text-xs text-muted-foreground">None found</p>}
-          <div className="space-y-1">
-            {javaOptions.map((j) => (
-              <div key={j.path} className="text-sm font-mono bg-muted p-2 rounded">
-                <span className="text-foreground font-medium">Java {j.version}</span>
-                <span className="text-muted-foreground ml-2 text-xs">{j.path}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+    <Tabs value={settingsTab} onValueChange={setSettingsTab}>
+      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-4 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
+        <TabsTrigger value="java" className="h-9 rounded-md text-sm">
+          Java
+        </TabsTrigger>
+        <TabsTrigger value="instances" className="h-9 rounded-md text-sm">
+          Instance Library
+        </TabsTrigger>
+        <TabsTrigger value="appearance" className="h-9 rounded-md text-sm">
+          Appearance
+        </TabsTrigger>
+        <TabsTrigger value="about" className="h-9 rounded-md text-sm">
+          About
+        </TabsTrigger>
+      </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Instance Library</CardTitle>
-          <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="instance-grid-columns">Grid columns</Label>
-          <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
-            <option value="2">2 columns</option>
-            <option value="3">3 columns</option>
-            <option value="4">4 columns</option>
-            <option value="5">5 columns</option>
-          </Select>
-          <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
-        </CardContent>
-      </Card>
+      <TabsContent value="java" className="mt-4">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-2">
+            <CardTitle>Java Detection</CardTitle>
+            <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
+              <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
+              {javaRefreshing ? "Scanning..." : "Refresh"}
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <JavaInstallationPicker
+              installations={javaOptions}
+              refreshing={javaRefreshing}
+              selectedPath={defaultJavaPath}
+              onBrowse={browseDefaultJava}
+              onSelect={onDefaultJavaChange}
+            />
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-      <ThemePresetPicker />
+      <TabsContent value="instances" className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Instance Library</CardTitle>
+            <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label htmlFor="instance-grid-columns">Grid columns</Label>
+            <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
+              <option value="2">2 columns</option>
+              <option value="3">3 columns</option>
+              <option value="4">4 columns</option>
+              <option value="5">5 columns</option>
+            </Select>
+            <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>About</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-1">
-          <p>Industrialis Launcher v0.1.0</p>
-          <p>GT New Horizons modpack manager built with Electron.</p>
-          <a
-            href={GITHUB_URL}
-            className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
-            onClick={(e) => {
-              e.preventDefault();
-              void openUrl(GITHUB_URL).catch(() => undefined);
-            }}
-          >
-            <ExternalLink className="size-3.5" />
-            View on GitHub
-          </a>
-        </CardContent>
-      </Card>
-    </div>
+      <TabsContent value="appearance" className="mt-4">
+        <ThemePresetPicker />
+      </TabsContent>
+
+      <TabsContent value="about" className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>About</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-1">
+            <p>Industrialis Launcher v0.1.0</p>
+            <p>GT New Horizons modpack manager built with Electron.</p>
+            <a
+              href={GITHUB_URL}
+              className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                void openUrl(GITHUB_URL).catch(() => undefined);
+              }}
+            >
+              <ExternalLink className="size-3.5" />
+              View on GitHub
+            </a>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
