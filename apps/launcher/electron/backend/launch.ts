@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { exists, readJson } from "./fs-utils";
+import { exists, mapConcurrent, readJson } from "./fs-utils";
 import { flattenNestedPack } from "./pack";
 import type { LaunchConfig, PatchAssetIndex } from "./types";
 
@@ -129,27 +129,23 @@ async function ensureAssets(assetsDir: string, index: PatchAssetIndex, id: strin
   const parsed = JSON.parse(indexBuffer.toString("utf8")) as { objects?: Record<string, { hash: string; size: number }> };
   const objects = Object.values(parsed.objects ?? {});
   const missing = (
-    await Promise.all(
-      objects.map(async (object) => {
-        const target = assetPath(assetsDir, object.hash);
-        const stat = await fs.stat(target).catch(() => null);
-        return !stat || stat.size !== object.size ? object : null;
-      }),
-    )
+    await mapConcurrent(objects, async (object) => {
+      const target = assetPath(assetsDir, object.hash);
+      const stat = await fs.stat(target).catch(() => null);
+      return !stat || stat.size !== object.size ? object : null;
+    })
   ).filter((object): object is (typeof objects)[number] => object !== null);
   if (!missing.length) {
     emit(id, "system", `Assets up to date (${objects.length} objects)`);
     return;
   }
   emit(id, "system", `Downloading ${missing.length} of ${objects.length} asset objects…`);
-  await Promise.all(
-    missing.map(async (object) => {
-      const target = assetPath(assetsDir, object.hash);
-      await downloadToFile(assetUrl(object.hash), target);
-      const stat = await fs.stat(target).catch(() => null);
-      if (!stat || stat.size !== object.size) throw new Error(`asset object ${assetDigest(object.hash)} did not verify after download`);
-    }),
-  );
+  await mapConcurrent(missing, async (object) => {
+    const target = assetPath(assetsDir, object.hash);
+    await downloadToFile(assetUrl(object.hash), target);
+    const stat = await fs.stat(target).catch(() => null);
+    if (!stat || stat.size !== object.size) throw new Error(`asset object ${assetDigest(object.hash)} did not verify after download`);
+  });
   emit(id, "system", "Asset sync complete");
 }
 
@@ -193,15 +189,13 @@ export async function buildLaunchConfig(instance: string, id: string, emit: Emit
   const mmc = await readJson<MmcPackJson>(mmcPath);
   if (!mmc) throw new Error(`invalid Minecraft pack metadata: ${mmcPath}`);
   const patches = (
-    await Promise.all(
-      mmc.components.map(async (component) => {
-        const patchPath = path.join(instance, "patches", `${component.uid}.json`);
-        if (!(await exists(patchPath))) return null;
-        const patch = await readJson<PatchJson>(patchPath);
-        if (!patch) throw new Error(`invalid Minecraft patch metadata: ${patchPath}`);
-        return { order: Number(patch.order ?? 0), uid: component.uid, patch };
-      }),
-    )
+    await mapConcurrent(mmc.components, async (component) => {
+      const patchPath = path.join(instance, "patches", `${component.uid}.json`);
+      if (!(await exists(patchPath))) return null;
+      const patch = await readJson<PatchJson>(patchPath);
+      if (!patch) throw new Error(`invalid Minecraft patch metadata: ${patchPath}`);
+      return { order: Number(patch.order ?? 0), uid: component.uid, patch };
+    })
   ).filter((patch): patch is { order: number; uid: string; patch: PatchJson } => patch !== null);
   patches.sort((a, b) => a.order - b.order);
   let mainClass = "net.minecraft.launchwrapper.Launch";
@@ -214,6 +208,15 @@ export async function buildLaunchConfig(instance: string, id: string, emit: Emit
   let assetIndex: PatchAssetIndex | undefined;
   let mainJar: NonNullable<PatchJson["mainJar"]> | undefined;
   const componentByUid = new Map(mmc.components.map((component) => [component.uid, component]));
+  const libraryPromises = new Map<string, Promise<string | null>>();
+  const resolveLibrary = (entry: PatchLibraryEntry): Promise<string | null> => {
+    const key = [entry.name, entry["MMC-hint"] ?? "", entry["MMC-absoluteUrl"] ?? "", entry.url ?? ""].join("\0");
+    const existing = libraryPromises.get(key);
+    if (existing) return existing;
+    const promise = ensureLibrary(instance, entry, id, emit);
+    libraryPromises.set(key, promise);
+    return promise;
+  };
 
   for (const loaded of patches) {
     const { patch } = loaded;
@@ -235,24 +238,25 @@ export async function buildLaunchConfig(instance: string, id: string, emit: Emit
       minecraftArgumentsTemplate = patch.minecraftArguments;
       assetIndex = patch.assetIndex;
     }
-    const resolvedLibraries = await Promise.all(
-      (patch.libraries ?? []).map(async (entry) => {
-        const resolved = await ensureLibrary(instance, entry, id, emit);
-        const spec = parseGradleSpec(entry.name);
-        if (!resolved || !spec) return null;
-        return { resolved, spec };
-      }),
-    );
-    for (const library of resolvedLibraries) {
-      if (!library) continue;
-      const { resolved, spec } = library;
-      const key = `${spec.group}:${spec.artifact}`;
-      const previous = index.get(key);
-      if (previous === undefined) {
-        index.set(key, libraries.length);
-        libraries.push({ path: resolved, version: spec.version, key });
-      } else if (spec.version > libraries[previous].version) libraries[previous] = { path: resolved, version: spec.version, key };
-    }
+  }
+  const resolvedLibraries = await mapConcurrent(
+    patches.flatMap(({ patch }) => patch.libraries ?? []),
+    async (entry) => {
+      const resolved = await resolveLibrary(entry);
+      const spec = parseGradleSpec(entry.name);
+      if (!resolved || !spec) return null;
+      return { resolved, spec };
+    },
+  );
+  for (const library of resolvedLibraries) {
+    if (!library) continue;
+    const { resolved, spec } = library;
+    const key = `${spec.group}:${spec.artifact}`;
+    const previous = index.get(key);
+    if (previous === undefined) {
+      index.set(key, libraries.length);
+      libraries.push({ path: resolved, version: spec.version, key });
+    } else if (spec.version > libraries[previous].version) libraries[previous] = { path: resolved, version: spec.version, key };
   }
   if (mainJar) {
     const resolved = await ensureMainJar(instance, mainJar, minecraftVersion, id, emit);

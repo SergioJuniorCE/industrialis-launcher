@@ -6,10 +6,6 @@
       {
         "files": ["electron/preload.ts"],
         "rules": ["deslop/unused-file"]
-      },
-      {
-        "files": ["package.json"],
-        "rules": ["deslop/unused-dependency", "deslop/unused-dev-dependency"]
       }
     ]
   }

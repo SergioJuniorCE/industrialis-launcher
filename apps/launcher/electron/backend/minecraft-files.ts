@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { exists } from "./fs-utils";
+import { exists, runConcurrent } from "./fs-utils";
 import type { MinecraftDirEntry } from "./types";
 
 const maxReadBytes = 2 * 1024 * 1024;
@@ -37,18 +37,16 @@ export function isPathEditable(input: string): boolean {
 async function persistentPaths(instance: string): Promise<Set<string>> {
   const overlay = persistentMinecraftDir(instance);
   const result = new Set<string>();
-  async function visit(dir: string): Promise<void> {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    await Promise.all(
-      entries.map(async (entry) => {
-        const child = path.join(dir, entry.name);
-        const rel = path.relative(overlay, child).replaceAll("\\", "/");
-        if (entry.isDirectory()) await visit(child);
-        else result.add(rel);
-      }),
-    );
-  }
-  if (await exists(overlay)) await visit(overlay);
+  if (!(await exists(overlay))) return result;
+  await runConcurrent([overlay], async (directory, enqueue) => {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const child = path.join(directory, entry.name);
+      const rel = path.relative(overlay, child).replaceAll("\\", "/");
+      if (entry.isDirectory()) enqueue(child);
+      else result.add(rel);
+    }
+  });
   return result;
 }
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
@@ -49,7 +49,9 @@ function SettingsSection({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className={enabled ? "space-y-2" : "space-y-2 opacity-50 pointer-events-none"}>{children}</CardContent>
+      <CardContent inert={!enabled} className={enabled ? "space-y-2" : "space-y-2 opacity-50"}>
+        {children}
+      </CardContent>
     </Card>
   );
 }
@@ -63,37 +65,50 @@ function FieldLabel({ children, hint }: { children: ReactNode; hint?: string }) 
   );
 }
 
+type EnvRow = [string, string];
+
+function envRowsToRecord(rows: readonly EnvRow[]): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of rows) {
+    const trimmed = key.trim();
+    if (trimmed) result[trimmed] = value;
+  }
+  return result;
+}
+
 function EnvVarEditor({ value, onChange }: { value: Record<string, string>; onChange: (next: Record<string, string>) => void }) {
   const entries = Object.entries(value);
-  const rows = entries.length > 0 ? entries : [["", ""]];
+  const rows: EnvRow[] = entries.length > 0 ? entries : [["", ""]];
+  const rowKeys = useRef<string[]>([]);
+  const nextRowKey = useRef(0);
+
+  const getStableRowKey = (index: number): string => {
+    const existing = rowKeys.current[index];
+    if (existing) return existing;
+    const key = `env-row-${nextRowKey.current}`;
+    nextRowKey.current += 1;
+    rowKeys.current[index] = key;
+    return key;
+  };
 
   const updateRow = (index: number, key: string, val: string) => {
     const next = [...rows];
     next[index] = [key, val];
-    const map: Record<string, string> = {};
-    for (const [k, v] of next) {
-      const trimmed = k.trim();
-      if (trimmed) map[trimmed] = v;
-    }
-    onChange(map);
+    onChange(envRowsToRecord(next));
   };
 
   const addRow = () => onChange({ ...value, "": "" });
 
   const removeRow = (index: number) => {
     const next = rows.filter((_, i) => i !== index);
-    const map: Record<string, string> = {};
-    for (const [k, v] of next) {
-      const trimmed = k.trim();
-      if (trimmed) map[trimmed] = v;
-    }
-    onChange(map);
+    rowKeys.current.splice(index, 1);
+    onChange(envRowsToRecord(next));
   };
 
   return (
     <div className="space-y-2">
       {rows.map(([key, val], index) => (
-        <div key={key || "new-variable"} className="flex gap-2">
+        <div key={getStableRowKey(index)} className="flex gap-2">
           <Input value={key} onChange={(e) => updateRow(index, e.target.value, val)} placeholder="VAR_NAME" className="font-mono text-xs" />
           <Input value={val} onChange={(e) => updateRow(index, key, e.target.value)} placeholder="value" className="font-mono text-xs flex-1" />
           <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(index)}>

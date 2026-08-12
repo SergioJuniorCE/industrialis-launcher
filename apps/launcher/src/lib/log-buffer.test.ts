@@ -14,6 +14,11 @@ describe("log buffers", () => {
     expect(appendLogTail([1, 2], [3, 4, 5], 2)).toEqual([4, 5]);
   });
 
+  it("returns no lines when the retained window is not positive", () => {
+    expect(takeLogTail([1, 2], 0)).toEqual([]);
+    expect(appendLogTail([1, 2], [3, 4], -1)).toEqual([]);
+  });
+
   it("does not mutate the source arrays", () => {
     const current = [1, 2, 3];
     const incoming = [4, 5];

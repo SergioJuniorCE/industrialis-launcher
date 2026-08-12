@@ -784,7 +784,7 @@ export default function App() {
                       onCopy={async () => {
                         if (selectedInstanceActive) return instanceLogs[selectedInstanceId!] ?? [];
                         try {
-                          return await session.getConsoleLog(selectedInstanceId!, true);
+                          return await session.getConsoleLog(selectedInstanceId!);
                         } catch {
                           return instanceLogs[selectedInstanceId!] ?? [];
                         }
@@ -1635,18 +1635,26 @@ function LogView({
 }) {
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   const copy = async () => {
     setCopying(true);
+    setCopied(false);
+    setCopyFailed(false);
     try {
       const source = onCopy ? await onCopy() : log;
       const text = formatLaunchLog(source);
-      if (!text) return;
+      if (!text) {
+        setCopyFailed(true);
+        return;
+      }
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      setCopyFailed(false);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopied(false);
+      setCopyFailed(true);
     } finally {
       setCopying(false);
     }
@@ -1656,7 +1664,7 @@ function LogView({
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex gap-0.5 px-3 pb-0.5 shrink-0">
         <Button size="sm" variant="ghost" onClick={() => void copy()} disabled={copying || log.length === 0}>
-          {copying ? "Preparing..." : copied ? "Copied" : "Copy"}
+          {copying ? "Preparing..." : copied ? "Copied" : copyFailed ? "Copy failed" : "Copy"}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClear} disabled={disableClear || log.length === 0}>
           Clear

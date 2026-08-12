@@ -319,7 +319,9 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
     try {
       const persisted = await getConsoleLog(id);
       if (!isCurrent(generation) || logRequests.get(id) !== request) return;
-      if (store.getState().launching === id && (currentSnapshot.instanceLogs[id]?.length ?? 0) > 0) return;
+      const launcherState = store.getState();
+      const instanceIsActive = launcherState.launching === id || launcherState.runningInstanceIds.has(id);
+      if (instanceIsActive && (currentSnapshot.instanceLogs[id]?.length ?? 0) > 0) return;
       setLogs((current) => ({ ...current, [id]: takeLogTail(persisted) }));
     } catch {
       // Keep live in-memory logs if persisted log loading fails.

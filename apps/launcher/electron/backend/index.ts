@@ -122,13 +122,20 @@ async function readConsoleLogTail(filePath: string): Promise<string> {
   }
 }
 
+function isLaunchLogLine(value: unknown): value is LaunchLogLine {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.stream === "string" && typeof entry.line === "string";
+}
+
 function parseConsoleLog(contents: string, full: boolean): LaunchLogLine[] {
   const entries = contents
     .split(/\r?\n/u)
     .filter(Boolean)
     .flatMap((line) => {
       try {
-        return [JSON.parse(line) as LaunchLogLine];
+        const value: unknown = JSON.parse(line);
+        return isLaunchLogLine(value) ? [value] : [];
       } catch {
         return [];
       }

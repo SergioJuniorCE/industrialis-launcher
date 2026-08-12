@@ -10,5 +10,6 @@ export function appendLogTail<T>(current: readonly T[], incoming: readonly T[], 
   if (incoming.length >= maxLines) return incoming.slice(-maxLines);
 
   const retainedCurrent = Math.max(0, maxLines - incoming.length);
-  return [...current.slice(-retainedCurrent), ...incoming];
+  const retained = retainedCurrent === 0 ? [] : current.slice(-retainedCurrent);
+  return [...retained, ...incoming];
 }

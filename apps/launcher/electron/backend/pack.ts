@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { unzipSync } from "fflate";
-import { copyTree, exists, readJson } from "./fs-utils";
+import { copyTree, exists, mapConcurrent, readJson } from "./fs-utils";
 import { lookupPackCache, copyCachedPackToStaging, storePackCache } from "./pack-cache";
 import type { GtnhVersion, ModEntry, ModPreviewEntry, UpdateModPreview } from "./types";
 
@@ -43,13 +43,11 @@ export async function listMods(dir: string): Promise<ModEntry[]> {
   if (!(await exists(dir))) return [];
   const entries = await fs.readdir(dir, { withFileTypes: true });
   const mods = (
-    await Promise.all(
-      entries.map(async (entry) => {
-        if (!entry.isFile() || !/\.(jar|zip)$/iu.test(entry.name)) return null;
-        const stat = await fs.stat(path.join(dir, entry.name));
-        return { filename: entry.name, identity: modIdentityFromFilename(entry.name), size_bytes: stat.size };
-      }),
-    )
+    await mapConcurrent(entries, async (entry) => {
+      if (!entry.isFile() || !/\.(jar|zip)$/iu.test(entry.name)) return null;
+      const stat = await fs.stat(path.join(dir, entry.name));
+      return { filename: entry.name, identity: modIdentityFromFilename(entry.name), size_bytes: stat.size };
+    })
   ).filter((mod): mod is ModEntry => mod !== null);
   return mods.sort((a, b) => a.identity.localeCompare(b.identity));
 }
@@ -196,7 +194,7 @@ async function moveInto(destinationRoot: string, source: string): Promise<void> 
     const dstStat = await fs.stat(destination);
     if (srcStat.isDirectory() && dstStat.isDirectory()) {
       const entries = await fs.readdir(source);
-      await Promise.all(entries.map((entry) => moveInto(destination, path.join(source, entry))));
+      await mapConcurrent(entries, (entry) => moveInto(destination, path.join(source, entry)));
       await fs.rm(source, { recursive: true, force: true });
       return;
     }
@@ -217,13 +215,13 @@ export async function flattenNestedPack(instance: string): Promise<void> {
     if (entry.isDirectory()) result.push(path.join(instance, entry.name));
     return result;
   }, []);
-  const nested = (await Promise.all(candidates.map(async (candidate) => ((await exists(path.join(candidate, "mmc-pack.json"))) ? candidate : null)))).filter(
+  const nested = (await mapConcurrent(candidates, async (candidate) => ((await exists(path.join(candidate, "mmc-pack.json"))) ? candidate : null))).filter(
     (candidate): candidate is string => candidate !== null,
   );
   const source = nested.sort()[0];
   if (!source) return;
   const entries = await fs.readdir(source);
-  await Promise.all(entries.map((entry) => moveInto(instance, path.join(source, entry))));
+  await mapConcurrent(entries, (entry) => moveInto(instance, path.join(source, entry)));
   await fs.rm(source, { recursive: true, force: true });
   if (!(await exists(path.join(instance, "mmc-pack.json")))) throw new Error(`failed to flatten instance pack in ${instance}`);
 }

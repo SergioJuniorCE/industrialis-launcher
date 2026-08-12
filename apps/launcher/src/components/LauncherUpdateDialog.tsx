@@ -35,7 +35,7 @@ export function LauncherUpdateDialog({
             {state.status === "failed"
               ? "The launcher update could not be completed."
               : state.status === "manual"
-                ? "The release page is open. Download and run the signed installer there to update."
+                ? `Version ${state.version ?? "a new launcher version"} is available. You are running ${state.current_version}. The release page is open. Download and run the signed installer there to update.`
                 : state.status === "deferred"
                   ? "The update will wait until active instances and operations finish."
                   : `Version ${state.version} is available. You are running ${state.current_version}.`}
@@ -94,8 +94,14 @@ export function LauncherUpdateDialog({
                 Later
               </Button>
               <Button onClick={onInstall} disabled={busy}>
-                {busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                {state.status === "installing" ? "Restarting…" : "Download and restart"}
+                {state.status === "available" ? (
+                  <ExternalLink className="size-4" />
+                ) : busy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download className="size-4" />
+                )}
+                {state.status === "available" ? "Open release page" : state.status === "installing" ? "Restarting…" : "Download and restart"}
               </Button>
             </>
           )}

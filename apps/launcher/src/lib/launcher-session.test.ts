@@ -12,7 +12,7 @@ const instance = {
   group: "",
 };
 
-function createHarness() {
+function createHarness({ launchError }: { launchError?: string } = {}) {
   const listeners = new Map<string, Set<(event: { payload: unknown }) => void>>();
   const invoked: Array<{ command: string; args: unknown }> = [];
   let persistedLogCalls = 0;
@@ -38,6 +38,9 @@ function createHarness() {
         return {} as T;
       case "check_launcher_update":
         return { status: "up-to-date", current_version: "0.1.0" } as T;
+      case "launch_instance":
+        if (launchError) throw new Error(launchError);
+        return undefined as T;
       case "get_instance_console_log":
         persistedLogCalls += 1;
         return new Promise<T>((resolve) => {
@@ -140,6 +143,21 @@ describe("launcher session", () => {
     await harness.session.kill("alpha");
 
     expect(useLauncherStore.getState().runningInstanceIds).toEqual(new Set());
+    expect(useLauncherStore.getState().launching).toBeNull();
+  });
+
+  it("publishes launch failures and opens the console when configured", async () => {
+    const harness = createHarness({ launchError: "game process could not start" });
+    await harness.session.start();
+
+    await harness.session.launch("alpha", {
+      ...DEFAULT_INSTANCE_SETTINGS,
+      override_console: true,
+      show_console_on_error: true,
+    });
+
+    expect(harness.session.snapshot.error).toContain("game process could not start");
+    expect(useLauncherStore.getState().detailTab).toBe("logs");
     expect(useLauncherStore.getState().launching).toBeNull();
   });
 
