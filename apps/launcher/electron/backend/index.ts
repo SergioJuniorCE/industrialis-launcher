@@ -56,6 +56,7 @@ import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, vali
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
 import { killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
 import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
+import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
 
 export interface BackendHost {
   emit(event: string, payload: unknown): void;
@@ -88,6 +89,7 @@ interface LaunchArgs {
   collapsed?: boolean;
   direction?: string;
   ids?: string[] | null;
+  full?: boolean;
   groupName?: string;
   idPreset?: string;
   instanceId?: string;
@@ -101,6 +103,44 @@ interface LaunchState {
   reinstallInProgress: Set<string>;
   copyInProgress: Set<string>;
   deleteCancel: Map<string, { cancelled: boolean }>;
+}
+
+const CONSOLE_LOG_TAIL_BYTES = 4 * 1024 * 1024;
+
+async function readConsoleLogTail(filePath: string): Promise<string> {
+  const file = await fs.open(filePath, "r").catch(() => null);
+  if (!file) return "";
+
+  try {
+    const size = (await file.stat()).size;
+    const start = Math.max(0, size - CONSOLE_LOG_TAIL_BYTES);
+    const buffer = Buffer.alloc(size - start);
+    const { bytesRead } = await file.read(buffer, 0, buffer.length, start);
+    return buffer.subarray(0, bytesRead).toString("utf8");
+  } finally {
+    await file.close();
+  }
+}
+
+function isLaunchLogLine(value: unknown): value is LaunchLogLine {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.stream === "string" && typeof entry.line === "string";
+}
+
+function parseConsoleLog(contents: string, full: boolean): LaunchLogLine[] {
+  const entries = contents
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        const value: unknown = JSON.parse(line);
+        return isLaunchLogLine(value) ? [value] : [];
+      } catch {
+        return [];
+      }
+    });
+  return full ? entries : takeLogTail(entries, MAX_RETAINED_LOG_LINES);
 }
 
 export class LauncherBackend {
@@ -132,20 +172,20 @@ export class LauncherBackend {
   }
 
   private async knownInstanceIds(): Promise<Set<string>> {
-    const result = new Set<string>();
-    for (const entry of await fs.readdir(instancesDir(), { withFileTypes: true }).catch(() => [])) {
-      if (!entry.isDirectory()) continue;
-      const instance = path.join(instancesDir(), entry.name);
-      if (await exists(path.join(instance, "mmc-pack.json"))) result.add(entry.name);
-      else
-        for (const child of await fs.readdir(instance, { withFileTypes: true }).catch(() => [])) {
-          if (child.isDirectory() && (await exists(path.join(instance, child.name, "mmc-pack.json")))) {
-            result.add(entry.name);
-            break;
-          }
-        }
-    }
-    return result;
+    const entries = await fs.readdir(instancesDir(), { withFileTypes: true }).catch(() => []);
+    const ids = await Promise.all(
+      entries.map(async (entry) => {
+        if (!entry.isDirectory()) return null;
+        const instance = path.join(instancesDir(), entry.name);
+        if (await exists(path.join(instance, "mmc-pack.json"))) return entry.name;
+        const children = await fs.readdir(instance, { withFileTypes: true }).catch(() => []);
+        const nested = await Promise.all(
+          children.map((child) => (child.isDirectory() ? exists(path.join(instance, child.name, "mmc-pack.json")) : Promise.resolve(false))),
+        );
+        return nested.some(Boolean) ? entry.name : null;
+      }),
+    );
+    return new Set(ids.filter((id): id is string => id !== null));
   }
 
   private async saveAndRefreshSize(id: string, settings: InstanceSettings): Promise<void> {
@@ -155,16 +195,17 @@ export class LauncherBackend {
 
   private async loadInstances(): Promise<InstanceInfo[]> {
     const known = await this.knownInstanceIds();
-    const list: InstanceInfo[] = [];
-    for (const id of [...known].sort()) {
-      const settings = await loadInstanceSettings(id);
-      if (!settings.pack_version) {
-        settings.pack_version = id;
-        await saveInstanceSettings(id, settings);
-      }
-      const icon = await this.resolveIconPath(id, settings);
-      list.push({ id, installed: true, size_bytes: settings.cached_size_bytes, settings, group: await getInstanceGroup(id, known), icon_path: icon });
-    }
+    const list = await Promise.all(
+      [...known].sort().map(async (id): Promise<InstanceInfo> => {
+        const settings = await loadInstanceSettings(id);
+        if (!settings.pack_version) {
+          settings.pack_version = id;
+          await saveInstanceSettings(id, settings);
+        }
+        const icon = await this.resolveIconPath(id, settings);
+        return { id, installed: true, size_bytes: settings.cached_size_bytes, settings, group: await getInstanceGroup(id, known), icon_path: icon };
+      }),
+    );
     return list;
   }
 
@@ -270,7 +311,7 @@ export class LauncherBackend {
       case "kill_instance":
         return this.killInstance(args.id);
       case "get_instance_console_log":
-        return this.getConsoleLog(args.id);
+        return this.getConsoleLog(args.id, Boolean(args.full));
       case "clear_instance_console_log":
         return fs.rm(consoleLogPath(sanitizeName(args.id)), { force: true });
       case "get_accounts":
@@ -301,15 +342,15 @@ export class LauncherBackend {
 
   private async refreshSizes(ids: string[] | null | undefined): Promise<Record<string, number>> {
     const target = ids?.map((id) => sanitizeName(id.trim())) ?? [...(await this.knownInstanceIds())];
-    const result: Record<string, number> = {};
-    for (const id of target) {
-      const size = await dirSize(instanceDir(id));
-      const settings = await loadInstanceSettings(id);
-      settings.cached_size_bytes = size;
-      await saveInstanceSettings(id, settings);
-      result[id] = size;
-    }
-    return result;
+    const sizes = await Promise.all(
+      target.map(async (id) => {
+        const [size, settings] = await Promise.all([dirSize(instanceDir(id)), loadInstanceSettings(id)]);
+        settings.cached_size_bytes = size;
+        await saveInstanceSettings(id, settings);
+        return [id, size] as const;
+      }),
+    );
+    return Object.fromEntries(sizes);
   }
 
   private async deleteInstance(rawId: string): Promise<void> {
@@ -389,7 +430,6 @@ export class LauncherBackend {
     const packVersion = String(args.packVersion);
     const javaType = String(args.javaType ?? "java17+");
     await fs.mkdir(instance, { recursive: true });
-    const { installStagingContents, prepareInstanceConfigs } = await import("./pack");
     const staging = await downloadAndExtractToStaging(
       (payload) => this.emitProgress({ ...payload, id, operation: payload.operation ?? "install" } as DownloadProgress),
       packVersion,
@@ -554,18 +594,10 @@ export class LauncherBackend {
     if (running) await killGameProcess(running);
   }
 
-  private async getConsoleLog(rawId: string): Promise<LaunchLogLine[]> {
-    const lines = await fs.readFile(consoleLogPath(sanitizeName(rawId)), "utf8").catch(() => "");
-    return lines
-      .split(/\r?\n/u)
-      .filter(Boolean)
-      .flatMap((line) => {
-        try {
-          return [JSON.parse(line) as LaunchLogLine];
-        } catch {
-          return [];
-        }
-      });
+  private async getConsoleLog(rawId: string, full: boolean): Promise<LaunchLogLine[]> {
+    const filePath = consoleLogPath(sanitizeName(rawId));
+    const contents = full ? await fs.readFile(filePath, "utf8").catch(() => "") : await readConsoleLogTail(filePath);
+    return parseConsoleLog(contents, full);
   }
 
   private async removeAccount(id: string): Promise<void> {
@@ -587,8 +619,7 @@ export class LauncherBackend {
     await prepareInstanceConfigs(instance, false);
     await applyPersistentCustomMods(instance);
     await applyPersistentMinecraft(instance);
-    const settings = await loadInstanceSettings(id);
-    const launcherSettings = await loadLauncherSettings();
+    const [settings, launcherSettings] = await Promise.all([loadInstanceSettings(id), loadLauncherSettings()]);
     const java = resolveJava(settings, launcherSettings.default_java_path);
     const config = await buildLaunchConfig(instance, id, (entryId, stream, line) => this.emitLog(entryId, stream, line));
     await syncAssets(config, id, (entryId, stream, line) => this.emitLog(entryId, stream, line));
@@ -729,21 +760,11 @@ export class LauncherBackend {
   private async installLauncherUpdate(): Promise<LauncherUpdateState> {
     const state = await this.checkLauncherUpdate();
     if (state.status === "available") {
-      if (process.platform === "win32" && state.download_url?.startsWith("https://github.com/")) {
-        const response = await fetch(state.download_url);
-        if (!response.ok) throw new Error(`launcher update download failed: HTTP ${response.status}`);
-        const installer = path.join(app.getPath("temp"), `industrialis-launcher-update-${state.version}.exe`);
-        await fs.writeFile(installer, Buffer.from(await response.arrayBuffer()));
-        const { spawn } = await import("node:child_process");
-        const child = spawn(installer, [], { detached: true, stdio: "ignore", windowsHide: true });
-        child.unref();
-        const installing = { ...state, status: "installing", progress: 1 } satisfies LauncherUpdateState;
-        this.emit("launcher-update", installing);
-        setTimeout(() => app.quit(), 300);
-        return installing;
-      }
-      await shell.openExternal(state.release_url ?? "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest");
-      return { ...state, status: "installing", progress: 1 };
+      const releaseUrl = state.release_url ?? "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest";
+      await shell.openExternal(releaseUrl);
+      const manual = { ...state, status: "manual" } satisfies LauncherUpdateState;
+      this.emit("launcher-update", manual);
+      return manual;
     }
     return state;
   }
@@ -812,7 +833,6 @@ function defaultSettings(): InstanceSettings {
     custom_icon: null,
   };
 }
-
 function defaultLauncherSettings(): LauncherSettings {
   return {
     theme_mode: "dark",

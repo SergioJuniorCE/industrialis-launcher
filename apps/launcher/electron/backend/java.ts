@@ -69,7 +69,7 @@ async function addJavaHomes(root: string, depth: number, candidates: Set<string>
     return;
   }
   const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
-  await Promise.all(entries.filter((entry) => entry.isDirectory()).map((entry) => addJavaHomes(path.join(root, entry.name), depth - 1, candidates)));
+  await Promise.all(entries.map((entry) => (entry.isDirectory() ? addJavaHomes(path.join(root, entry.name), depth - 1, candidates) : Promise.resolve())));
 }
 
 function windowsJavaRoots(): Array<{ root: string; depth: number }> {

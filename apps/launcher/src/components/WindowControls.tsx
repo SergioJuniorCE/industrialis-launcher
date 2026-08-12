@@ -28,6 +28,15 @@ export function WindowControls() {
     };
   }, [desktop]);
 
+  const handleToggleMaximize = async () => {
+    if (!desktop) return;
+    try {
+      setMaximized(await toggleMaximizeWindow());
+    } catch {
+      // The native window may close while the command is in flight.
+    }
+  };
+
   if (desktopPlatform() === "darwin") return null;
 
   return (
@@ -48,10 +57,7 @@ export function WindowControls() {
         className="window-control"
         aria-label={maximized ? "Restore window" : "Maximize window"}
         title={maximized ? "Restore" : "Maximize"}
-        onClick={() => {
-          if (!desktop) return;
-          void toggleMaximizeWindow().then(setMaximized);
-        }}
+        onClick={() => void handleToggleMaximize()}
       >
         {maximized ? <Copy aria-hidden="true" /> : <Square aria-hidden="true" />}
       </button>
