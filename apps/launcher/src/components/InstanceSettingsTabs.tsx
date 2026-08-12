@@ -10,11 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Textarea } from "./ui/textarea";
 import { formatPlayTime, type InstanceSettings } from "../lib/instance-settings";
 
-export interface JavaInfo {
-  path: string;
-  version: number;
-}
-
 export interface AccountOption {
   id: string;
   username: string;

@@ -3,11 +3,16 @@ export interface DesktopEvent {
 }
 
 export interface ElectronLauncherApi {
+  platform: NodeJS.Platform;
   invoke(command: string, args?: unknown): Promise<unknown>;
   listen(event: string, listener: (payload: unknown) => void): () => void;
   openUrl(url: string): Promise<void>;
   convertFileSrc(path: string): string;
   hideWindow(): Promise<void>;
+  minimizeWindow(): Promise<void>;
+  toggleMaximizeWindow(): Promise<boolean>;
+  isWindowMaximized(): Promise<boolean>;
+  closeWindow(): Promise<void>;
 }
 
 declare global {
@@ -31,10 +36,7 @@ export function invoke<T>(command: string, args?: unknown): Promise<T> {
   return getApi().invoke(command, args) as Promise<T>;
 }
 
-export function listen<T>(
-  event: string,
-  listener: (event: DesktopEvent & { payload: T }) => void,
-): Promise<() => void> {
+export function listen<T>(event: string, listener: (event: DesktopEvent & { payload: T }) => void): Promise<() => void> {
   if (!window.electronAPI) return Promise.resolve(() => undefined);
   const unsubscribe = getApi().listen(event, (payload) => listener({ payload: payload as T }));
   return Promise.resolve(unsubscribe);
@@ -50,4 +52,24 @@ export function convertFileSrc(path: string): string {
 
 export function hideWindow(): Promise<void> {
   return getApi().hideWindow();
+}
+
+export function desktopPlatform(): NodeJS.Platform | null {
+  return window.electronAPI?.platform ?? null;
+}
+
+export function minimizeWindow(): Promise<void> {
+  return getApi().minimizeWindow();
+}
+
+export function toggleMaximizeWindow(): Promise<boolean> {
+  return getApi().toggleMaximizeWindow();
+}
+
+export function isWindowMaximized(): Promise<boolean> {
+  return getApi().isWindowMaximized();
+}
+
+export function closeWindow(): Promise<void> {
+  return getApi().closeWindow();
 }

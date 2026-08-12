@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "../lib/desktop";
 import { DEFAULT_INSTANCE_SETTINGS, mergeInstanceSettings, type InstanceSettings } from "../lib/instance-settings";
-import { InstanceSettingsTabs, type AccountOption, type JavaInfo } from "./InstanceSettingsTabs";
+import { InstanceSettingsTabs, type AccountOption } from "./InstanceSettingsTabs";
+import type { JavaInfo } from "../lib/java-installations";
 
 export function InstanceSettingsPanel({
   instanceId,
