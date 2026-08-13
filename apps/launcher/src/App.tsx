@@ -65,6 +65,7 @@ import { LauncherUpdateDialog } from "./components/LauncherUpdateDialog";
 import { VirtualizedLogList } from "./components/VirtualizedLogList";
 import { WindowControls } from "./components/WindowControls";
 import { JavaInstallationPicker } from "./components/JavaInstallationPicker";
+import { UiComparisonSwitch, type UiComparisonMode } from "./components/UiComparisonSwitch";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
@@ -215,6 +216,7 @@ export default function App() {
   const handleProcessFailed = session.failProcess;
   const handleKill = session.kill;
   const [notice, setNotice] = useState<string | null>(null);
+  const [uiComparisonMode, setUiComparisonMode] = useState<UiComparisonMode>("after");
   const [lastUsedGroup, setLastUsedGroup] = useState("");
   const [accountsLaunchRedirect, setAccountsLaunchRedirect] = useState<{
     instanceId: string;
@@ -504,7 +506,10 @@ export default function App() {
   const selectedInstanceStarting = selectedInstanceId ? launching === selectedInstanceId : false;
 
   return (
-    <div className={cn("app-shell h-screen flex flex-col overflow-hidden", desktopPlatform() === "darwin" && "app-shell-macos")}>
+    <div
+      className={cn("app-shell h-screen flex flex-col overflow-hidden", desktopPlatform() === "darwin" && "app-shell-macos")}
+      data-ui-view={uiComparisonMode}
+    >
       {/* Toolbar */}
       <header className="app-toolbar h-11 shrink-0 flex items-center px-3 gap-1.5">
         <div className="flex items-center gap-2 pr-1.5">
@@ -525,11 +530,12 @@ export default function App() {
           <Plus className="size-3.5" /> <span className="toolbar-label">Add</span>
         </Button>
         <div className="w-px h-5 bg-border/80 mx-1" />
-        <div className="inline-flex h-8 items-center rounded-lg border border-border/70 bg-muted/70 p-0.5 gap-0.5 shadow-inner">
+        <div className="primary-nav inline-flex h-8 items-center rounded-lg border border-border/70 bg-muted/70 p-0.5 gap-0.5 shadow-inner">
           <Button
             variant={tab === "instances" ? "secondary" : "ghost"}
             size="sm"
-            className="h-6 px-2"
+            className="primary-nav-button h-6 px-2"
+            data-active={tab === "instances"}
             aria-label="Instances"
             title="Instances"
             onClick={() => setTab("instances")}
@@ -539,7 +545,8 @@ export default function App() {
           <Button
             variant={tab === "processes" ? "secondary" : "ghost"}
             size="sm"
-            className="h-6 px-2"
+            className="primary-nav-button h-6 px-2"
+            data-active={tab === "processes"}
             aria-label="Processes"
             title="Processes"
             onClick={() => openProcesses()}
@@ -554,7 +561,8 @@ export default function App() {
           <Button
             variant={tab === "settings" ? "secondary" : "ghost"}
             size="sm"
-            className="h-6 px-2"
+            className="primary-nav-button h-6 px-2"
+            data-active={tab === "settings"}
             aria-label="Settings"
             title="Settings"
             onClick={() => setTab("settings")}
@@ -564,7 +572,8 @@ export default function App() {
           <Button
             variant={tab === "accounts" ? "secondary" : "ghost"}
             size="sm"
-            className="h-6 px-2"
+            className="primary-nav-button h-6 px-2"
+            data-active={tab === "accounts"}
             aria-label="Accounts"
             title="Accounts"
             onClick={() => setTab("accounts")}
@@ -586,11 +595,11 @@ export default function App() {
       </header>
 
       {tab === "instances" ? (
-        <div className="flex-1 flex overflow-hidden p-2 gap-2">
+        <div className="instance-workspace flex-1 flex overflow-hidden p-2 gap-2">
           {/* Instance list */}
-          <div className="surface-panel flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-auto flex flex-col rounded-lg border border-border/80 shadow-sm">
+          <div className="surface-panel workspace-panel workspace-panel-library flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-auto flex flex-col rounded-lg border border-border/80 shadow-sm">
             {instances.length === 0 ? (
-              <div className="m-2 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
+              <div className="empty-state m-2 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
                 <div className="font-medium text-foreground">No instances installed</div>
                 <p className="mt-1 text-xs text-muted-foreground">Add a pack instance to start building your launcher library.</p>
               </div>
@@ -615,7 +624,7 @@ export default function App() {
           </div>
 
           {/* Details panel */}
-          <div className="surface-panel flex-1 flex flex-col overflow-hidden rounded-lg border border-border/80 shadow-sm">
+          <div className="surface-panel workspace-panel flex-1 flex flex-col overflow-hidden rounded-lg border border-border/80 shadow-sm">
             {sel ? (
               <>
                 <Tabs value={detailTab} onValueChange={setDetailTab} className="flex-1 flex flex-col overflow-hidden">
@@ -693,7 +702,7 @@ export default function App() {
                   </div>
 
                   <TabsContent value="info" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0 space-y-3">
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2">
+                    <div className="detail-row flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2">
                       <PackVersionStatus
                         currentVersion={instancePackVersion(sel)}
                         versions={gtnhVersions}
@@ -701,7 +710,7 @@ export default function App() {
                         disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
                       />
                     </div>
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2">
+                    <div className="detail-row flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2">
                       <div className="min-w-0">
                         <div className="text-sm font-medium">Clean reinstall</div>
                         <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
@@ -794,7 +803,7 @@ export default function App() {
                 </Tabs>
 
                 {/* Action bar */}
-                <div className="shrink-0 border-t border-border/80 bg-card/60 px-4 py-3 flex items-center gap-2">
+                <div className="detail-action-bar shrink-0 border-t border-border/80 bg-card/60 px-4 py-3 flex items-center gap-2">
                   {isReinstallingSelected && selectedReinstallProcess ? (
                     <>
                       <div className="flex-1 min-w-0 space-y-1.5">
@@ -931,7 +940,7 @@ export default function App() {
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center p-6">
-                <div className="max-w-sm rounded-lg border border-dashed border-border/80 bg-muted/30 p-6 text-center">
+                <div className="empty-state max-w-sm rounded-lg border border-dashed border-border/80 bg-muted/30 p-6 text-center">
                   <div className="mx-auto mb-3 instance-avatar size-11 rounded-lg flex items-center justify-center">
                     <Boxes className="size-5 text-muted-foreground" />
                   </div>
@@ -956,9 +965,9 @@ export default function App() {
           }}
         />
       ) : (
-        <main className="min-w-0 flex-1 overflow-auto">
+        <main className="content-shell min-w-0 flex-1 overflow-auto">
           {tab === "settings" && (
-            <div className="w-full max-w-5xl p-4">
+            <div className="settings-page w-full max-w-5xl p-4">
               <SettingsTab
                 javaOptions={javaOptions}
                 javaRefreshing={javaRefreshing}
@@ -971,7 +980,7 @@ export default function App() {
             </div>
           )}
           {tab === "accounts" && (
-            <div className="w-full max-w-2xl p-4">
+            <div className="accounts-page w-full max-w-2xl p-4">
               <AccountsTab
                 onSetDefaultAccount={handleSetDefaultAccount}
                 defaultAccountId={defaultAccountId}
@@ -996,6 +1005,7 @@ export default function App() {
             {runningProcessCount(processes)} background process{runningProcessCount(processes) === 1 ? "" : "es"}
           </span>
         )}
+        <UiComparisonSwitch mode={uiComparisonMode} onModeChange={setUiComparisonMode} />
       </footer>
 
       {updatePackInstanceId &&
@@ -1613,7 +1623,7 @@ function InfoGrid({ items }: { items: { label: string; value: string }[] }) {
   return (
     <div className="grid sm:grid-cols-2 gap-2 pt-1">
       {items.map((item) => (
-        <div key={item.label} className="flex min-w-0 justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2 text-xs">
+        <div key={item.label} className="info-grid-row flex min-w-0 justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2 text-xs">
           <span className="text-muted-foreground shrink-0">{item.label}</span>
           <span className="font-medium text-right truncate">{item.value}</span>
         </div>

@@ -197,6 +197,297 @@ body {
   background: var(--color-muted-foreground);
 }
 
+.ui-comparison-toggle {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding-left: 0.75rem;
+}
+
+.ui-comparison-toggle > label {
+  gap: 0;
+}
+
+.ui-comparison-label {
+  color: var(--color-muted-foreground);
+  font-size: 10px;
+  line-height: 1;
+  transition: color 120ms ease;
+}
+
+.ui-comparison-label[data-active="true"] {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.ui-comparison-toggle button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/*
+ * Comparison mode is intentionally additive: Before receives no overrides,
+ * while After trades nested cards for whitespace, selection tint, and dividers.
+ */
+.app-shell[data-ui-view="after"] {
+  background: var(--color-background);
+}
+
+.app-shell[data-ui-view="after"] .app-toolbar {
+  background: var(--color-card);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--color-border) 82%, transparent);
+}
+
+.app-shell[data-ui-view="after"] .brand-mark {
+  background: color-mix(in srgb, var(--color-primary) 88%, var(--color-card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+}
+
+.app-shell[data-ui-view="after"] .primary-nav {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.app-shell[data-ui-view="after"] .primary-nav-button {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--color-muted-foreground);
+  position: relative;
+}
+
+.app-shell[data-ui-view="after"] .primary-nav-button::after {
+  background: transparent;
+  bottom: -0.4rem;
+  content: "";
+  height: 2px;
+  left: 0.5rem;
+  position: absolute;
+  right: 0.5rem;
+}
+
+.app-shell[data-ui-view="after"] .primary-nav-button[data-active="true"] {
+  color: var(--color-foreground);
+}
+
+.app-shell[data-ui-view="after"] .primary-nav-button[data-active="true"]::after {
+  background: var(--color-primary);
+}
+
+.app-shell[data-ui-view="after"] .instance-workspace {
+  gap: 0;
+  padding: 0;
+}
+
+.app-shell[data-ui-view="after"] .workspace-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app-shell[data-ui-view="after"] .workspace-panel-library {
+  border-right: 1px solid color-mix(in srgb, var(--color-border) 84%, transparent);
+}
+
+.app-shell[data-ui-view="after"] .detail-header {
+  background: color-mix(in srgb, var(--color-card) 72%, var(--color-background));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-view="after"] .ui-tabs-list {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--color-border) 76%, transparent);
+  padding: 0;
+}
+
+.app-shell[data-ui-view="after"] .ui-tabs-trigger {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  position: relative;
+}
+
+.app-shell[data-ui-view="after"] .ui-tabs-trigger[aria-selected="true"]::after {
+  background: var(--color-primary);
+  bottom: 0;
+  content: "";
+  height: 2px;
+  left: 0.5rem;
+  position: absolute;
+  right: 0.5rem;
+}
+
+.app-shell[data-ui-view="after"] .detail-row {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .detail-row + .detail-row {
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  padding-top: 0.75rem;
+}
+
+.app-shell[data-ui-view="after"] .info-grid-row {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 66%, transparent);
+  padding: 0.625rem 0;
+}
+
+.app-shell[data-ui-view="after"] .detail-action-bar {
+  background: color-mix(in srgb, var(--color-card) 54%, var(--color-background));
+}
+
+.app-shell[data-ui-view="after"] .instance-grid-card {
+  border-radius: 0.375rem;
+}
+
+.app-shell[data-ui-view="after"] .instance-row-selected {
+  background: color-mix(in srgb, var(--color-primary) 13%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-primary) 86%, transparent);
+}
+
+.app-shell[data-ui-view="after"] .instance-card-menu,
+.app-shell[data-ui-view="after"] .instance-drag-handle {
+  background: color-mix(in srgb, var(--color-background) 86%, transparent);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.app-shell[data-ui-view="after"] .empty-state {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.app-shell[data-ui-view="after"] .content-shell {
+  background: var(--color-background);
+}
+
+.app-shell[data-ui-view="after"] .settings-page,
+.app-shell[data-ui-view="after"] .accounts-page {
+  padding-top: 1.25rem;
+}
+
+.app-shell[data-ui-view="after"] .settings-page > .w-full > .ui-tabs-list {
+  max-width: none;
+}
+
+.app-shell[data-ui-view="after"] .settings-page [role="tabpanel"] > .ui-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app-shell[data-ui-view="after"] .settings-page [role="tabpanel"] > .ui-card > .ui-card-header {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .settings-page [role="tabpanel"] > .ui-card > .ui-card-content {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .settings-section {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  box-shadow: none;
+}
+
+.app-shell[data-ui-view="after"] .settings-section .ui-card-header,
+.app-shell[data-ui-view="after"] .settings-section .ui-card-content {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .instance-settings-stack {
+  gap: 0;
+}
+
+.app-shell[data-ui-view="after"] .java-installation-picker {
+  border-left: 0;
+  border-radius: 0;
+  border-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .appearance-summary {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .theme-preset-option {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0.375rem;
+}
+
+.app-shell[data-ui-view="after"] .theme-preset-option:has(button[aria-pressed="true"]) {
+  background: color-mix(in srgb, var(--color-primary) 11%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+.app-shell[data-ui-view="after"] .appearance-advanced {
+  background: transparent;
+  border-left: 0;
+  border-radius: 0;
+  border-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .account-list,
+.app-shell[data-ui-view="after"] .account-method,
+.app-shell[data-ui-view="after"] .device-code-panel {
+  background: transparent;
+  border-left: 0;
+  border-radius: 0;
+  border-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .account-method {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-shell[data-ui-view="after"] .status-running {
+  box-shadow: 0 0 0 2px color-mix(in srgb, #37d67a 18%, transparent);
+}
+
+@media (max-width: 960px) {
+  .ui-comparison-label {
+    display: none;
+  }
+
+  .ui-comparison-toggle {
+    padding-left: 0.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-comparison-label {
+    transition: none;
+  }
+}
+
 .config-code-editor .cm-editor {
   height: 100%;
 }

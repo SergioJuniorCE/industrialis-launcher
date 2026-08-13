@@ -32,7 +32,7 @@ function SettingsSection({
 }) {
   const enabled = override === undefined || override;
   return (
-    <Card className="border-border/80 shadow-none">
+    <Card className="settings-section border-border/80 shadow-none">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -194,7 +194,7 @@ function GeneralSettingsTab({
 }) {
   return (
     <TabsContent value="general" className="space-y-2 mt-2">
-      <Card className="shadow-none">
+      <Card className="settings-section shadow-none">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Instance</CardTitle>
         </CardHeader>
@@ -412,7 +412,7 @@ export function InstanceSettingsTabs({
   onOpenLauncherSettings?: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 max-w-2xl pb-2">
+    <div className="instance-settings-stack flex flex-col gap-2 max-w-2xl pb-2">
       <LauncherSettingsLink onOpen={onOpenLauncherSettings} />
       <Tabs value={settingsTab} onValueChange={onSettingsTabChange} className="w-full">
         <TabsList className="flex flex-wrap h-auto gap-0.5">
