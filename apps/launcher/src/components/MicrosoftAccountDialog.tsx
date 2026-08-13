@@ -24,6 +24,14 @@ async function copyText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 
+async function cancelNativeMicrosoftLogin(): Promise<void> {
+  try {
+    await invoke("cancel_microsoft_login");
+  } catch {
+    // Browser-only previews and shutdown paths may not have a native bridge.
+  }
+}
+
 function MicrosoftMark() {
   return (
     <span className="grid size-9 shrink-0 grid-cols-2 gap-0.5 rounded-md bg-background p-1.5 shadow-sm" aria-hidden="true">
@@ -49,6 +57,8 @@ export function MicrosoftAccountDialog({
   const [deviceCodeCopied, setDeviceCodeCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedForOpenRef = useRef(false);
+  const loginAttemptRef = useRef(0);
+  const wasOpenRef = useRef(open);
 
   const reset = useCallback(() => {
     setPhase("starting");
@@ -58,6 +68,7 @@ export function MicrosoftAccountDialog({
   }, []);
 
   const startLogin = useCallback(async () => {
+    const attempt = ++loginAttemptRef.current;
     setPhase("starting");
     setDeviceCode(null);
     setDeviceCodeCopied(false);
@@ -65,16 +76,24 @@ export function MicrosoftAccountDialog({
 
     try {
       const account = await invoke<LauncherAccount>("start_microsoft_login");
+      if (attempt !== loginAttemptRef.current) return;
       onAccountAdded(account);
       onOpenChange(false);
     } catch (loginError) {
+      if (attempt !== loginAttemptRef.current) return;
       setError(errorMessage(loginError));
       setPhase("error");
     }
   }, [onAccountAdded, onOpenChange]);
 
   useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
     if (!open) {
+      if (wasOpen) {
+        loginAttemptRef.current += 1;
+        void cancelNativeMicrosoftLogin();
+      }
       startedForOpenRef.current = false;
       reset();
       return;
@@ -104,7 +123,11 @@ export function MicrosoftAccountDialog({
   }, [open, startLogin]);
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) reset();
+    if (!nextOpen) {
+      loginAttemptRef.current += 1;
+      reset();
+      void cancelNativeMicrosoftLogin();
+    }
     onOpenChange(nextOpen);
   };
 

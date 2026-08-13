@@ -543,6 +543,15 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
   return session;
 }
 
+export function startLauncherSession(session: LauncherSession, desktopAvailable = isDesktop()): () => void {
+  if (!desktopAvailable) {
+    useLauncherStore.setState({ accountsLoaded: true });
+    return () => session.dispose();
+  }
+  void session.start();
+  return () => session.dispose();
+}
+
 export function useLauncherSession(): UseLauncherSessionResult {
   const session = useMemo(
     () =>
@@ -558,14 +567,7 @@ export function useLauncherSession(): UseLauncherSessionResult {
     () => session.snapshot,
   );
 
-  useEffect(() => {
-    if (!isDesktop()) {
-      useLauncherStore.setState({ accountsLoaded: true });
-      return () => session.dispose();
-    }
-    void session.start();
-    return () => session.dispose();
-  }, [session]);
+  useEffect(() => startLauncherSession(session), [session]);
 
   return { ...snapshot, session };
 }

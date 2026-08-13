@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CircleAlert, Plus, Star, Trash2, UserPlus, WifiOff } from "lucide-react";
-import { invoke } from "../lib/desktop";
+import { invoke, isDesktop } from "../lib/desktop";
 import { useLauncherStore, type LauncherAccount } from "../stores/launcher-store";
 import { SkinFace } from "./AccountSwitcher";
 import { MicrosoftAccountDialog } from "./MicrosoftAccountDialog";
@@ -10,6 +10,10 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 const OFFLINE_USERNAME_RE = /^[a-zA-Z0-9_]{1,16}$/;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function accountLabel(account: LauncherAccount): string {
   if (account.username.trim()) return account.username;
@@ -41,48 +45,55 @@ export function AccountsTab({
   const accounts = useLauncherStore((state) => state.accounts);
   const setAccounts = useLauncherStore((state) => state.setAccounts);
   const [microsoftDialogOpen, setMicrosoftDialogOpen] = useState(false);
+  const [accountLoadError, setAccountLoadError] = useState<string | null>(null);
   const [offlineError, setOfflineError] = useState<string | null>(null);
   const [offlineUsername, setOfflineUsername] = useState("");
   const [addingOffline, setAddingOffline] = useState(false);
+  const addingOfflineRef = useRef(false);
 
-  const load = useCallback(() => {
-    void (async () => {
-      try {
-        setAccounts(await invoke<LauncherAccount[]>("get_accounts"));
-      } catch {
-        // Browser-only renderer previews have no native account bridge.
-      }
-    })();
+  const load = useCallback(async () => {
+    if (!isDesktop()) return;
+    setAccountLoadError(null);
+    try {
+      setAccounts(await invoke<LauncherAccount[]>("get_accounts"));
+    } catch (error) {
+      setAccountLoadError(errorMessage(error));
+    }
   }, [setAccounts]);
 
-  useEffect(() => load(), [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const handleMicrosoftAccountAdded = useCallback(
     (account: LauncherAccount) => {
       onSetDefaultAccount(account.id);
-      load();
+      void load();
       onDismissRedirect?.();
     },
     [load, onDismissRedirect, onSetDefaultAccount],
   );
 
   const handleAddOffline = async () => {
+    if (addingOfflineRef.current) return;
     const trimmed = offlineUsername.trim();
     if (!OFFLINE_USERNAME_RE.test(trimmed)) {
       setOfflineError("Use 1-16 letters, numbers, or underscores.");
       return;
     }
+    addingOfflineRef.current = true;
     setAddingOffline(true);
     setOfflineError(null);
     try {
       const account = await invoke<LauncherAccount>("add_offline_account", { username: trimmed });
       setOfflineUsername("");
       onSetDefaultAccount(account.id);
-      load();
+      void load();
       onDismissRedirect?.();
     } catch (error) {
       setOfflineError(`${error}`);
     } finally {
+      addingOfflineRef.current = false;
       setAddingOffline(false);
     }
   };
@@ -92,7 +103,7 @@ export function AccountsTab({
     if (defaultAccountId === id) {
       onSetDefaultAccount(null);
     }
-    load();
+    void load();
   };
 
   return (
@@ -132,6 +143,16 @@ export function AccountsTab({
             {accounts.length}
           </Badge>
         </div>
+
+        {accountLoadError && (
+          <div className="flex items-start gap-2.5 border-b border-destructive/25 bg-destructive/8 px-4 py-3 text-xs" role="alert">
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div>
+              <p className="font-medium">Could not load accounts</p>
+              <p className="mt-0.5 text-muted-foreground">{accountLoadError}</p>
+            </div>
+          </div>
+        )}
 
         {accounts.length > 0 ? (
           <div className="space-y-1.5 p-2">
@@ -234,7 +255,10 @@ export function AccountsTab({
                   maxLength={16}
                   className="h-9 font-mono text-xs"
                   aria-invalid={Boolean(offlineError)}
-                  onKeyDown={(event) => event.key === "Enter" && void handleAddOffline()}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || addingOffline || !offlineUsername.trim()) return;
+                    void handleAddOffline();
+                  }}
                 />
               </div>
               <Button type="button" size="sm" variant="outline" disabled={addingOffline || !offlineUsername.trim()} onClick={() => void handleAddOffline()}>
