@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { app, BrowserWindow, dialog, shell } from "electron";
-import { accountToInfo, createOfflineAccount, ensureFreshToken, handleOauthCallback, loadAccounts, startMicrosoftLogin } from "./auth";
+import { accountToInfo, cancelMicrosoftLogin, createOfflineAccount, ensureFreshToken, handleOauthCallback, loadAccounts, startMicrosoftLogin } from "./auth";
 import { applyConfigPreset, getConfigPresetStatus } from "./config-presets";
 import {
   deleteGroup,
@@ -326,6 +326,9 @@ export class LauncherBackend {
         return saveLauncherSettings(args.launcherSettings ?? defaultLauncherSettings());
       case "start_microsoft_login":
         return startMicrosoftLogin((event, payload) => this.emit(event, payload));
+      case "cancel_microsoft_login":
+        cancelMicrosoftLogin();
+        return undefined;
       case "check_launcher_update":
         return this.checkLauncherUpdate();
       case "install_launcher_update":

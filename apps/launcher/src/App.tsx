@@ -962,7 +962,7 @@ export default function App() {
       ) : (
         <main className="content-shell min-w-0 flex-1 overflow-auto">
           {tab === "settings" && (
-            <div className="settings-page w-full max-w-5xl p-4">
+            <div className="settings-page mx-auto w-full max-w-5xl p-4">
               <SettingsTab
                 javaOptions={javaOptions}
                 javaRefreshing={javaRefreshing}
@@ -975,7 +975,7 @@ export default function App() {
             </div>
           )}
           {tab === "accounts" && (
-            <div className="accounts-page w-full max-w-2xl p-4">
+            <div className="accounts-page mx-auto w-full max-w-2xl p-4">
               <AccountsTab
                 onSetDefaultAccount={handleSetDefaultAccount}
                 defaultAccountId={defaultAccountId}
@@ -1843,24 +1843,25 @@ function SettingsTab({
       </TabsList>
 
       <TabsContent value="java" className="mt-4">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2">
-            <CardTitle>Java Detection</CardTitle>
+        <div className="space-y-5">
+          <div className="flex items-start justify-between gap-3 border-b border-border/70 pb-3">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Java Detection</h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Choose the Java runtime used by your instances by default.</p>
+            </div>
             <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
               <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
               {javaRefreshing ? "Scanning..." : "Refresh"}
             </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <JavaInstallationPicker
-              installations={javaOptions}
-              refreshing={javaRefreshing}
-              selectedPath={defaultJavaPath}
-              onBrowse={browseDefaultJava}
-              onSelect={onDefaultJavaChange}
-            />
-          </CardContent>
-        </Card>
+          </div>
+          <JavaInstallationPicker
+            installations={javaOptions}
+            refreshing={javaRefreshing}
+            selectedPath={defaultJavaPath}
+            onBrowse={browseDefaultJava}
+            onSelect={onDefaultJavaChange}
+          />
+        </div>
       </TabsContent>
 
       <TabsContent value="instances" className="mt-4">
