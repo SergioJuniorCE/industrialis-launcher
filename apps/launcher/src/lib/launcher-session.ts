@@ -14,7 +14,7 @@ import { appendLogTail, MAX_RETAINED_LOG_LINES, takeLogTail } from "./log-buffer
 import type { LaunchLogLine } from "./launch-log";
 import type { InstanceSettings } from "./instance-settings";
 import type { JavaInfo } from "./java-installations";
-import { hideWindow, invoke, listen } from "./desktop";
+import { hideWindow, invoke, isDesktop, listen } from "./desktop";
 import type { GtnhVersion, InstanceGroupsState, InstanceInfo, LauncherAccount, LauncherStoreState } from "../stores/launcher-store";
 import { useLauncherStore } from "../stores/launcher-store";
 
@@ -559,6 +559,10 @@ export function useLauncherSession(): UseLauncherSessionResult {
   );
 
   useEffect(() => {
+    if (!isDesktop()) {
+      useLauncherStore.setState({ accountsLoaded: true });
+      return () => session.dispose();
+    }
     void session.start();
     return () => session.dispose();
   }, [session]);
