@@ -65,7 +65,6 @@ import { LauncherUpdateDialog } from "./components/LauncherUpdateDialog";
 import { VirtualizedLogList } from "./components/VirtualizedLogList";
 import { WindowControls } from "./components/WindowControls";
 import { JavaInstallationPicker } from "./components/JavaInstallationPicker";
-import { UiComparisonSwitch, type UiComparisonMode } from "./components/UiComparisonSwitch";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
@@ -216,7 +215,6 @@ export default function App() {
   const handleProcessFailed = session.failProcess;
   const handleKill = session.kill;
   const [notice, setNotice] = useState<string | null>(null);
-  const [uiComparisonMode, setUiComparisonMode] = useState<UiComparisonMode>("after");
   const [lastUsedGroup, setLastUsedGroup] = useState("");
   const [accountsLaunchRedirect, setAccountsLaunchRedirect] = useState<{
     instanceId: string;
@@ -506,10 +504,7 @@ export default function App() {
   const selectedInstanceStarting = selectedInstanceId ? launching === selectedInstanceId : false;
 
   return (
-    <div
-      className={cn("app-shell h-screen flex flex-col overflow-hidden", desktopPlatform() === "darwin" && "app-shell-macos")}
-      data-ui-view={uiComparisonMode}
-    >
+    <div className={cn("app-shell h-screen flex flex-col overflow-hidden", desktopPlatform() === "darwin" && "app-shell-macos")}>
       {/* Toolbar */}
       <header className="app-toolbar h-11 shrink-0 flex items-center px-3 gap-1.5">
         <div className="flex items-center gap-2 pr-1.5">
@@ -1005,7 +1000,6 @@ export default function App() {
             {runningProcessCount(processes)} background process{runningProcessCount(processes) === 1 ? "" : "es"}
           </span>
         )}
-        <UiComparisonSwitch mode={uiComparisonMode} onModeChange={setUiComparisonMode} />
       </footer>
 
       {updatePackInstanceId &&
