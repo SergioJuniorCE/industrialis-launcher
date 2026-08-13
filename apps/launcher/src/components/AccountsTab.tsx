@@ -129,7 +129,7 @@ export function AccountsTab({
         </div>
       )}
 
-      <section className="overflow-hidden rounded-lg border border-border/80 bg-card/50 shadow-sm" aria-labelledby="linked-accounts-title">
+      <section className="account-list overflow-hidden rounded-lg border border-border/80 bg-card/50 shadow-sm" aria-labelledby="linked-accounts-title">
         <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3.5">
           <div>
             <h2 id="linked-accounts-title" className="text-sm font-semibold">
@@ -229,7 +229,7 @@ export function AccountsTab({
         )}
       </section>
 
-      <section className="rounded-lg border border-border/80 bg-card/35 p-4" aria-labelledby="offline-account-title">
+      <section className="account-method rounded-lg border border-border/80 bg-card/35 p-4" aria-labelledby="offline-account-title">
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
             <WifiOff className="size-4" />

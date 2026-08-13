@@ -106,7 +106,7 @@ export function InstanceGridCard({
         <div
           ref={cardRef}
           className={cn(
-            "group/card relative flex flex-col rounded-lg p-2.5 transition-colors",
+            "instance-grid-card group/card relative flex flex-col rounded-lg p-2.5 transition-colors",
             packBusy && "opacity-80",
             isDragging && "opacity-40",
             isDragOver && "bg-primary/15 ring-2 ring-primary/35",
@@ -119,7 +119,7 @@ export function InstanceGridCard({
           <Button
             variant="ghost"
             size="icon"
-            className="absolute right-1.5 top-1.5 z-10 size-7 bg-card/80 text-muted-foreground shadow-sm backdrop-blur-sm hover:text-foreground"
+            className="instance-card-menu absolute right-1.5 top-1.5 z-10 size-7 bg-card/80 text-muted-foreground shadow-sm backdrop-blur-sm hover:text-foreground"
             aria-label={`More actions for ${name}`}
             aria-haspopup="menu"
             title="More actions"
@@ -146,7 +146,7 @@ export function InstanceGridCard({
           {!packBusy && onDragHandleStart && (
             <div
               draggable
-              className="absolute left-1.5 top-1.5 flex cursor-grab items-center gap-0.5 rounded bg-card/80 p-0.5 text-muted-foreground shadow-sm backdrop-blur-sm active:cursor-grabbing"
+              className="instance-drag-handle absolute left-1.5 top-1.5 flex cursor-grab items-center gap-0.5 rounded bg-card/80 p-0.5 text-muted-foreground shadow-sm backdrop-blur-sm active:cursor-grabbing"
               title="Drag to reorder"
               onDragStart={(event) => {
                 event.stopPropagation();

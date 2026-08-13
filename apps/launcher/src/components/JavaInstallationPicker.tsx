@@ -83,7 +83,7 @@ export function JavaInstallationPicker({
         <p className="text-xs text-muted-foreground">Used by every instance unless that instance has a Java location override.</p>
       </div>
 
-      <section className="overflow-hidden rounded-lg border border-border/80" aria-labelledby="java-installations-title">
+      <section className="java-installation-picker overflow-hidden rounded-lg border border-border/80" aria-labelledby="java-installations-title">
         <div className="flex flex-wrap items-end justify-between gap-3 px-4 py-3">
           <div>
             <h3 id="java-installations-title" className="text-sm font-semibold">
