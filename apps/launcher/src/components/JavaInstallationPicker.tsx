@@ -128,7 +128,7 @@ export function JavaInstallationPicker({
                       role="radio"
                       aria-checked={selected}
                       className={cn(
-                        "grid w-full grid-cols-[7.5rem_7.5rem_minmax(0,1fr)] items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                        "grid w-full cursor-pointer grid-cols-[7.5rem_7.5rem_minmax(0,1fr)] items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                         selected ? "bg-primary/15" : "hover:bg-muted/70",
                       )}
                       onClick={() => onSelect(java.path)}
@@ -176,7 +176,7 @@ function SortHeader({ label, sortKey, sort, onSort }: { label: string; sortKey: 
       <button
         type="button"
         className={cn(
-          "flex w-full items-center gap-1.5 rounded-sm text-left text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "flex w-full cursor-pointer items-center gap-1.5 rounded-sm text-left text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           active && "text-foreground",
         )}
         onClick={() => onSort(sortKey)}
