@@ -14,9 +14,11 @@ export function WindowControls() {
     if (!desktop) return;
 
     let active = true;
-    void isWindowMaximized().then((value) => {
-      if (active) setMaximized(value);
-    });
+    void isWindowMaximized()
+      .then((value) => {
+        if (active) setMaximized(value);
+      })
+      .catch(() => undefined);
 
     const unlisten = listen<WindowMaximizedEvent>("window-maximized", (event) => {
       setMaximized(event.payload.maximized);
@@ -37,7 +39,7 @@ export function WindowControls() {
     }
   };
 
-  if (desktopPlatform() === "darwin") return null;
+  if (!desktop || desktopPlatform() === "darwin") return null;
 
   return (
     <div className="window-controls" aria-label="Window controls">

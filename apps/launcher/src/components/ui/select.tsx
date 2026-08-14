@@ -93,7 +93,7 @@ const Select = React.forwardRef<HTMLButtonElement, React.SelectHTMLAttributes<HT
         {open && (
           <div
             role="listbox"
-            className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
+            className="absolute left-0 right-0 top-full z-[60] mt-1 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
           >
             {options.map((option) => {
               const isSelected = option.value === currentValue;

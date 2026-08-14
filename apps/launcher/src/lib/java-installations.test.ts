@@ -26,6 +26,22 @@ describe("Java installation sorting", () => {
     expect(sortJavaInstallations(installations, "version", "asc").map((java) => java.majorVersion)).toEqual([8, 17, 21]);
   });
 
+  it("applies the sort direction to equal-version path tie-breakers", () => {
+    const sameVersion = [
+      { ...installations[0], path: "C:\\Java\\jdk-21-a\\bin\\java.exe" },
+      { ...installations[0], path: "C:\\Java\\jdk-21-b\\bin\\java.exe" },
+    ];
+
+    expect(sortJavaInstallations(sameVersion, "version", "asc").map((java) => java.path)).toEqual([
+      "C:\\Java\\jdk-21-a\\bin\\java.exe",
+      "C:\\Java\\jdk-21-b\\bin\\java.exe",
+    ]);
+    expect(sortJavaInstallations(sameVersion, "version", "desc").map((java) => java.path)).toEqual([
+      "C:\\Java\\jdk-21-b\\bin\\java.exe",
+      "C:\\Java\\jdk-21-a\\bin\\java.exe",
+    ]);
+  });
+
   it("does not mutate the detected installation order", () => {
     const original = [...installations];
     sortJavaInstallations(installations, "path", "asc");

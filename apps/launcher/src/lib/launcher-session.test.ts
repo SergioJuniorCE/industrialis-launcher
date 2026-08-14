@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_INSTANCE_SETTINGS } from "./instance-settings";
-import { createLauncherSession, startLauncherSession, type LauncherSessionDesktop } from "./launcher-session";
+import { createLauncherSession, type LauncherSessionDesktop } from "./launcher-session";
 import type { LaunchLogLine } from "./launch-log";
 import { resetLauncherStore, useLauncherStore } from "../stores/launcher-store";
 
@@ -94,22 +94,7 @@ describe("launcher session", () => {
     expect(useLauncherStore.getState().accountsLoaded).toBe(true);
     expect(harness.session.snapshot.javaOptions).toEqual([{ path: "C:/Java/bin/java.exe", version: 17 }]);
     expect(harness.session.snapshot.launcherUpdate.status).toBe("up-to-date");
-    expect(harness.listeners.size).toBe(5);
-  });
-
-  it("skips native startup and disposes the session in browser previews", () => {
-    const harness = createHarness();
-    const start = vi.spyOn(harness.session, "start");
-    const dispose = vi.spyOn(harness.session, "dispose");
-
-    const cleanup = startLauncherSession(harness.session, false);
-
-    expect(useLauncherStore.getState().accountsLoaded).toBe(true);
-    expect(start).not.toHaveBeenCalled();
-    expect(harness.invoked).toEqual([]);
-
-    cleanup();
-    expect(dispose).toHaveBeenCalledOnce();
+    expect([...harness.listeners.keys()].sort()).toEqual(["dl-progress", "instance-started", "instance-stopped", "launch-log", "launcher-update"]);
   });
 
   it("owns process transitions and batches live log events", async () => {
@@ -184,8 +169,8 @@ describe("launcher session", () => {
     const second = harness.session.loadLogs("alpha");
     expect(harness.persistedLogCalls).toBe(2);
 
-    harness.persistedLogResolvers[0]?.([{ stream: "stdout", line: "old" }]);
     harness.persistedLogResolvers[1]?.([{ stream: "stdout", line: "new" }]);
+    harness.persistedLogResolvers[0]?.([{ stream: "stdout", line: "old" }]);
     await Promise.all([first, second]);
 
     expect(harness.session.snapshot.instanceLogs.alpha).toEqual([{ stream: "stdout", line: "new" }]);

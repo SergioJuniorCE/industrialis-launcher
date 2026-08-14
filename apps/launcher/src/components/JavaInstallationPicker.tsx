@@ -83,7 +83,7 @@ export function JavaInstallationPicker({
         <p className="text-xs text-muted-foreground">Used by every instance unless that instance has a Java location override.</p>
       </div>
 
-      <section className="java-installation-picker overflow-hidden rounded-lg border border-border/80" aria-labelledby="java-installations-title">
+      <section className="overflow-hidden rounded-lg border border-border/80" aria-labelledby="java-installations-title">
         <div className="flex flex-wrap items-end justify-between gap-3 px-4 py-3">
           <div>
             <h3 id="java-installations-title" className="text-sm font-semibold">
@@ -110,7 +110,7 @@ export function JavaInstallationPicker({
         </div>
 
         <div className="border-t border-border/80 bg-muted/20">
-          <div className="grid grid-cols-[7.5rem_7.5rem_minmax(0,1fr)] gap-3 border-b border-border/70 px-4 py-2" role="row">
+          <div className="grid grid-cols-[7.5rem_7.5rem_minmax(0,1fr)] gap-3 border-b border-border/70 px-4 py-2">
             <SortHeader label="Version" sortKey="version" sort={sort} onSort={changeSort} />
             <SortHeader label="Architecture" sortKey="architecture" sort={sort} onSort={changeSort} />
             <SortHeader label="Path" sortKey="path" sort={sort} onSort={changeSort} />
@@ -128,7 +128,7 @@ export function JavaInstallationPicker({
                       role="radio"
                       aria-checked={selected}
                       className={cn(
-                        "grid w-full cursor-pointer grid-cols-[7.5rem_7.5rem_minmax(0,1fr)] items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                        "grid w-full grid-cols-[7.5rem_7.5rem_minmax(0,1fr)] items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                         selected ? "bg-primary/15" : "hover:bg-muted/70",
                       )}
                       onClick={() => onSelect(java.path)}
@@ -168,15 +168,14 @@ export function JavaInstallationPicker({
 
 function SortHeader({ label, sortKey, sort, onSort }: { label: string; sortKey: JavaSortKey; sort: JavaSort; onSort: (key: JavaSortKey) => void }) {
   const active = sort.key === sortKey;
-  const ariaSort = active ? (sort.direction === "asc" ? "ascending" : "descending") : "none";
   const SortIcon = !active ? ArrowUpDown : sort.direction === "asc" ? ArrowUp : ArrowDown;
 
   return (
-    <div role="columnheader" aria-sort={ariaSort}>
+    <div>
       <button
         type="button"
         className={cn(
-          "flex w-full cursor-pointer items-center gap-1.5 rounded-sm text-left text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "flex w-full items-center gap-1.5 rounded-sm text-left text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           active && "text-foreground",
         )}
         onClick={() => onSort(sortKey)}

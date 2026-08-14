@@ -40,9 +40,13 @@ export async function ensureInstanceIconLibrary(): Promise<Set<string>> {
   const destination = iconsDir();
   await fs.mkdir(destination, { recursive: true });
   const builtIns = new Set(await bundledIconIds());
-  for (const id of builtIns) {
-    await fs.copyFile(path.join(bundledIconsDir(), id), path.join(destination, id));
-  }
+  await Promise.all(
+    [...builtIns].map(async (id) => {
+      const target = path.join(destination, id);
+      if (await exists(target)) return;
+      await fs.copyFile(path.join(bundledIconsDir(), id), target);
+    }),
+  );
   return builtIns;
 }
 

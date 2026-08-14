@@ -210,7 +210,8 @@ export async function buildLaunchConfig(instance: string, id: string, emit: Emit
   const componentByUid = new Map(mmc.components.map((component) => [component.uid, component]));
   const libraryPromises = new Map<string, Promise<string | null>>();
   const resolveLibrary = (entry: PatchLibraryEntry): Promise<string | null> => {
-    const key = [entry.name, entry["MMC-hint"] ?? "", entry["MMC-absoluteUrl"] ?? "", entry.url ?? ""].join("\0");
+    const spec = parseGradleSpec(entry.name);
+    const key = spec ? (entry["MMC-hint"] === "local" ? filename(spec) : storagePath(spec)) : entry.name;
     const existing = libraryPromises.get(key);
     if (existing) return existing;
     const promise = ensureLibrary(instance, entry, id, emit);

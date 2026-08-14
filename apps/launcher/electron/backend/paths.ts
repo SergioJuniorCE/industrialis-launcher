@@ -14,7 +14,7 @@ export function iconsDir(): string {
 }
 
 export function instanceDir(id: string): string {
-  return path.join(instancesDir(), sanitizeName(id));
+  return path.join(instancesDir(), validateInstanceId(id));
 }
 
 export function settingsPath(id: string): string {
@@ -50,5 +50,6 @@ export function validateInstanceId(raw: string): string {
   if (!trimmed) throw new Error("instance id cannot be empty");
   const id = sanitizeName(trimmed);
   if (!id) throw new Error("instance id cannot be empty");
+  if (id === "." || id === "..") throw new Error(`invalid instance id: ${raw}`);
   return id;
 }

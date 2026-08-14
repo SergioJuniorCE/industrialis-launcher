@@ -194,7 +194,7 @@ async function moveInto(destinationRoot: string, source: string): Promise<void> 
     const dstStat = await fs.stat(destination);
     if (srcStat.isDirectory() && dstStat.isDirectory()) {
       const entries = await fs.readdir(source);
-      await mapConcurrent(entries, (entry) => moveInto(destination, path.join(source, entry)));
+      for (const entry of entries) await moveInto(destination, path.join(source, entry));
       await fs.rm(source, { recursive: true, force: true });
       return;
     }
@@ -221,7 +221,7 @@ export async function flattenNestedPack(instance: string): Promise<void> {
   const source = nested.sort()[0];
   if (!source) return;
   const entries = await fs.readdir(source);
-  await mapConcurrent(entries, (entry) => moveInto(instance, path.join(source, entry)));
+  await mapConcurrent(entries, (entry) => moveInto(instance, path.join(source, entry)), 4);
   await fs.rm(source, { recursive: true, force: true });
   if (!(await exists(path.join(instance, "mmc-pack.json")))) throw new Error(`failed to flatten instance pack in ${instance}`);
 }

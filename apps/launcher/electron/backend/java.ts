@@ -139,7 +139,7 @@ export async function testJava(pathOverride?: string): Promise<string> {
   const java = pathOverride?.trim() || javaPath();
   if (!java) throw new Error("no Java configured or found - set JAVA_HOME or pick a Java path");
   return new Promise((resolve, reject) => {
-    execFile(java, ["-version"], { windowsHide: true }, (error, stdout, stderr) => {
+    execFile(java, ["-version"], { windowsHide: true, timeout: 8_000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
       const output = `${stderr}${stdout}`;
       if (error) reject(new Error(`Java test failed (${java}):\n${output}`));
       else resolve(`OK - ${java}\n${output}`);

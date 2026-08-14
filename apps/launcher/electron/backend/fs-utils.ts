@@ -133,7 +133,8 @@ export async function dirSize(target: string): Promise<number> {
 
 export async function copyTree(source: string, destination: string): Promise<void> {
   await runConcurrent([{ source, destination }], async (current, enqueue) => {
-    const stat = await fs.stat(current.source);
+    const stat = await fs.lstat(current.source);
+    if (stat.isSymbolicLink()) return;
     if (stat.isDirectory()) {
       await fs.mkdir(current.destination, { recursive: true });
       const entries = await fs.readdir(current.source, { withFileTypes: true });
