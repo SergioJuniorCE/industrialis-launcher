@@ -9,12 +9,14 @@ export interface RunningProcess {
   child?: ChildProcess;
   capture?: WindowsProcessCapture;
   stopRequested?: boolean;
+  waitStarted?: boolean;
 }
 
 export type EmitProcessLog = (stream: string, line: string) => void;
 
 interface CaptureTailer {
   stopAndDrain(): Promise<void>;
+  dispose(): Promise<void>;
 }
 
 interface WindowsProcessCapture {
@@ -99,11 +101,13 @@ try {
 
   $stdoutCopy = $child.StandardOutput.BaseStream.CopyToAsync($stdoutFile)
   $stderrCopy = $child.StandardError.BaseStream.CopyToAsync($stderrFile)
+  $readyTempPath = [string]$payload.ready_path + ".tmp"
   [System.IO.File]::WriteAllText(
-    [string]$payload.ready_path,
+    $readyTempPath,
     [string]$child.Id,
     [System.Text.Encoding]::ASCII
   )
+  [System.IO.File]::Move($readyTempPath, [string]$payload.ready_path)
   $child.WaitForExit()
   $stdoutCopy.Wait()
   $stderrCopy.Wait()
@@ -132,7 +136,10 @@ try {
 # The launcher acknowledges after draining the files. If it has already closed,
 # keep them briefly so a slow final read cannot race cleanup, then clean up here.
 for ($attempt = 0; $attempt -lt 300; $attempt += 1) {
-  if ([System.IO.File]::Exists([string]$payload.acknowledgement_path)) { break }
+  if (
+    [System.IO.File]::Exists([string]$payload.acknowledgement_path) -or
+    -not [System.IO.Directory]::Exists([string]$payload.capture_directory)
+  ) { break }
   Start-Sleep -Milliseconds 100
 }
 
@@ -140,6 +147,7 @@ foreach ($file in @(
   [string]$payload.stdout_path,
   [string]$payload.stderr_path,
   [string]$payload.ready_path,
+  ([string]$payload.ready_path + ".tmp"),
   [string]$payload.exit_code_path,
   [string]$payload.acknowledgement_path,
   [string]$MyInvocation.MyCommand.Path
@@ -295,6 +303,7 @@ async function cleanupCaptureFiles(capture: Omit<WindowsProcessCapture, "tailer"
       capture.stdoutPath,
       capture.stderrPath,
       capture.readyPath,
+      `${capture.readyPath}.tmp`,
       capture.exitCodePath,
       capture.acknowledgementPath,
       capture.wrapperPath,
@@ -324,7 +333,6 @@ async function readCapturedBytes(
 }
 
 function startCaptureTail(capture: Omit<WindowsProcessCapture, "tailer">, emit: EmitProcessLog): CaptureTailer {
-  let stopping = false;
   let stdoutOffset = 0;
   let stderrOffset = 0;
   let stdoutRemainder = "";
@@ -333,6 +341,9 @@ function startCaptureTail(capture: Omit<WindowsProcessCapture, "tailer">, emit: 
   const stderrDecoder = new StringDecoder("utf8");
   const stdoutFile = fs.open(capture.stdoutPath, "r");
   const stderrFile = fs.open(capture.stderrPath, "r");
+  let stopping = false;
+  let closed = false;
+  let completion: Promise<void> | null = null;
 
   const emitDecoded = (stream: "stdout" | "stderr", decoded: string) => {
     const contents = (stream === "stdout" ? stdoutRemainder : stderrRemainder) + decoded;
@@ -348,27 +359,56 @@ function startCaptureTail(capture: Omit<WindowsProcessCapture, "tailer">, emit: 
     stderrOffset = await readCapturedBytes(await stderrFile, stderrOffset, stderrDecoder, (decoded) => emitDecoded("stderr", decoded));
   };
 
+  const closeFiles = async (): Promise<void> => {
+    if (closed) return;
+    closed = true;
+    const [stdout, stderr] = await Promise.all([stdoutFile.catch(() => null), stderrFile.catch(() => null)]);
+    await Promise.all([stdout?.close(), stderr?.close()]);
+  };
+
   const loop = (async () => {
     while (!stopping) {
       await drain().catch(() => undefined);
+      if (stopping) break;
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_POLL_MS));
     }
   })();
 
-  return {
-    async stopAndDrain() {
+  const stopAndDrain = (): Promise<void> => {
+    if (completion) return completion;
+    completion = (async () => {
       stopping = true;
       try {
         await loop;
+        if (closed) return;
         await drain();
         emitDecoded("stdout", stdoutDecoder.end());
         emitDecoded("stderr", stderrDecoder.end());
         if (stdoutRemainder) emit("stdout", stdoutRemainder);
         if (stderrRemainder) emit("stderr", stderrRemainder);
       } finally {
-        await Promise.all([(await stdoutFile).close(), (await stderrFile).close()]);
+        await closeFiles();
       }
-    },
+    })();
+    return completion;
+  };
+
+  const dispose = (): Promise<void> => {
+    if (completion) return completion;
+    completion = (async () => {
+      stopping = true;
+      try {
+        await loop;
+      } finally {
+        await closeFiles();
+      }
+    })();
+    return completion;
+  };
+
+  return {
+    stopAndDrain,
+    dispose,
   };
 }
 
@@ -383,9 +423,16 @@ function isAlive(pid: number): boolean {
 
 async function terminateWindowsProcess(pid: number): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    execFile("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, (error) =>
-      error && !/not found|no running instance/iu.test(error.message) ? reject(error) : resolve(),
-    );
+    execFile("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, async (error) => {
+      if (!error) {
+        resolve();
+        return;
+      }
+      const deadline = Date.now() + 2_000;
+      while (isAlive(pid) && Date.now() < deadline) await new Promise((wait) => setTimeout(wait, CAPTURE_POLL_MS));
+      if (!isAlive(pid)) resolve();
+      else reject(error);
+    });
   });
 }
 
@@ -422,6 +469,7 @@ export async function spawnGameProcess(
 }
 
 export async function waitForGameProcess(processInfo: RunningProcess): Promise<number> {
+  processInfo.waitStarted = true;
   if (processInfo.child) {
     return new Promise((resolve) => processInfo.child?.once("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0))));
   }
@@ -440,11 +488,13 @@ export async function waitForGameProcess(processInfo: RunningProcess): Promise<n
   await processInfo.capture.tailer.stopAndDrain();
   if (exitCode !== null) {
     await fs.writeFile(processInfo.capture.acknowledgementPath, "drained", "utf8").catch(() => undefined);
-    return processInfo.stopRequested ? 0 : exitCode;
+    const resolved = processInfo.stopRequested ? 0 : exitCode;
+    await cleanupCaptureFiles(processInfo.capture);
+    return resolved;
   }
   while (isAlive(processInfo.pid)) await new Promise((resolve) => setTimeout(resolve, 500));
   await cleanupCaptureFiles(processInfo.capture);
-  return 1;
+  return processInfo.stopRequested ? 0 : 1;
 }
 
 export async function killGameProcess(processInfo: RunningProcess): Promise<void> {
@@ -454,7 +504,11 @@ export async function killGameProcess(processInfo: RunningProcess): Promise<void
   }
   if (process.platform === "win32") {
     processInfo.stopRequested = true;
-    await terminateWindowsProcess(processInfo.pid);
+    try {
+      await terminateWindowsProcess(processInfo.pid);
+    } finally {
+      if (processInfo.capture && !processInfo.waitStarted) await processInfo.capture.tailer.dispose();
+    }
   } else {
     try {
       process.kill(processInfo.pid, "SIGTERM");

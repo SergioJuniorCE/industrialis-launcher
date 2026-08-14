@@ -206,6 +206,26 @@ describe("launcher session", () => {
     expect(harness.session.snapshot.instanceLogs.alpha).toEqual([{ stream: "stdout", line: "new" }]);
   });
 
+  it("does not let a pending persisted-log response replace launch output", async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = createHarness();
+      await harness.session.start();
+      const pendingLoad = harness.session.loadLogs("alpha");
+      const launch = harness.session.launch("alpha", DEFAULT_INSTANCE_SETTINGS);
+
+      harness.emit("launch-log", { id: "alpha", stream: "stdout", line: "live launch output" });
+      vi.advanceTimersByTime(50);
+      harness.persistedLogResolvers[0]?.([{ stream: "stdout", line: "stale persisted output" }]);
+
+      await Promise.all([pendingLoad, launch]);
+
+      expect(harness.session.snapshot.instanceLogs.alpha).toEqual([{ stream: "stdout", line: "live launch output" }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("unsubscribes and drops pending log work when disposed", async () => {
     vi.useFakeTimers();
     try {

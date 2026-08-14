@@ -340,6 +340,7 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
   const launch = async (id: string, settings: InstanceSettings | null): Promise<void> => {
     if (store.getState().launching !== null) return;
     setError(null);
+    logRequests.set(id, (logRequests.get(id) ?? 0) + 1);
     store.setState({ selectedInstanceId: id, detailTab: "logs", launching: id });
 
     const consoleConfig = settings?.override_console

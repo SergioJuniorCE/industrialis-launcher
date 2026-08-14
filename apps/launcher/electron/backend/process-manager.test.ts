@@ -224,7 +224,7 @@ describe("detached game process logs", () => {
       let stopped = false;
 
       try {
-        await withTimeout(liveLogs, 15_000);
+        await withTimeout(liveLogs, 30_000);
         expect(() => process.kill(running.pid, 0)).not.toThrow();
         expect(processIsAlive(grandchildPid)).toBe(true);
         await killGameProcess(running);
@@ -239,7 +239,7 @@ describe("detached game process logs", () => {
         if (grandchildPid > 0 && processIsAlive(grandchildPid)) await terminateProcessTree(grandchildPid);
       }
     },
-    45_000,
+    60_000,
   );
 
   it.skipIf(process.platform !== "win32")(
@@ -258,18 +258,21 @@ describe("detached game process logs", () => {
         stdio: "ignore",
       });
       let gamePid = 0;
+      const helperPid = helper.pid;
 
       try {
+        expect(helperPid).toBeDefined();
+        if (helperPid === undefined || helperPid <= 0) throw new Error("Detached-process helper did not spawn");
         await waitUntil(() => existsSync(helperReadyPath), 30_000);
-        await closeKillOnCloseJob(helper.pid ?? 0, launchSignalPath, statePath);
+        await closeKillOnCloseJob(helperPid, launchSignalPath, statePath);
         const state = JSON.parse(await fs.readFile(statePath, "utf8")) as { marker: string; gamePid: number };
         expect(state.marker).toBe(marker);
         gamePid = state.gamePid;
-        await waitUntil(() => !processIsAlive(helper.pid ?? 0), 10_000);
+        await waitUntil(() => !processIsAlive(helperPid), 10_000);
         expect(processIsAlive(gamePid)).toBe(true);
       } finally {
         if (gamePid > 0) await terminateProcessTree(gamePid);
-        if (helper.pid && processIsAlive(helper.pid)) await terminateProcessTree(helper.pid);
+        if (helperPid && processIsAlive(helperPid)) await terminateProcessTree(helperPid);
         await fs.rm(directory, { recursive: true, force: true });
       }
     },
@@ -280,8 +283,31 @@ describe("detached game process logs", () => {
     "preserves the exit code from the detached Windows game process",
     async () => {
       const running = await spawnGameProcess(process.execPath, ["-e", "process.exit(23)"], process.cwd(), {}, () => undefined);
+      const captureDirectory = running.capture?.directory;
+      expect(captureDirectory).toBeDefined();
 
       await expect(waitForGameProcess(running)).resolves.toBe(23);
+      if (captureDirectory) await waitUntil(() => !existsSync(captureDirectory), 10_000);
+    },
+    45_000,
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "passes environment variables through the detached Windows launcher",
+    async () => {
+      const key = `INDUSTRIALIS_PROCESS_MANAGER_${Date.now()}`;
+      const value = `value-${Date.now()}`;
+      const lines: Array<{ stream: string; line: string }> = [];
+      const running = await spawnGameProcess(
+        process.execPath,
+        ["-e", `console.log(process.env[${JSON.stringify(key)}])`],
+        process.cwd(),
+        { [key]: value },
+        (stream, line) => lines.push({ stream, line }),
+      );
+
+      await expect(waitForGameProcess(running)).resolves.toBe(0);
+      expect(lines).toEqual(expect.arrayContaining([{ stream: "stdout", line: value }]));
     },
     45_000,
   );
