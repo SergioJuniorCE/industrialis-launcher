@@ -340,19 +340,14 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
   const launch = async (id: string, settings: InstanceSettings | null): Promise<void> => {
     if (store.getState().launching !== null) return;
     setError(null);
-    store.setState({ selectedInstanceId: id, launching: id });
+    store.setState({ selectedInstanceId: id, detailTab: "logs", launching: id });
 
     const consoleConfig = settings?.override_console
       ? {
-          showOnLaunch: settings.show_console_on_launch,
           showOnError: settings.show_console_on_error,
           autoClose: settings.auto_close_console,
         }
-      : { showOnLaunch: false, showOnError: true, autoClose: false };
-
-    if (consoleConfig.showOnLaunch) {
-      store.setState({ detailTab: "logs" });
-    }
+      : { showOnError: true, autoClose: false };
 
     if (settings?.override_window && settings.close_after_launch) {
       try {
