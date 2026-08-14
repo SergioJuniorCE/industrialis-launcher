@@ -108,6 +108,7 @@ export function InstanceSettingsPanel({
 
   return (
     <InstanceSettingsTabs
+      instanceId={instanceId}
       settings={settings}
       packVersion={packVersion}
       settingsTab={settingsTab}
