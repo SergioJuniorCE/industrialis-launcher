@@ -34,6 +34,6 @@ export function sortJavaInstallations(installations: JavaInfo[], key: JavaSortKe
     } else {
       comparison = naturalCollator.compare(left[key], right[key]);
     }
-    return comparison === 0 ? naturalCollator.compare(left.path, right.path) : comparison * multiplier;
+    return (comparison === 0 ? naturalCollator.compare(left.path, right.path) : comparison) * multiplier;
   });
 }

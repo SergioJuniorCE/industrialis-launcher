@@ -6,6 +6,12 @@ import { InstanceGridCard, type InstanceGridCardCommands } from "./InstanceGridC
 
 let container: HTMLDivElement;
 let root: Root;
+const reactActGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+const originalActEnvironment = reactActGlobal.IS_REACT_ACT_ENVIRONMENT;
+const originalDialogMethods = {
+  showModal: Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal"),
+  close: Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close"),
+};
 
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -32,6 +38,10 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  if (originalDialogMethods.showModal) Object.defineProperty(HTMLDialogElement.prototype, "showModal", originalDialogMethods.showModal);
+  if (originalDialogMethods.close) Object.defineProperty(HTMLDialogElement.prototype, "close", originalDialogMethods.close);
+  if (originalActEnvironment === undefined) delete reactActGlobal.IS_REACT_ACT_ENVIRONMENT;
+  else reactActGlobal.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment;
 });
 
 describe("InstanceGridCard context menu", () => {
@@ -52,7 +62,7 @@ describe("InstanceGridCard context menu", () => {
       );
     });
 
-    const card = container.querySelector(".group\\/card");
+    const card = container.querySelector(".instance-grid-card");
     expect(card).toBeInstanceOf(HTMLElement);
 
     await act(async () => {

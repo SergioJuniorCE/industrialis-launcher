@@ -57,7 +57,7 @@ function PresetOption({
 }) {
   return (
     <div
-      className={`theme-preset-option relative rounded-lg border transition-colors ${
+      className={`relative rounded-lg border transition-colors ${
         selected ? "border-primary bg-primary/10" : "border-border/80 bg-background/35 hover:border-primary/55"
       }`}
     >
@@ -171,7 +171,7 @@ export function ThemePresetPicker() {
 
       <CardContent className="space-y-5">
         <section
-          className="appearance-summary grid gap-3 rounded-lg border border-border/80 bg-muted/25 p-3 sm:grid-cols-[11rem_1fr] sm:items-center"
+          className="grid gap-3 rounded-lg border border-border/80 bg-muted/25 p-3 sm:grid-cols-[11rem_1fr] sm:items-center"
           aria-label="Active theme preview"
         >
           <ThemePreview tokens={activeTokens} />
@@ -210,7 +210,7 @@ export function ThemePresetPicker() {
           </section>
         )}
 
-        <details className="appearance-advanced group rounded-lg border border-border/80 bg-background/30">
+        <details className="group rounded-lg border border-border/80 bg-background/30">
           <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
             <SlidersHorizontal className="size-4 text-primary" aria-hidden="true" />
             <span className="min-w-0 flex-1">

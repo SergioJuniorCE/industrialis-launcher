@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { app, BrowserWindow, dialog, shell } from "electron";
-import { accountToInfo, cancelMicrosoftLogin, createOfflineAccount, ensureFreshToken, handleOauthCallback, loadAccounts, startMicrosoftLogin } from "./auth";
+import { accountToInfo, createOfflineAccount, ensureFreshToken, handleOauthCallback, loadAccounts, startMicrosoftLogin } from "./auth";
 import { applyConfigPreset, getConfigPresetStatus } from "./config-presets";
 import {
   deleteGroup,
@@ -15,7 +15,7 @@ import {
   setGroupInstanceOrder,
   setInstanceGroup,
 } from "./groups";
-import { copyTree, dirSize, exists, listFiles, removeIfExists } from "./fs-utils";
+import { copyTree, dirSize, exists, listFiles, mapConcurrent, removeIfExists } from "./fs-utils";
 import { defaultInstanceIconPath, ensureInstanceIconLibrary, importInstanceIcon, instanceIconLibraryPath, listInstanceIcons } from "./instance-icons";
 import {
   buildClasspath,
@@ -331,9 +331,6 @@ export class LauncherBackend {
         return saveLauncherSettings(args.launcherSettings ?? defaultLauncherSettings());
       case "start_microsoft_login":
         return startMicrosoftLogin((event, payload) => this.emit(event, payload));
-      case "cancel_microsoft_login":
-        cancelMicrosoftLogin();
-        return undefined;
       case "check_launcher_update":
         return this.checkLauncherUpdate();
       case "install_launcher_update":
@@ -350,13 +347,15 @@ export class LauncherBackend {
 
   private async refreshSizes(ids: string[] | null | undefined): Promise<Record<string, number>> {
     const target = ids?.map((id) => sanitizeName(id.trim())) ?? [...(await this.knownInstanceIds())];
-    const sizes = await Promise.all(
-      target.map(async (id) => {
+    const sizes = await mapConcurrent(
+      target,
+      async (id) => {
         const [size, settings] = await Promise.all([dirSize(instanceDir(id)), loadInstanceSettings(id)]);
         settings.cached_size_bytes = size;
         await saveInstanceSettings(id, settings);
         return [id, size] as const;
-      }),
+      },
+      4,
     );
     return Object.fromEntries(sizes);
   }
@@ -734,6 +733,7 @@ export class LauncherBackend {
     try {
       const response = await fetch("https://api.github.com/repos/SergioJuniorCE/industrialis-launcher/releases/latest", {
         headers: { Accept: "application/vnd.github+json", "User-Agent": "industrialis-launcher" },
+        signal: AbortSignal.timeout(10_000),
       });
       if (!response.ok) throw new Error(`GitHub release lookup failed: HTTP ${response.status}`);
       const release = (await response.json()) as {

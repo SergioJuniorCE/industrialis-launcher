@@ -54,4 +54,18 @@ describe("instance icon library", () => {
   it("rejects paths outside the icon library", async () => {
     await expect(instanceIconLibraryPath("../gtnh-logo.png")).rejects.toThrow("invalid icon id");
   });
+
+  it("rejects unsupported image types", async () => {
+    const source = path.join(tempRoot, "icon.txt");
+    await fs.writeFile(source, "not-an-image");
+
+    await expect(importInstanceIcon(source)).rejects.toThrow("unsupported image type");
+  });
+
+  it("rejects images over 4 MB", async () => {
+    const source = path.join(tempRoot, "huge.png");
+    await fs.writeFile(source, Buffer.alloc(4 * 1024 * 1024 + 1));
+
+    await expect(importInstanceIcon(source)).rejects.toThrow("image must be under 4 MB");
+  });
 });

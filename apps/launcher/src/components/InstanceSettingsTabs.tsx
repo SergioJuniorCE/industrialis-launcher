@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
@@ -32,7 +32,7 @@ function SettingsSection({
 }) {
   const enabled = override === undefined || override;
   return (
-    <Card className="settings-section border-border/80 shadow-none">
+    <Card className="border-border/80 shadow-none">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -65,20 +65,30 @@ function FieldLabel({ children, hint }: { children: ReactNode; hint?: string }) 
   );
 }
 
-type EnvRow = [string, string];
+type EnvRow = {
+  key: string;
+  value: string;
+  persistedKey: string | null;
+};
 
 function envRowsToRecord(rows: readonly EnvRow[]): Record<string, string> {
   const result: Record<string, string> = {};
-  for (const [key, value] of rows) {
-    const trimmed = key.trim();
-    if (trimmed) result[trimmed] = value;
+  for (const row of rows) {
+    const trimmed = row.key.trim();
+    if (trimmed) result[trimmed] = row.value;
   }
   return result;
 }
 
-function EnvVarEditor({ value, onChange }: { value: Record<string, string>; onChange: (next: Record<string, string>) => void }) {
+function envRowsFromValue(value: Record<string, string>): EnvRow[] {
   const entries = Object.entries(value);
-  const rows: EnvRow[] = entries.length > 0 ? entries : [["", ""]];
+  return entries.length > 0 ? entries.map(([key, rowValue]) => ({ key, value: rowValue, persistedKey: key })) : [{ key: "", value: "", persistedKey: null }];
+}
+
+function EnvVarEditor({ value, onChange }: { value: Record<string, string>; onChange: (next: Record<string, string>) => void }) {
+  const persistedRows = envRowsFromValue(value);
+  const [draftRows, setDraftRows] = useState<EnvRow[] | null>(null);
+  const rows = draftRows ?? persistedRows;
   const rowKeys = useRef<string[]>([]);
   const nextRowKey = useRef(0);
 
@@ -92,25 +102,32 @@ function EnvVarEditor({ value, onChange }: { value: Record<string, string>; onCh
   };
 
   const updateRow = (index: number, key: string, val: string) => {
-    const next = [...rows];
-    next[index] = [key, val];
-    onChange(envRowsToRecord(next));
+    const existing = rows[index];
+    if (!existing) return;
+    const trimmedKey = key.trim();
+    const next = rows.map((row, rowIndex) => (rowIndex === index ? { ...row, key, value: val, persistedKey: trimmedKey || row.persistedKey } : row));
+    setDraftRows(next);
+    if (trimmedKey) onChange(envRowsToRecord(next));
   };
 
-  const addRow = () => onChange({ ...value, "": "" });
+  const addRow = () => setDraftRows([...rows, { key: "", value: "", persistedKey: null }]);
 
   const removeRow = (index: number) => {
+    const removed = rows[index];
+    if (!removed) return;
     const next = rows.filter((_, i) => i !== index);
+    const nextRows: EnvRow[] = next.length > 0 ? next : [{ key: "", value: "", persistedKey: null }];
     rowKeys.current.splice(index, 1);
-    onChange(envRowsToRecord(next));
+    setDraftRows(nextRows);
+    if (removed.persistedKey) onChange(envRowsToRecord(nextRows));
   };
 
   return (
     <div className="space-y-2">
-      {rows.map(([key, val], index) => (
+      {rows.map((row, index) => (
         <div key={getStableRowKey(index)} className="flex gap-2">
-          <Input value={key} onChange={(e) => updateRow(index, e.target.value, val)} placeholder="VAR_NAME" className="font-mono text-xs" />
-          <Input value={val} onChange={(e) => updateRow(index, key, e.target.value)} placeholder="value" className="font-mono text-xs flex-1" />
+          <Input value={row.key} onChange={(e) => updateRow(index, e.target.value, row.value)} placeholder="VAR_NAME" className="font-mono text-xs" />
+          <Input value={row.value} onChange={(e) => updateRow(index, row.key, e.target.value)} placeholder="value" className="font-mono text-xs flex-1" />
           <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(index)}>
             ×
           </Button>
@@ -123,7 +140,15 @@ function EnvVarEditor({ value, onChange }: { value: Record<string, string>; onCh
   );
 }
 
-function AdvancedSettingsTabs({ settings, update }: { settings: InstanceSettings; update: (patch: Partial<InstanceSettings>) => void }) {
+function AdvancedSettingsTabs({
+  instanceId,
+  settings,
+  update,
+}: {
+  instanceId: string;
+  settings: InstanceSettings;
+  update: (patch: Partial<InstanceSettings>) => void;
+}) {
   return (
     <>
       <TabsContent value="commands" className="space-y-2 mt-2">
@@ -158,7 +183,7 @@ function AdvancedSettingsTabs({ settings, update }: { settings: InstanceSettings
 
       <TabsContent value="environment" className="space-y-2 mt-2">
         <SettingsSection title="Environment variables" override={settings.override_env} onOverrideChange={(value) => update({ override_env: value })}>
-          <EnvVarEditor value={settings.env_vars} onChange={(env_vars) => update({ env_vars })} />
+          <EnvVarEditor key={instanceId} value={settings.env_vars} onChange={(env_vars) => update({ env_vars })} />
         </SettingsSection>
       </TabsContent>
     </>
@@ -194,7 +219,7 @@ function GeneralSettingsTab({
 }) {
   return (
     <TabsContent value="general" className="space-y-2 mt-2">
-      <Card className="settings-section shadow-none">
+      <Card className="shadow-none">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Instance</CardTitle>
         </CardHeader>
@@ -378,6 +403,7 @@ function JavaSettingsTab({
 }
 
 export function InstanceSettingsTabs({
+  instanceId,
   settings,
   packVersion,
   settingsTab,
@@ -392,6 +418,7 @@ export function InstanceSettingsTabs({
   onTestJava,
   onOpenLauncherSettings,
 }: {
+  instanceId: string;
   settings: InstanceSettings;
   packVersion: string;
   settingsTab: string;
@@ -407,7 +434,7 @@ export function InstanceSettingsTabs({
   onOpenLauncherSettings?: () => void;
 }) {
   return (
-    <div className="instance-settings-stack flex flex-col gap-2 max-w-2xl pb-2">
+    <div className="flex flex-col gap-2 max-w-2xl pb-2">
       <LauncherSettingsLink onOpen={onOpenLauncherSettings} />
       <Tabs value={settingsTab} onValueChange={onSettingsTabChange} className="w-full">
         <TabsList className="flex flex-wrap h-auto gap-0.5">
@@ -427,7 +454,7 @@ export function InstanceSettingsTabs({
           onBrowseJava={onBrowseJava}
           onTestJava={onTestJava}
         />
-        <AdvancedSettingsTabs settings={settings} update={onUpdate} />
+        <AdvancedSettingsTabs instanceId={instanceId} settings={settings} update={onUpdate} />
       </Tabs>
     </div>
   );
