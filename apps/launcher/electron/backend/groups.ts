@@ -1,4 +1,4 @@
-import { groupsPath, instancesDir } from "./paths";
+import { groupsPath } from "./paths";
 import { readJson, writeJson } from "./fs-utils";
 import type { InstanceGroupsState } from "./types";
 
@@ -224,5 +224,3 @@ function appendToOrder(data: GroupData, id: string, group: string): void {
   if (!order.includes(id)) order.push(id);
   data.groupOrder.set(group, order);
 }
-
-export { instancesDir };

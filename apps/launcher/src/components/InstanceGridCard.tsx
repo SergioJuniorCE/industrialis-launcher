@@ -1,8 +1,8 @@
-import type { DragEvent } from "react";
-import { Copy, FolderOpen, Loader2, Pencil, Play, RefreshCw, SlidersHorizontal, Square, Trash2, X, GripVertical } from "lucide-react";
+import { useRef, type DragEvent } from "react";
+import { Copy, Ellipsis, FolderOpen, Images, Loader2, Pencil, Play, RefreshCw, SlidersHorizontal, Square, Trash2, X, GripVertical } from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
-import { InstanceAvatar } from "./InstanceAvatar";
+import { InstanceAvatar, type InstanceAvatarHandle } from "./InstanceAvatar";
 import { PackVersionStatus } from "./PackVersionStatus";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./ui/context-menu";
 import { cn } from "../lib/utils";
@@ -92,6 +92,8 @@ export function InstanceGridCard({
   const setReinstallInstanceId = useLauncherStore((state) => state.setReinstallInstanceId);
   const setCopyInstanceId = useLauncherStore((state) => state.setCopyInstanceId);
   const setRenameInstanceId = useLauncherStore((state) => state.setRenameInstanceId);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const avatarRef = useRef<InstanceAvatarHandle>(null);
   const name = displayName(inst);
   const deleting = deleteProcess?.status === "running";
   const updating = updateProcess?.status === "running";
@@ -102,8 +104,9 @@ export function InstanceGridCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
+          ref={cardRef}
           className={cn(
-            "group/card relative flex flex-col rounded-lg p-2.5 transition-colors",
+            "instance-grid-card group/card relative flex flex-col rounded-lg p-2.5 transition-colors",
             packBusy && "opacity-80",
             isDragging && "opacity-40",
             isDragOver && "bg-primary/15 ring-2 ring-primary/35",
@@ -113,6 +116,33 @@ export function InstanceGridCard({
           onDragLeave={onDragLeave}
           onDrop={onDrop}
         >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-1.5 top-1.5 z-10 size-7 bg-card/80 text-muted-foreground shadow-sm backdrop-blur-sm hover:text-foreground"
+            aria-label={`More actions for ${name}`}
+            aria-haspopup="menu"
+            title="More actions"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedInstanceId(inst.id);
+              const bounds = event.currentTarget.getBoundingClientRect();
+              cardRef.current?.dispatchEvent(
+                new MouseEvent("contextmenu", {
+                  bubbles: true,
+                  cancelable: true,
+                  button: 2,
+                  buttons: 2,
+                  clientX: bounds.right,
+                  clientY: bounds.bottom,
+                  view: window,
+                }),
+              );
+            }}
+          >
+            <Ellipsis className="size-4" />
+          </Button>
+
           {!packBusy && onDragHandleStart && (
             <div
               draggable
@@ -150,6 +180,7 @@ export function InstanceGridCard({
             title="Double-click to launch"
           >
             <InstanceAvatar
+              ref={avatarRef}
               instanceId={inst.id}
               name={name}
               iconPath={inst.icon_path}
@@ -221,7 +252,7 @@ export function InstanceGridCard({
             )}
           </div>
 
-          {running && !packBusy && <span className="status-running absolute right-2 top-2 size-2 rounded-full animate-pulse" title="Running" />}
+          {running && !packBusy && <span className="status-running absolute right-10 top-2.5 size-2 rounded-full animate-pulse" title="Running" />}
 
           {(deleting || updating || reinstalling) && (
             <div className="mt-2">
@@ -239,6 +270,10 @@ export function InstanceGridCard({
         <ContextMenuItem onSelect={() => openInstanceSettings(inst.id)}>
           <SlidersHorizontal />
           Settings
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => void avatarRef.current?.openIconGallery()} disabled={packBusy}>
+          <Images />
+          Change icon…
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => setRenameInstanceId(inst.id)} disabled={deleting}>
           <Pencil />

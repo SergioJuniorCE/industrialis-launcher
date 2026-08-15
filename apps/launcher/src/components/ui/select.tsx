@@ -31,10 +31,7 @@ function parseOptions(children: React.ReactNode): SelectOption[] {
   return options;
 }
 
-function emitChange(
-  onChange: React.SelectHTMLAttributes<HTMLSelectElement>["onChange"],
-  value: string,
-) {
+function emitChange(onChange: React.SelectHTMLAttributes<HTMLSelectElement>["onChange"], value: string) {
   if (!onChange) return;
   onChange({
     target: { value },
@@ -90,12 +87,7 @@ const Select = React.forwardRef<HTMLButtonElement, React.SelectHTMLAttributes<HT
           )}
         >
           <span className="truncate">{selected?.label ?? currentValue}</span>
-          <ChevronDown
-            className={cn(
-              "size-4 shrink-0 text-muted-foreground transition-transform",
-              open && "rotate-180",
-            )}
-          />
+          <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
         </button>
 
         {open && (
@@ -115,9 +107,7 @@ const Select = React.forwardRef<HTMLButtonElement, React.SelectHTMLAttributes<HT
                   onClick={() => choose(option.value)}
                   className={cn(
                     "flex w-full px-3 py-2 text-left text-sm transition-colors",
-                    isSelected
-                      ? "bg-primary/18 text-foreground"
-                      : "text-foreground hover:bg-accent hover:text-accent-foreground",
+                    isSelected ? "bg-primary/18 text-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground",
                     option.disabled && "pointer-events-none opacity-50",
                   )}
                 >

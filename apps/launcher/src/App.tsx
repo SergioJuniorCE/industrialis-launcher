@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { hideWindow, invoke, listen, openUrl } from "./lib/desktop";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { desktopPlatform, invoke, openUrl } from "./lib/desktop";
 import {
   Plus,
   Settings,
@@ -42,24 +42,16 @@ import { resolveDefaultAccountId } from "./lib/launcher-settings";
 import { ProcessesDropdown } from "./components/ProcessesDropdown";
 import { ProcessesTab } from "./components/ProcessesTab";
 import {
-  applyDlProgressEvent,
-  createProcess,
-  dismissProcess,
   formatDownloadProgress,
   getInstanceProcess,
   isInstanceBusy,
-  markProcessFailed,
-  operationLabel,
   processKey,
-  resolveOperation,
   runningProcessCount,
   sortedProcesses,
   stageLabel,
   type BackgroundProcess,
-  type DlProgressEvent,
-  type ProcessOperation,
 } from "./lib/background-processes";
-import { classifyLaunchLogLine, formatLaunchLog, launchLogLevelClass, type LaunchLogLine } from "./lib/launch-log";
+import { formatLaunchLog, type LaunchLogLine } from "./lib/launch-log";
 import { formatPlayTime, mergeInstanceSettings, type InstanceSettings } from "./lib/instance-settings";
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
 import { InstanceMinecraftEditor } from "./components/InstanceMinecraftEditor";
@@ -69,28 +61,32 @@ import { ReinstallInstanceDialog } from "./components/ReinstallInstanceDialog";
 import { PackVersionStatus } from "./components/PackVersionStatus";
 import { InstanceAvatar } from "./components/InstanceAvatar";
 import { InstanceGridCard, type InstanceGridCardCommands } from "./components/InstanceGridCard";
-import { LauncherUpdateDialog, type LauncherUpdateState } from "./components/LauncherUpdateDialog";
+import { LauncherUpdateDialog } from "./components/LauncherUpdateDialog";
+import { VirtualizedLogList } from "./components/VirtualizedLogList";
+import { WindowControls } from "./components/WindowControls";
+import { JavaInstallationPicker } from "./components/JavaInstallationPicker";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
-import { cn, keyedByOccurrence } from "./lib/utils";
+import { MAX_RETAINED_LOG_LINES } from "./lib/log-buffer";
+import { cn } from "./lib/utils";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./components/ui/context-menu";
-import { useLauncherStore, type GtnhVersion, type InstanceGroupsState, type InstanceInfo, type LauncherAccount } from "./stores/launcher-store";
+import { useLauncherStore, type GtnhVersion, type InstanceInfo, type LauncherAccount } from "./stores/launcher-store";
+import { useLauncherSession } from "./lib/launcher-session";
+import type { JavaInfo } from "./lib/java-installations";
 import "./App.css";
 
 const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 
+const PRIMARY_NAV_TABS = [
+  { key: "instances", label: "Instances", Icon: Boxes },
+  { key: "processes", label: "Processes", Icon: Activity },
+  { key: "settings", label: "Settings", Icon: Settings },
+  { key: "accounts", label: "Accounts", Icon: Users },
+] as const;
+
 // ── Types ──
-
-interface JavaInfo {
-  path: string;
-  version: number;
-}
-
-interface LaunchLogEvent extends LaunchLogLine {
-  id: string;
-}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -183,6 +179,7 @@ function formatUpdateProgress(proc: BackgroundProcess): string {
 export default function App() {
   const { settings: launcherSettings, loaded: launcherSettingsLoaded, updateSettings, saveSettingsNow } = useLauncherSettings();
   const defaultAccountId = resolveDefaultAccountId(launcherSettings);
+  const { error, javaOptions, javaRefreshing, instanceLogs, launcherUpdate, session } = useLauncherSession();
   const {
     tab,
     selectedProcessKey,
@@ -209,31 +206,22 @@ export default function App() {
     setShowNewInstance,
     setDetailTab,
     setInstances,
-    setSizesRefreshing,
-    setProcesses,
-    setLaunching,
-    setRunningInstanceIds,
     setGroupsState,
     setAccounts,
-    setAccountsLoaded,
-    setGtnhVersions,
     setUpdatePackInstanceId,
     setReinstallInstanceId,
     setCopyInstanceId,
     setChangeGroupInstanceId,
     setRenameInstanceId,
   } = useLauncherStore();
-  const updateProcesses = useCallback(
-    (updater: (current: Map<string, BackgroundProcess>) => Map<string, BackgroundProcess>) => {
-      setProcesses(updater);
-    },
-    [setProcesses],
-  );
-  const [error, setError] = useState<string | null>(null);
+  const setError = session.setError;
+  const loadGroups = session.loadGroups;
+  const loadInstances = session.loadInstances;
+  const refreshJava = session.refreshJava;
+  const registerProcess = session.startProcess;
+  const handleProcessFailed = session.failProcess;
+  const handleKill = session.kill;
   const [notice, setNotice] = useState<string | null>(null);
-  const [javaOptions, setJavaOptions] = useState<JavaInfo[]>([]);
-  const [javaRefreshing, setJavaRefreshing] = useState(false);
-  const [instanceLogs, setInstanceLogs] = useState<Record<string, LaunchLogLine[]>>({});
   const [lastUsedGroup, setLastUsedGroup] = useState("");
   const [accountsLaunchRedirect, setAccountsLaunchRedirect] = useState<{
     instanceId: string;
@@ -243,109 +231,13 @@ export default function App() {
     id: string;
     name: string;
   } | null>(null);
-  const [launcherUpdate, setLauncherUpdate] = useState<LauncherUpdateState>({
-    status: "idle",
-    current_version: "",
-  });
-
-  const loadGroups = useCallback(() => {
-    invoke<InstanceGroupsState>("get_instance_groups")
-      .then(setGroupsState)
-      .catch(() => {});
-  }, [setGroupsState]);
-
-  const loadAccounts = useCallback(() => {
-    void invoke<LauncherAccount[]>("get_accounts")
-      .then(setAccounts)
-      .catch(() => setAccounts([]))
-      .finally(() => setAccountsLoaded(true));
-  }, [setAccounts, setAccountsLoaded]);
-
-  const refreshJava = useCallback(async () => {
-    setJavaRefreshing(true);
-    try {
-      const detected = await invoke<JavaInfo[]>("detect_java");
-      setJavaOptions(detected);
-      return detected;
-    } catch (e) {
-      setError(`Java detection failed: ${e}`);
-      return [];
-    } finally {
-      setJavaRefreshing(false);
-    }
-  }, []);
-
-  const loadInstanceSizes = useCallback(() => {
-    setSizesRefreshing(true);
-    void invoke<Record<string, number>>("refresh_instance_sizes", { ids: null })
-      .then((sizes) => {
-        setInstances((prev) =>
-          prev.map((inst) => ({
-            ...inst,
-            size_bytes: sizes[inst.id] ?? inst.size_bytes,
-          })),
-        );
-      })
-      .catch(() => {})
-      .finally(() => setSizesRefreshing(false));
-  }, [setInstances, setSizesRefreshing]);
-
-  const loadInstances = useCallback(() => {
-    invoke<InstanceInfo[]>("get_instances")
-      .then((list) => {
-        setInstances(list);
-        loadGroups();
-        if (list.some((inst) => inst.size_bytes === 0)) {
-          loadInstanceSizes();
-        }
-      })
-      .catch(() => {});
-  }, [loadGroups, loadInstanceSizes, setInstances]);
-
-  useEffect(() => {
-    loadInstances();
-    loadAccounts();
-    void refreshJava();
-    invoke<Record<string, GtnhVersion>>("get_versions")
-      .then(setGtnhVersions)
-      .catch(() => {});
-    void invoke<LauncherUpdateState>("check_launcher_update")
-      .then(setLauncherUpdate)
-      .catch(() => {});
-  }, [loadAccounts, loadInstances, refreshJava, setGtnhVersions]);
-
-  useEffect(() => {
-    const unlisten = listen<LauncherUpdateState>("launcher-update", (event) => {
-      setLauncherUpdate(event.payload);
-    });
-    return () => {
-      unlisten.then((f) => f());
-    };
-  }, []);
-
   const installLauncherUpdate = useCallback(() => {
-    void invoke<LauncherUpdateState>("install_launcher_update")
-      .then(setLauncherUpdate)
-      .catch((error) =>
-        setLauncherUpdate((current) => ({
-          ...current,
-          status: "failed",
-          error: String(error),
-        })),
-      );
-  }, []);
+    void session.installLauncherUpdate();
+  }, [session]);
 
   const retryLauncherUpdate = useCallback(() => {
-    void invoke<LauncherUpdateState>("check_launcher_update")
-      .then(setLauncherUpdate)
-      .catch((error) =>
-        setLauncherUpdate((current) => ({
-          ...current,
-          status: "failed",
-          error: String(error),
-        })),
-      );
-  }, []);
+    void session.retryLauncherUpdate();
+  }, [session]);
 
   useEffect(() => {
     if (!launcherSettingsLoaded || !accountsLoaded) return;
@@ -376,37 +268,13 @@ export default function App() {
     [updateSettings, saveSettingsNow],
   );
 
-  const registerProcess = useCallback(
-    (operation: ProcessOperation, id: string, name: string, initialLog?: string) => {
-      const proc = createProcess(operation, id, name, initialLog);
-      updateProcesses((prev) => {
-        const next = new Map(prev);
-        next.set(proc.key, proc);
-        return next;
-      });
-    },
-    [updateProcesses],
-  );
-
-  const handleProcessFailed = useCallback(
-    (operation: ProcessOperation, id: string, error: unknown) => {
-      updateProcesses((prev) => markProcessFailed(prev, operation, id, error));
-      setError(`${operationLabel(operation)} failed: ${error}`);
-    },
-    [updateProcesses],
-  );
-
   const startPackUpdate = useCallback(
     (id: string, name: string, packVersion: string, javaType: string, keepModIdentities: string[]) => {
       const key = processKey("update-pack", id);
       setError(null);
       setNotice(`${name} is updating in the background. Follow its progress in Processes.`);
       setUpdatePackInstanceId(null);
-      updateProcesses((prev) => {
-        const next = new Map(prev);
-        next.set(key, createProcess("update-pack", id, name, `Preparing pack update to ${packVersion}...`));
-        return next;
-      });
+      registerProcess("update-pack", id, name, `Preparing pack update to ${packVersion}...`);
       setTab("processes");
       setSelectedProcessKey(key);
       void invoke("update_instance", {
@@ -416,7 +284,7 @@ export default function App() {
         keepModIdentities,
       }).catch((e) => handleProcessFailed("update-pack", id, e));
     },
-    [handleProcessFailed, setSelectedProcessKey, setTab, setUpdatePackInstanceId, updateProcesses],
+    [handleProcessFailed, registerProcess, setError, setNotice, setSelectedProcessKey, setTab, setUpdatePackInstanceId],
   );
 
   const startCleanReinstall = useCallback(
@@ -424,11 +292,7 @@ export default function App() {
       const key = processKey("reinstall", id);
       setError(null);
       setReinstallInstanceId(null);
-      updateProcesses((prev) => {
-        const next = new Map(prev);
-        next.set(key, createProcess("reinstall", id, name, `Starting clean reinstall to ${packVersion}…`));
-        return next;
-      });
+      registerProcess("reinstall", id, name, `Starting clean reinstall to ${packVersion}…`);
       setTab("processes");
       setSelectedProcessKey(key);
       void invoke("reinstall_instance", {
@@ -437,15 +301,15 @@ export default function App() {
         javaType,
       }).catch((e) => handleProcessFailed("reinstall", id, e));
     },
-    [handleProcessFailed, setReinstallInstanceId, setSelectedProcessKey, setTab, updateProcesses],
+    [handleProcessFailed, registerProcess, setError, setReinstallInstanceId, setSelectedProcessKey, setTab],
   );
 
   const handleDismissProcess = useCallback(
     (key: string) => {
-      updateProcesses((prev) => dismissProcess(prev, key));
+      session.dismissProcess(key);
       setSelectedProcessKey((current) => (current === key ? null : current));
     },
-    [setSelectedProcessKey, updateProcesses],
+    [session, setSelectedProcessKey],
   );
 
   const openProcesses = useCallback(
@@ -463,79 +327,11 @@ export default function App() {
     [processes, setSelectedProcessKey, setTab],
   );
 
-  useEffect(() => {
-    const unlisten = listen<LaunchLogEvent>("launch-log", (e) => {
-      const { id, stream, line } = e.payload;
-      setInstanceLogs((prev) => ({
-        ...prev,
-        [id]: [...(prev[id] ?? []), { stream, line }],
-      }));
-    });
-    return () => {
-      unlisten.then((f) => f());
-    };
-  }, []);
-
-  useEffect(() => {
-    const clearLaunching = (id: string) => {
-      if (useLauncherStore.getState().launching === id) {
-        setLaunching(null);
-      }
-    };
-
-    const unlistenStarted = listen<{ id: string }>("instance-started", (e) => {
-      const { id } = e.payload;
-      setRunningInstanceIds((prev) => new Set(prev).add(id));
-      clearLaunching(id);
-    });
-    const unlistenStopped = listen<{ id: string }>("instance-stopped", (e) => {
-      const { id } = e.payload;
-      setRunningInstanceIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      clearLaunching(id);
-      loadInstances();
-    });
-    return () => {
-      unlistenStarted.then((f) => f());
-      unlistenStopped.then((f) => f());
-    };
-  }, [loadInstances, setLaunching, setRunningInstanceIds]);
-
-  useEffect(() => {
-    const unlisten = listen<DlProgressEvent>("dl-progress", (e) => {
-      const p = e.payload;
-      const previous = useLauncherStore.getState().processes;
-      const operation = resolveOperation(previous, p);
-      const next = applyDlProgressEvent(previous, p);
-      setProcesses(next);
-
-      if (p.stage === "failed" && p.id && operation) {
-        const message = p.log_line?.replace(/^Error:\s*/, "") ?? "Unknown error";
-        setError(`${operationLabel(operation)} failed: ${message}`);
-      }
-      if (p.stage === "done" && p.id) {
-        if (operation === "delete") {
-          setSelectedInstanceId((current) => (current === p.id ? null : current));
-        } else if (operation === "install") {
-          setSelectedInstanceId(p.id);
-          setShowNewInstance(false);
-        } else if (operation === "update-pack" || operation === "reinstall" || operation === "copy") {
-          setSelectedInstanceId(p.id);
-          setTab("instances");
-          setSelectedProcessKey(null);
-        }
-        loadInstances();
-      }
-    });
-    return () => {
-      unlisten.then((f) => f());
-    };
-  }, [loadInstances, setProcesses, setSelectedInstanceId, setSelectedProcessKey, setShowNewInstance, setTab]);
-
   const instanceBusy = useCallback((id: string) => isInstanceBusy(processes, id), [processes]);
+
+  useEffect(() => {
+    if (selectedInstanceId) void session.loadLogs(selectedInstanceId);
+  }, [selectedInstanceId, session]);
 
   const handleSetInstanceGroup = async (id: string, group: string) => {
     try {
@@ -592,78 +388,6 @@ export default function App() {
     }
   };
 
-  const loadLogs = useCallback(async (id: string) => {
-    try {
-      const persisted = await invoke<LaunchLogLine[]>("get_instance_console_log", { id });
-      setInstanceLogs((prev) => {
-        if (useLauncherStore.getState().launching === id && (prev[id]?.length ?? 0) > 0) {
-          return prev;
-        }
-        return { ...prev, [id]: persisted };
-      });
-    } catch {
-      // keep in-memory logs if file read fails
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedInstanceId) loadLogs(selectedInstanceId);
-  }, [selectedInstanceId, loadLogs]);
-
-  const runLaunch = useCallback(
-    async (id: string) => {
-      if (useLauncherStore.getState().launching !== null) return;
-      setError(null);
-      setSelectedInstanceId(id);
-      setLaunching(id);
-
-      const inst = instances.find((i) => i.id === id);
-      const settings = inst ? mergeInstanceSettings(inst.settings) : null;
-      const consoleCfg = settings?.override_console
-        ? {
-            showOnLaunch: settings.show_console_on_launch,
-            showOnError: settings.show_console_on_error,
-            autoClose: settings.auto_close_console,
-          }
-        : { showOnLaunch: false, showOnError: true, autoClose: false };
-
-      if (consoleCfg.showOnLaunch) {
-        setDetailTab("logs");
-      }
-
-      if (settings?.override_window && settings.close_after_launch) {
-        try {
-          await hideWindow();
-        } catch {
-          // Browser-only renderer preview has no native window bridge.
-        }
-      }
-
-      try {
-        await invoke("launch_instance", { id });
-        if (settings?.override_window && settings.quit_after_game_stop) {
-          try {
-            await invoke("exit_launcher");
-          } catch {
-            // Browser-only renderer preview has no native window bridge.
-          }
-        }
-        if (consoleCfg.autoClose) {
-          setDetailTab("info");
-        }
-        loadInstances();
-      } catch (e) {
-        if (consoleCfg.showOnError) {
-          setDetailTab("logs");
-        }
-        setError(`Launch failed: ${e}`);
-      } finally {
-        setLaunching(null);
-      }
-    },
-    [instances, loadInstances, setDetailTab, setLaunching, setSelectedInstanceId],
-  );
-
   const handleLaunch = async (id: string) => {
     if (useLauncherStore.getState().launching !== null) return;
 
@@ -688,25 +412,7 @@ export default function App() {
       return;
     }
 
-    await runLaunch(id);
-  };
-
-  const handleKill = async (id: string) => {
-    try {
-      await invoke("kill_instance", { id });
-    } catch (e) {
-      setError(`Stop failed: ${e}`);
-    } finally {
-      setRunningInstanceIds((prev) => {
-        if (!prev.has(id)) return prev;
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      if (useLauncherStore.getState().launching === id) {
-        setLaunching(null);
-      }
-    }
+    await session.launch(id, mergeInstanceSettings(inst.settings));
   };
 
   const handleOpenInstanceFolder = async (id: string) => {
@@ -718,12 +424,7 @@ export default function App() {
   };
 
   const handleClearConsole = async (id: string) => {
-    try {
-      await invoke("clear_instance_console_log", { id });
-      setInstanceLogs((prev) => ({ ...prev, [id]: [] }));
-    } catch (e) {
-      setError(`Clear console failed: ${e}`);
-    }
+    await session.clearConsole(id);
   };
 
   const handleDelete = (id: string) => {
@@ -740,7 +441,7 @@ export default function App() {
     void invoke("delete_instance", { id }).catch((e) => {
       const message = String(e);
       if (message.toLowerCase().includes("cancelled")) {
-        updateProcesses((prev) => dismissProcess(prev, processKey("delete", id)));
+        session.dismissProcess(processKey("delete", id));
         loadInstances();
         return;
       }
@@ -775,7 +476,7 @@ export default function App() {
         setError(`Save failed: ${e}`);
       }
     },
-    [setInstances],
+    [setError, setInstances],
   );
 
   const handleRenameInstance = async (id: string, newName: string) => {
@@ -810,45 +511,48 @@ export default function App() {
   const selectedInstanceStarting = selectedInstanceId ? launching === selectedInstanceId : false;
 
   return (
-    <div className="app-shell h-screen flex flex-col overflow-hidden">
+    <div className={cn("app-shell h-screen flex flex-col overflow-hidden", desktopPlatform() === "darwin" && "app-shell-macos")}>
       {/* Toolbar */}
       <header className="app-toolbar h-11 shrink-0 flex items-center px-3 gap-1.5">
         <div className="flex items-center gap-2 pr-1.5">
           <span className="brand-mark size-5 rounded-md" aria-hidden="true" />
-          <span className="font-semibold text-sm tracking-tight">Industrialis</span>
+          <span className="toolbar-brand-name font-semibold text-sm tracking-tight">Industrialis</span>
         </div>
         <Button
           variant="default"
           size="sm"
           className="h-7"
+          aria-label="Add instance"
+          title="Add instance"
           onClick={() => {
             setTab("instances");
             setShowNewInstance(true);
           }}
         >
-          <Plus className="size-3.5" /> Add
+          <Plus className="size-3.5" /> <span className="toolbar-label">Add</span>
         </Button>
         <div className="w-px h-5 bg-border/80 mx-1" />
         <div className="inline-flex h-8 items-center rounded-lg border border-border/70 bg-muted/70 p-0.5 gap-0.5 shadow-inner">
-          <Button variant={tab === "instances" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("instances")}>
-            <Boxes className="size-3.5" /> Instances
-          </Button>
-          <Button variant={tab === "processes" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => openProcesses()}>
-            <Activity className="size-3.5" /> Processes
-            {runningProcessCount(processes) > 0 && (
-              <Badge variant="secondary" className="h-4 min-w-4 justify-center px-1 text-[10px]">
-                {runningProcessCount(processes)}
-              </Badge>
-            )}
-          </Button>
-          <Button variant={tab === "settings" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("settings")}>
-            <Settings className="size-3.5" /> Settings
-          </Button>
-          <Button variant={tab === "accounts" ? "secondary" : "ghost"} size="sm" className="h-6 px-2" onClick={() => setTab("accounts")}>
-            <Users className="size-3.5" /> Accounts
-          </Button>
+          {PRIMARY_NAV_TABS.map(({ key, label, Icon }) => (
+            <Button
+              key={key}
+              variant={tab === key ? "secondary" : "ghost"}
+              size="sm"
+              className="h-6 px-2"
+              aria-label={label}
+              title={label}
+              onClick={() => (key === "processes" ? openProcesses() : setTab(key))}
+            >
+              <Icon className="size-3.5" /> <span className="toolbar-label">{label}</span>
+              {key === "processes" && runningProcessCount(processes) > 0 && (
+                <Badge variant="secondary" className="h-4 min-w-4 justify-center px-1 text-[10px]">
+                  {runningProcessCount(processes)}
+                </Badge>
+              )}
+            </Button>
+          ))}
         </div>
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="app-toolbar-actions ml-auto flex items-center gap-0.5">
           <AccountSwitcher
             accounts={accounts}
             defaultAccountId={defaultAccountId}
@@ -858,6 +562,7 @@ export default function App() {
           <ProcessesDropdown processes={processes} onDismiss={handleDismissProcess} onCancelDelete={handleCancelDelete} onOpenProcesses={openProcesses} />
           <ThemeSwitcher />
         </div>
+        <WindowControls />
       </header>
 
       {tab === "instances" ? (
@@ -1056,6 +761,14 @@ export default function App() {
                       log={instanceLogs[selectedInstanceId!] ?? []}
                       onClear={() => handleClearConsole(selectedInstanceId!)}
                       disableClear={selectedInstanceActive}
+                      onCopy={async () => {
+                        if (selectedInstanceActive) return instanceLogs[selectedInstanceId!] ?? [];
+                        try {
+                          return await session.getConsoleLog(selectedInstanceId!);
+                        } catch {
+                          return instanceLogs[selectedInstanceId!] ?? [];
+                        }
+                      }}
                     />
                   </TabsContent>
                 </Tabs>
@@ -1223,25 +936,33 @@ export default function App() {
           }}
         />
       ) : (
-        <main className="flex-1 overflow-auto p-4 max-w-2xl">
+        <main className="min-w-0 flex-1 overflow-auto">
           {tab === "settings" && (
-            <SettingsTab
-              javaOptions={javaOptions}
-              javaRefreshing={javaRefreshing}
-              onRefreshJava={refreshJava}
-              defaultJavaPath={launcherSettings.default_java_path ?? null}
-              onDefaultJavaChange={handleSetDefaultJava}
-              gridColumns={launcherSettings.instance_grid_columns ?? 3}
-              onGridColumnsChange={(columns) => updateSettings({ instance_grid_columns: columns })}
-            />
+            <div className="w-full max-w-5xl p-4">
+              <SettingsTab
+                javaOptions={javaOptions}
+                javaRefreshing={javaRefreshing}
+                onRefreshJava={refreshJava}
+                defaultJavaPath={launcherSettings.default_java_path ?? null}
+                onDefaultJavaChange={handleSetDefaultJava}
+                gridColumns={launcherSettings.instance_grid_columns ?? 3}
+                onGridColumnsChange={(columns) => {
+                  updateSettings({ instance_grid_columns: columns });
+                  void saveSettingsNow();
+                }}
+                onError={(message) => setError(`Settings failed: ${message}`)}
+              />
+            </div>
           )}
           {tab === "accounts" && (
-            <AccountsTab
-              onSetDefaultAccount={handleSetDefaultAccount}
-              defaultAccountId={defaultAccountId}
-              launchRedirect={accountsLaunchRedirect ? { instanceName: accountsLaunchRedirect.instanceName } : null}
-              onDismissRedirect={() => setAccountsLaunchRedirect(null)}
-            />
+            <div className="w-full max-w-2xl p-4">
+              <AccountsTab
+                onSetDefaultAccount={handleSetDefaultAccount}
+                defaultAccountId={defaultAccountId}
+                launchRedirect={accountsLaunchRedirect ? { instanceName: accountsLaunchRedirect.instanceName } : null}
+                onDismissRedirect={() => setAccountsLaunchRedirect(null)}
+              />
+            </div>
           )}
         </main>
       )}
@@ -1369,7 +1090,7 @@ export default function App() {
       <LauncherUpdateDialog
         state={launcherUpdate}
         onInstall={installLauncherUpdate}
-        onDismiss={() => setLauncherUpdate((current) => ({ ...current, status: "idle" }))}
+        onDismiss={() => session.dismissLauncherUpdate()}
         onRetry={retryLauncherUpdate}
       />
 
@@ -1885,48 +1606,58 @@ function InfoGrid({ items }: { items: { label: string; value: string }[] }) {
   );
 }
 
-function LogView({ log, onClear, disableClear }: { log: LaunchLogLine[]; onClear: () => void; disableClear: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
+function LogView({
+  log,
+  onClear,
+  disableClear,
+  onCopy,
+}: {
+  log: LaunchLogLine[];
+  onClear: () => void;
+  disableClear: boolean;
+  onCopy?: () => Promise<LaunchLogLine[]>;
+}) {
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [log]);
+  const [copying, setCopying] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   const copy = async () => {
-    const text = formatLaunchLog(log);
-    if (!text) return;
+    setCopying(true);
+    setCopied(false);
+    setCopyFailed(false);
     try {
+      const source = onCopy ? await onCopy() : log;
+      const text = formatLaunchLog(source.length > 0 ? source : log);
+      if (!text) {
+        setCopyFailed(true);
+        return;
+      }
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      setCopyFailed(false);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopied(false);
+      setCopyFailed(true);
+    } finally {
+      setCopying(false);
     }
   };
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex gap-0.5 px-3 pb-0.5 shrink-0">
-        <Button size="sm" variant="ghost" onClick={copy} disabled={log.length === 0}>
-          {copied ? "Copied" : "Copy"}
+        <Button size="sm" variant="ghost" onClick={() => void copy()} disabled={copying || log.length === 0}>
+          {copying ? "Preparing..." : copied ? "Copied" : copyFailed ? "Copy failed" : "Copy"}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClear} disabled={disableClear || log.length === 0}>
           Clear
         </Button>
-      </div>
-      <ScrollArea ref={ref} className="flex-1 bg-black/60 px-3 py-2 font-mono text-[11px] leading-relaxed">
-        {log.length === 0 ? (
-          <div className="text-muted-foreground">No log output yet.</div>
-        ) : (
-          keyedByOccurrence(log, (entry) => `${entry.stream}:${entry.line}`).map(({ key, value: entry }) => (
-            <div key={key} className={launchLogLevelClass(classifyLaunchLogLine(entry))}>
-              {entry.line}
-            </div>
-          ))
+        {log.length >= MAX_RETAINED_LOG_LINES && (
+          <span className="self-center px-2 text-[10px] text-muted-foreground">Latest {MAX_RETAINED_LOG_LINES.toLocaleString()} lines retained</span>
         )}
-      </ScrollArea>
+      </div>
+      <VirtualizedLogList lines={log} />
     </div>
   );
 }
@@ -2059,6 +1790,7 @@ function SettingsTab({
   onDefaultJavaChange,
   gridColumns,
   onGridColumnsChange,
+  onError,
 }: {
   javaOptions: JavaInfo[];
   javaRefreshing: boolean;
@@ -2067,94 +1799,101 @@ function SettingsTab({
   onDefaultJavaChange: (path: string | null) => void;
   gridColumns: number;
   onGridColumnsChange: (columns: number) => void;
+  onError: (message: string) => void;
 }) {
+  const [settingsTab, setSettingsTab] = useState("java");
+
   const browseDefaultJava = async () => {
-    const picked = await invoke<string | null>("browse_java_executable");
-    if (picked) onDefaultJavaChange(picked);
+    try {
+      const picked = await invoke<string | null>("browse_java_executable");
+      if (picked) onDefaultJavaChange(picked);
+    } catch (error) {
+      onError(`Browse Java failed: ${error}`);
+    }
   };
-  const selectedJavaIsDetected = defaultJavaPath !== null && javaOptions.some((java) => java.path === defaultJavaPath);
-
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2">
-          <CardTitle>Java Detection</CardTitle>
-          <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
-            <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
-            {javaRefreshing ? "Scanning..." : "Refresh"}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="default-java">Default Java installation</Label>
-            <div className="flex gap-2">
-              <Select id="default-java" className="flex-1" value={defaultJavaPath ?? ""} onChange={(e) => onDefaultJavaChange(e.target.value || null)}>
-                <option value="">Auto-detect (JAVA_HOME / PATH)</option>
-                {!selectedJavaIsDetected && defaultJavaPath && <option value={defaultJavaPath}>{defaultJavaPath}</option>}
-                {javaOptions.map((java) => (
-                  <option key={java.path} value={java.path}>
-                    Java {java.version} — {java.path}
-                  </option>
-                ))}
-              </Select>
-              <Button type="button" variant="outline" onClick={() => void browseDefaultJava()}>
-                Browse
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">Used by every instance unless that instance has a Java location override.</p>
-          </div>
-          <p className="text-sm text-muted-foreground mb-2">Detected Java installations:</p>
-          {javaOptions.length === 0 && <p className="text-xs text-muted-foreground">None found</p>}
-          <div className="space-y-1">
-            {javaOptions.map((j) => (
-              <div key={j.path} className="text-sm font-mono bg-muted p-2 rounded">
-                <span className="text-foreground font-medium">Java {j.version}</span>
-                <span className="text-muted-foreground ml-2 text-xs">{j.path}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+    <Tabs value={settingsTab} onValueChange={setSettingsTab}>
+      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-4 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
+        <TabsTrigger value="java" className="h-9 rounded-md text-sm">
+          Java
+        </TabsTrigger>
+        <TabsTrigger value="instances" className="h-9 rounded-md text-sm">
+          Instance Library
+        </TabsTrigger>
+        <TabsTrigger value="appearance" className="h-9 rounded-md text-sm">
+          Appearance
+        </TabsTrigger>
+        <TabsTrigger value="about" className="h-9 rounded-md text-sm">
+          About
+        </TabsTrigger>
+      </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Instance Library</CardTitle>
-          <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="instance-grid-columns">Grid columns</Label>
-          <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
-            <option value="2">2 columns</option>
-            <option value="3">3 columns</option>
-            <option value="4">4 columns</option>
-            <option value="5">5 columns</option>
-          </Select>
-          <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
-        </CardContent>
-      </Card>
+      <TabsContent value="java" className="mt-4">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-2">
+            <CardTitle>Java Detection</CardTitle>
+            <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
+              <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
+              {javaRefreshing ? "Scanning..." : "Refresh"}
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <JavaInstallationPicker
+              installations={javaOptions}
+              refreshing={javaRefreshing}
+              selectedPath={defaultJavaPath}
+              onBrowse={browseDefaultJava}
+              onSelect={onDefaultJavaChange}
+            />
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-      <ThemePresetPicker />
+      <TabsContent value="instances" className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Instance Library</CardTitle>
+            <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label htmlFor="instance-grid-columns">Grid columns</Label>
+            <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
+              <option value="2">2 columns</option>
+              <option value="3">3 columns</option>
+              <option value="4">4 columns</option>
+              <option value="5">5 columns</option>
+            </Select>
+            <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>About</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-1">
-          <p>Industrialis Launcher v0.1.0</p>
-          <p>GT New Horizons modpack manager built with Electron.</p>
-          <a
-            href={GITHUB_URL}
-            className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
-            onClick={(e) => {
-              e.preventDefault();
-              void openUrl(GITHUB_URL).catch(() => undefined);
-            }}
-          >
-            <ExternalLink className="size-3.5" />
-            View on GitHub
-          </a>
-        </CardContent>
-      </Card>
-    </div>
+      <TabsContent value="appearance" className="mt-4">
+        <ThemePresetPicker />
+      </TabsContent>
+
+      <TabsContent value="about" className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>About</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-1">
+            <p>Industrialis Launcher v0.1.0</p>
+            <p>GT New Horizons modpack manager built with Electron.</p>
+            <a
+              href={GITHUB_URL}
+              className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                void openUrl(GITHUB_URL).catch(() => undefined);
+              }}
+            >
+              <ExternalLink className="size-3.5" />
+              View on GitHub
+            </a>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }

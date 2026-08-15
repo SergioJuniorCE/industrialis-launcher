@@ -41,13 +41,9 @@ export function ReinstallInstanceDialog({
   onClose: () => void;
   onReinstall: (packVersion: string, javaType: string) => void;
 }) {
-  const sorted = versions
-    ? Object.entries(versions).sort(([a], [b]) => compareVersionsByReleaseDate(a, b, versions))
-    : [];
+  const sorted = versions ? Object.entries(versions).sort(([a], [b]) => compareVersionsByReleaseDate(a, b, versions)) : [];
   const [packVersion, setPackVersion] = useState(
-    sorted.some(([v]) => v === currentPackVersion)
-      ? currentPackVersion
-      : sorted.at(-1)?.[0] ?? currentPackVersion,
+    sorted.some(([v]) => v === currentPackVersion) ? currentPackVersion : (sorted.at(-1)?.[0] ?? currentPackVersion),
   );
   const [javaType, setJavaType] = useState(defaultJavaType || "java17+");
 
@@ -57,12 +53,15 @@ export function ReinstallInstanceDialog({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="max-w-lg">
         <DialogTitle>Clean reinstall</DialogTitle>
-        <DialogDescription>
-          Downloads a fresh pack for {instanceName} while keeping your player data.
-        </DialogDescription>
+        <DialogDescription>Downloads a fresh pack for {instanceName} while keeping your player data.</DialogDescription>
         <div className="space-y-2 text-sm text-muted-foreground">
           <p>
             Use this to fix a broken or mixed install (for example after a partial update). Preserved paths follow the{" "}
@@ -94,11 +93,7 @@ export function ReinstallInstanceDialog({
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="space-y-1">
               <span className="text-xs font-medium">Pack version</span>
-              <Select
-                value={packVersion}
-                onChange={(e) => setPackVersion(e.target.value)}
-                disabled={sorted.length === 0}
-              >
+              <Select value={packVersion} onChange={(e) => setPackVersion(e.target.value)} disabled={sorted.length === 0}>
                 {sorted.length === 0 ? (
                   <option value={currentPackVersion}>{currentPackVersion}</option>
                 ) : (

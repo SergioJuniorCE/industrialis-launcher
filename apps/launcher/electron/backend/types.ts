@@ -126,7 +126,10 @@ export interface InstanceInfo {
 
 export interface JavaInfo {
   path: string;
-  version: number;
+  version: string;
+  majorVersion: number;
+  architecture: string;
+  vendor: string;
 }
 
 export interface InstanceGroupsState {
@@ -254,7 +257,6 @@ export interface LauncherUpdateState {
   body?: string;
   progress?: number;
   error?: string;
-  download_url?: string;
   release_url?: string;
 }
 
