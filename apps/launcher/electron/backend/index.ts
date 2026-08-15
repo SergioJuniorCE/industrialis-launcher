@@ -57,6 +57,7 @@ import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveL
 import { killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
 import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
+import { ConsoleLogWriter } from "./console-log-writer";
 
 export interface BackendHost {
   emit(event: string, payload: unknown): void;
@@ -151,6 +152,7 @@ export class LauncherBackend {
     copyInProgress: new Set(),
     deleteCancel: new Map(),
   };
+  private readonly consoleLogWriter = new ConsoleLogWriter(consoleLogPath);
 
   constructor(private readonly host: BackendHost) {
     void evictExpiredPackCache();
@@ -166,9 +168,12 @@ export class LauncherBackend {
 
   private emitLog(id: string, stream: string, line: string): void {
     const entry: LaunchLogLine = { stream, line };
-    void fs.mkdir(path.dirname(consoleLogPath(id)), { recursive: true });
-    void fs.appendFile(consoleLogPath(id), `${JSON.stringify(entry)}\n`, "utf8");
+    this.consoleLogWriter.append(id, entry);
     this.emit("launch-log", { id, ...entry });
+  }
+
+  private flushConsoleLog(id: string): Promise<void> {
+    return this.consoleLogWriter.flush(id);
   }
 
   private async knownInstanceIds(): Promise<Set<string>> {
@@ -597,7 +602,9 @@ export class LauncherBackend {
   }
 
   private async getConsoleLog(rawId: string, full: boolean): Promise<LaunchLogLine[]> {
-    const filePath = consoleLogPath(sanitizeName(rawId));
+    const id = sanitizeName(rawId);
+    await this.flushConsoleLog(id);
+    const filePath = consoleLogPath(id);
     const contents = full ? await fs.readFile(filePath, "utf8").catch(() => "") : await readConsoleLogTail(filePath);
     return parseConsoleLog(contents, full);
   }
@@ -690,14 +697,18 @@ export class LauncherBackend {
     const exitCode = await waitForGameProcess(running);
     this.state.running.delete(id);
     this.emitLog(id, "system", `Process exited with code ${exitCode}`);
-    this.emit("instance-stopped", { id, exit_code: exitCode });
-    if (settings.override_game_time && settings.record_game_time) {
-      settings.total_play_seconds += Math.floor((Date.now() - started) / 1000);
-      await saveInstanceSettings(id, settings);
-    }
-    if (settings.override_commands && settings.post_exit_command.trim()) {
-      await runShellCommand(substituteCommandVars(settings.post_exit_command.trim(), vars), instance, settings.override_env ? settings.env_vars : {});
-      this.emitLog(id, "system", "Post-exit command finished");
+    try {
+      if (settings.override_game_time && settings.record_game_time) {
+        settings.total_play_seconds += Math.floor((Date.now() - started) / 1000);
+        await saveInstanceSettings(id, settings);
+      }
+      if (settings.override_commands && settings.post_exit_command.trim()) {
+        await runShellCommand(substituteCommandVars(settings.post_exit_command.trim(), vars), instance, settings.override_env ? settings.env_vars : {});
+        this.emitLog(id, "system", "Post-exit command finished");
+      }
+    } finally {
+      await this.flushConsoleLog(id);
+      this.emit("instance-stopped", { id, exit_code: exitCode });
     }
     if (exitCode !== 0) throw new Error(`game exited with code ${exitCode}`);
   }

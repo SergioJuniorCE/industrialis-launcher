@@ -269,11 +269,6 @@ function GeneralSettingsTab({
         onOverrideChange={(v) => update({ override_console: v })}
       >
         <Checkbox
-          checked={settings.show_console_on_launch}
-          onChange={(e) => update({ show_console_on_launch: e.target.checked })}
-          label="When the game is launched, show the log panel"
-        />
-        <Checkbox
           checked={settings.show_console_on_error}
           onChange={(e) => update({ show_console_on_error: e.target.checked })}
           label="When the game crashes, show the log panel"
