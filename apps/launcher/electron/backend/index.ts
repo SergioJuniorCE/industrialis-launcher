@@ -602,7 +602,9 @@ export class LauncherBackend {
   }
 
   private async getConsoleLog(rawId: string, full: boolean): Promise<LaunchLogLine[]> {
-    const filePath = consoleLogPath(sanitizeName(rawId));
+    const id = sanitizeName(rawId);
+    await this.flushConsoleLog(id);
+    const filePath = consoleLogPath(id);
     const contents = full ? await fs.readFile(filePath, "utf8").catch(() => "") : await readConsoleLogTail(filePath);
     return parseConsoleLog(contents, full);
   }
