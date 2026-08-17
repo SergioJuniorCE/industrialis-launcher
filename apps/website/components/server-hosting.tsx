@@ -39,7 +39,7 @@ export function ServerHosting() {
               <code>curl -fsSL https://industrialislauncher.yoggan.dev/install.sh | bash</code>
             </pre>
             <p className="mt-3 font-mono text-[11px] text-muted-foreground">
-              Script: {/* eslint-disable-next-line react-doctor/nextjs-no-a-element -- install.sh is a static script download, not an internal route. */}
+              Script:{" "}
               <a href="/install.sh" className="text-primary underline-offset-2 hover:underline">
                 /install.sh
               </a>
