@@ -88,18 +88,9 @@ Build only one format with `pnpm build:launcher:installer` or
 `pnpm build:launcher:portable`. On Windows you can target the installer with
 `powershell -File scripts/build-launcher.ps1 -Target installer`.
 
-Run the exact Linux ZIP, DEB, and RPM makers locally in an ephemeral Podman or
-Docker container:
-
-```bash
-pnpm test:launcher:linux
-```
-
-On Windows with Podman, start the machine once with `podman machine start`.
-The script automatically uses a running Podman or Docker engine.
-
-Launcher pull requests run the Windows, macOS, and Linux packaging jobs without
-publishing. Pushes to `master` run the same jobs and publish a GitHub Release
+The launcher release workflow runs on pushes to `master` and can also be started
+manually from GitHub Actions. Pushes to `master` run the Windows, macOS, and
+Linux packaging jobs and publish a GitHub Release
 (`launcher-v0.1.<run number>`) with all artifacts.
 
 ## Microsoft login
