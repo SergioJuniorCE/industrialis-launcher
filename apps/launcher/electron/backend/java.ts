@@ -142,6 +142,7 @@ export async function testJava(pathOverride?: string): Promise<string> {
     execFile(java, ["-version"], { windowsHide: true, timeout: 8_000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
       const output = `${stderr}${stdout}`;
       if (error) reject(new Error(`Java test failed (${java}):\n${output}`));
+      else if (!parseJavaRuntimeDetails(output)) reject(new Error(`Java test failed (${java}): executable did not report a valid Java runtime.\n${output}`));
       else resolve(`OK - ${java}\n${output}`);
     });
   });
