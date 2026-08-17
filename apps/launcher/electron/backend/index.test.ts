@@ -5,9 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_PERSISTED_CONSOLE_LOG_BYTES, type ConsoleLogWriter } from "./console-log-writer";
-import { consoleLogPath } from "./paths";
+import { consoleLogPath, instanceDir } from "./paths";
 
-const electronState = vi.hoisted(() => ({ appData: "" }));
+const electronState = vi.hoisted(() => ({
+  appData: "",
+  shell: { openExternal: vi.fn(), openPath: vi.fn(async () => "") },
+}));
 
 vi.mock("electron", () => ({
   app: {
@@ -22,7 +25,7 @@ vi.mock("electron", () => ({
     getAllWindows: () => [],
   },
   dialog: { showOpenDialog: vi.fn() },
-  shell: { openExternal: vi.fn(), openPath: vi.fn() },
+  shell: electronState.shell,
 }));
 
 import { LauncherBackend } from "./index";
@@ -37,6 +40,7 @@ let tempRoot = "";
 beforeEach(async () => {
   tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "industrialis-backend-"));
   electronState.appData = tempRoot;
+  vi.clearAllMocks();
 });
 
 afterEach(async () => {
@@ -81,5 +85,19 @@ describe("LauncherBackend console log endpoint", () => {
     expect(stat.size).toBeLessThanOrEqual(MAX_PERSISTED_CONSOLE_LOG_BYTES);
     expect(result.length).toBeLessThan(entryCount);
     expect(result[result.length - 1]).toEqual({ stream: "stdout", line: `${entryCount - 1}:${filler}` });
+  });
+});
+
+describe("LauncherBackend mods folder endpoint", () => {
+  it("creates and opens the active mods folder", async () => {
+    const backend = new LauncherBackend({ emit: vi.fn() });
+    const instance = instanceDir("alpha");
+    const modsDir = path.join(instance, ".minecraft", "mods");
+    await fs.mkdir(instance, { recursive: true });
+
+    await expect(backend.invoke("open_mods_folder", { id: "alpha" })).resolves.toBeUndefined();
+
+    expect((await fs.stat(modsDir)).isDirectory()).toBe(true);
+    expect(electronState.shell.openPath).toHaveBeenCalledWith(modsDir);
   });
 });

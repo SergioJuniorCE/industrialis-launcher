@@ -50,6 +50,7 @@ import {
   persistentCustomModsDir,
   removeCustomMod,
   removeCustomModsExcept,
+  resolveModsDir,
 } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
 import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
@@ -254,6 +255,8 @@ export class LauncherBackend {
         return this.copyInstance(args);
       case "open_instance_folder":
         return this.openInstanceFolder(args.id);
+      case "open_mods_folder":
+        return this.openModsFolder(args.id);
       case "save_settings":
         return saveInstanceSettings(sanitizeName(args.id), args.settings ?? defaultSettings());
       case "get_settings":
@@ -427,6 +430,17 @@ export class LauncherBackend {
     await flattenNestedPack(instance);
     const error = await shell.openPath(instance);
     if (error) throw new Error(`failed to open instance folder: ${error}`);
+  }
+
+  private async openModsFolder(rawId: string): Promise<void> {
+    const id = sanitizeName(rawId);
+    const instance = instanceDir(id);
+    if (!(await exists(instance))) throw new Error("instance not installed");
+    await flattenNestedPack(instance);
+    const mods = await resolveModsDir(instance);
+    await fs.mkdir(mods, { recursive: true });
+    const error = await shell.openPath(mods);
+    if (error) throw new Error(`failed to open mods folder: ${error}`);
   }
 
   private async downloadInstall(args: LaunchArgs): Promise<void> {
