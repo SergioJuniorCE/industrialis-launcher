@@ -25,4 +25,47 @@ describe("validateAndSelectJava", () => {
     expect(onSelect).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith("Selected file is not a usable Java runtime: Java test failed: not a Java runtime");
   });
+
+  it("ignores an older validation result when a newer browse attempt finishes first", async () => {
+    let resolveFirst!: () => void;
+    let resolveSecond!: () => void;
+    const firstTest = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondTest = new Promise<void>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const testJava = vi
+      .fn()
+      .mockImplementationOnce(() => firstTest)
+      .mockImplementationOnce(() => secondTest);
+    const selected: string[] = [];
+    const errors: string[] = [];
+    let latestAttempt = 0;
+    const startValidation = (path: string) => {
+      const attempt = ++latestAttempt;
+      const isCurrent = () => attempt === latestAttempt;
+      return validateAndSelectJava(
+        path,
+        testJava,
+        (selectedPath) => {
+          if (isCurrent()) selected.push(selectedPath);
+        },
+        (message) => {
+          if (isCurrent()) errors.push(message);
+        },
+        isCurrent,
+      );
+    };
+
+    const firstValidation = startValidation("C:\\Java\\first\\bin\\java.exe");
+    const secondValidation = startValidation("C:\\Java\\second\\bin\\java.exe");
+    resolveSecond();
+    await secondValidation;
+    resolveFirst();
+    await firstValidation;
+
+    expect(selected).toEqual(["C:\\Java\\second\\bin\\java.exe"]);
+    expect(errors).toEqual([]);
+  });
 });

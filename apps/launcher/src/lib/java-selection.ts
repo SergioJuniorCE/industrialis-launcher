@@ -4,6 +4,8 @@ type JavaSelectionHandler = (path: string) => void;
 
 type JavaSelectionErrorHandler = (message: string) => void;
 
+type JavaSelectionCurrentCheck = () => boolean;
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -13,14 +15,15 @@ export async function validateAndSelectJava(
   testJava: JavaPathTester,
   onSelect: JavaSelectionHandler,
   onError: JavaSelectionErrorHandler,
+  isCurrent: JavaSelectionCurrentCheck = () => true,
 ): Promise<void> {
   const path = selectedPath?.trim();
-  if (!path) return;
+  if (!path || !isCurrent()) return;
 
   try {
     await testJava(path);
-    onSelect(path);
+    if (isCurrent()) onSelect(path);
   } catch (error) {
-    onError(`Selected file is not a usable Java runtime: ${errorMessage(error)}`);
+    if (isCurrent()) onError(`Selected file is not a usable Java runtime: ${errorMessage(error)}`);
   }
 }
