@@ -4,15 +4,6 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    paths:
-      - ".github/workflows/launcher-release.yml"
-      - ".npmrc"
-      - "apps/launcher/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "scripts/**"
   workflow_dispatch:
 
 concurrency:
