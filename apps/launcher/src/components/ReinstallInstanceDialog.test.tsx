@@ -37,7 +37,9 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   if (originalDialogMethods.showModal) Object.defineProperty(HTMLDialogElement.prototype, "showModal", originalDialogMethods.showModal);
+  else Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal");
   if (originalDialogMethods.close) Object.defineProperty(HTMLDialogElement.prototype, "close", originalDialogMethods.close);
+  else Reflect.deleteProperty(HTMLDialogElement.prototype, "close");
   if (originalActEnvironment === undefined) delete reactActGlobal.IS_REACT_ACT_ENVIRONMENT;
   else reactActGlobal.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment;
 });
