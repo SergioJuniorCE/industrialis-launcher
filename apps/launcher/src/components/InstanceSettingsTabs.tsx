@@ -32,7 +32,7 @@ function SettingsSection({
 }) {
   const enabled = override === undefined || override;
   return (
-    <Card className="border-border/80 shadow-none">
+    <Card className="settings-section border-border/80 shadow-none">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -219,7 +219,7 @@ function GeneralSettingsTab({
 }) {
   return (
     <TabsContent value="general" className="space-y-2 mt-2">
-      <Card className="shadow-none">
+      <Card className="settings-section shadow-none">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Instance</CardTitle>
         </CardHeader>
