@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { desktopPlatform, invoke, openUrl } from "./lib/desktop";
 import {
   Plus,
@@ -66,6 +66,7 @@ import { VirtualizedLogList } from "./components/VirtualizedLogList";
 import { WindowControls } from "./components/WindowControls";
 import { JavaInstallationPicker } from "./components/JavaInstallationPicker";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
+import { validateAndSelectJava } from "./lib/java-selection";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
@@ -1802,13 +1803,27 @@ function SettingsTab({
   onError: (message: string) => void;
 }) {
   const [settingsTab, setSettingsTab] = useState("java");
+  const javaBrowseAttempt = useRef(0);
 
   const browseDefaultJava = async () => {
+    const attempt = ++javaBrowseAttempt.current;
+    const isCurrentAttempt = () => attempt === javaBrowseAttempt.current;
+
     try {
       const picked = await invoke<string | null>("browse_java_executable");
-      if (picked) onDefaultJavaChange(picked);
+      await validateAndSelectJava(
+        picked,
+        (javaPath) => invoke("test_java", { javaPath }),
+        (javaPath) => {
+          if (isCurrentAttempt()) onDefaultJavaChange(javaPath);
+        },
+        (message) => {
+          if (isCurrentAttempt()) onError(message);
+        },
+        isCurrentAttempt,
+      );
     } catch (error) {
-      onError(`Browse Java failed: ${error}`);
+      if (isCurrentAttempt()) onError(`Browse Java failed: ${error}`);
     }
   };
   return (
