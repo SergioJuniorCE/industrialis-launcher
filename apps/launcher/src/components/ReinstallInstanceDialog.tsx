@@ -97,9 +97,9 @@ export function ReinstallInstanceDialog({
                 {sorted.length === 0 ? (
                   <option value={currentPackVersion}>{currentPackVersion}</option>
                 ) : (
-                  sorted.map(([version, meta]) => (
+                  sorted.map(([version]) => (
                     <option key={version} value={version}>
-                      {meta.title || version}
+                      {version}
                     </option>
                   ))
                 )}

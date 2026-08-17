@@ -4,9 +4,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConsoleLogWriter } from "./console-log-writer";
+import { MAX_PERSISTED_CONSOLE_LOG_BYTES, type ConsoleLogWriter } from "./console-log-writer";
+import { consoleLogPath, instanceDir } from "./paths";
 
-const electronState = vi.hoisted(() => ({ appData: "" }));
+const electronState = vi.hoisted(() => ({
+  appData: "",
+  shell: { openExternal: vi.fn(), openPath: vi.fn(async () => "") },
+}));
 
 vi.mock("electron", () => ({
   app: {
@@ -21,7 +25,7 @@ vi.mock("electron", () => ({
     getAllWindows: () => [],
   },
   dialog: { showOpenDialog: vi.fn() },
-  shell: { openExternal: vi.fn(), openPath: vi.fn() },
+  shell: electronState.shell,
 }));
 
 import { LauncherBackend } from "./index";
@@ -36,6 +40,7 @@ let tempRoot = "";
 beforeEach(async () => {
   tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "industrialis-backend-"));
   electronState.appData = tempRoot;
+  vi.clearAllMocks();
 });
 
 afterEach(async () => {
@@ -63,5 +68,36 @@ describe("LauncherBackend console log endpoint", () => {
     releaseFlush();
 
     await expect(read).resolves.toEqual([{ stream: "stdout", line: "queued output" }]);
+  });
+
+  it("bounds a legacy oversized file before returning a full retained log", async () => {
+    const backend = new LauncherBackend({ emit: vi.fn() });
+    const logPath = consoleLogPath("alpha");
+    const filler = "x".repeat(8 * 1024);
+    const entryCount = 600;
+    const contents = Array.from({ length: entryCount }, (_, index) => `${JSON.stringify({ stream: "stdout", line: `${index}:${filler}` })}\n`).join("");
+    await fs.mkdir(path.dirname(logPath), { recursive: true });
+    await fs.writeFile(logPath, contents, "utf8");
+
+    const result = (await backend.invoke("get_instance_console_log", { id: "alpha", full: true })) as Array<{ stream: string; line: string }>;
+    const stat = await fs.stat(logPath);
+
+    expect(stat.size).toBeLessThanOrEqual(MAX_PERSISTED_CONSOLE_LOG_BYTES);
+    expect(result.length).toBeLessThan(entryCount);
+    expect(result[result.length - 1]).toEqual({ stream: "stdout", line: `${entryCount - 1}:${filler}` });
+  });
+});
+
+describe("LauncherBackend mods folder endpoint", () => {
+  it("creates and opens the active mods folder", async () => {
+    const backend = new LauncherBackend({ emit: vi.fn() });
+    const instance = instanceDir("alpha");
+    const modsDir = path.join(instance, ".minecraft", "mods");
+    await fs.mkdir(instance, { recursive: true });
+
+    await expect(backend.invoke("open_mods_folder", { id: "alpha" })).resolves.toBeUndefined();
+
+    expect((await fs.stat(modsDir)).isDirectory()).toBe(true);
+    expect(electronState.shell.openPath).toHaveBeenCalledWith(modsDir);
   });
 });

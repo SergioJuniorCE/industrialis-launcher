@@ -50,6 +50,7 @@ import {
   persistentCustomModsDir,
   removeCustomMod,
   removeCustomModsExcept,
+  resolveModsDir,
 } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
 import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
@@ -57,7 +58,7 @@ import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveL
 import { killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
 import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
-import { ConsoleLogWriter } from "./console-log-writer";
+import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
 
 export interface BackendHost {
   emit(event: string, payload: unknown): void;
@@ -106,7 +107,7 @@ interface LaunchState {
   deleteCancel: Map<string, { cancelled: boolean }>;
 }
 
-const CONSOLE_LOG_TAIL_BYTES = 4 * 1024 * 1024;
+const CONSOLE_LOG_TAIL_BYTES = MAX_PERSISTED_CONSOLE_LOG_BYTES;
 
 async function readConsoleLogTail(filePath: string): Promise<string> {
   const file = await fs.open(filePath, "r").catch(() => null);
@@ -254,6 +255,8 @@ export class LauncherBackend {
         return this.copyInstance(args);
       case "open_instance_folder":
         return this.openInstanceFolder(args.id);
+      case "open_mods_folder":
+        return this.openModsFolder(args.id);
       case "save_settings":
         return saveInstanceSettings(sanitizeName(args.id), args.settings ?? defaultSettings());
       case "get_settings":
@@ -427,6 +430,17 @@ export class LauncherBackend {
     await flattenNestedPack(instance);
     const error = await shell.openPath(instance);
     if (error) throw new Error(`failed to open instance folder: ${error}`);
+  }
+
+  private async openModsFolder(rawId: string): Promise<void> {
+    const id = sanitizeName(rawId);
+    const instance = instanceDir(id);
+    if (!(await exists(instance))) throw new Error("instance not installed");
+    await flattenNestedPack(instance);
+    const mods = await resolveModsDir(instance);
+    await fs.mkdir(mods, { recursive: true });
+    const error = await shell.openPath(mods);
+    if (error) throw new Error(`failed to open mods folder: ${error}`);
   }
 
   private async downloadInstall(args: LaunchArgs): Promise<void> {
@@ -604,8 +618,9 @@ export class LauncherBackend {
   private async getConsoleLog(rawId: string, full: boolean): Promise<LaunchLogLine[]> {
     const id = sanitizeName(rawId);
     await this.flushConsoleLog(id);
+    await this.consoleLogWriter.compact(id);
     const filePath = consoleLogPath(id);
-    const contents = full ? await fs.readFile(filePath, "utf8").catch(() => "") : await readConsoleLogTail(filePath);
+    const contents = await readConsoleLogTail(filePath);
     return parseConsoleLog(contents, full);
   }
 
