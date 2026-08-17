@@ -66,6 +66,7 @@ import { VirtualizedLogList } from "./components/VirtualizedLogList";
 import { WindowControls } from "./components/WindowControls";
 import { JavaInstallationPicker } from "./components/JavaInstallationPicker";
 import { compareVersionsByReleaseDate } from "./lib/pack-version-status";
+import { validateAndSelectJava } from "./lib/java-selection";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
@@ -1806,7 +1807,7 @@ function SettingsTab({
   const browseDefaultJava = async () => {
     try {
       const picked = await invoke<string | null>("browse_java_executable");
-      if (picked) onDefaultJavaChange(picked);
+      await validateAndSelectJava(picked, (javaPath) => invoke("test_java", { javaPath }), onDefaultJavaChange, onError);
     } catch (error) {
       onError(`Browse Java failed: ${error}`);
     }
