@@ -57,7 +57,7 @@ import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveL
 import { killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
 import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
-import { ConsoleLogWriter } from "./console-log-writer";
+import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
 
 export interface BackendHost {
   emit(event: string, payload: unknown): void;
@@ -106,7 +106,7 @@ interface LaunchState {
   deleteCancel: Map<string, { cancelled: boolean }>;
 }
 
-const CONSOLE_LOG_TAIL_BYTES = 4 * 1024 * 1024;
+const CONSOLE_LOG_TAIL_BYTES = MAX_PERSISTED_CONSOLE_LOG_BYTES;
 
 async function readConsoleLogTail(filePath: string): Promise<string> {
   const file = await fs.open(filePath, "r").catch(() => null);
@@ -604,8 +604,9 @@ export class LauncherBackend {
   private async getConsoleLog(rawId: string, full: boolean): Promise<LaunchLogLine[]> {
     const id = sanitizeName(rawId);
     await this.flushConsoleLog(id);
+    await this.consoleLogWriter.compact(id);
     const filePath = consoleLogPath(id);
-    const contents = full ? await fs.readFile(filePath, "utf8").catch(() => "") : await readConsoleLogTail(filePath);
+    const contents = await readConsoleLogTail(filePath);
     return parseConsoleLog(contents, full);
   }
 
