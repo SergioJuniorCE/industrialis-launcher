@@ -51,6 +51,7 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
   const [saveError, setSaveError] = useState<string | null>(null);
   const settingsRef = useRef(settings);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueueRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -69,14 +70,20 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
-      settingsRef.current = snapshot;
       if (!isDesktop()) return;
-      try {
-        await invoke("save_launcher_settings", { launcherSettings: snapshot });
-        clearSaveError();
-      } catch (e) {
-        setSaveError(`Save failed: ${e}`);
-      }
+
+      const queuedSave = (saveQueueRef.current ?? Promise.resolve())
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            await invoke("save_launcher_settings", { launcherSettings: snapshot });
+            clearSaveError();
+          } catch (e) {
+            setSaveError(`Save failed: ${e}`);
+          }
+        });
+      saveQueueRef.current = queuedSave;
+      await queuedSave;
     },
     [clearSaveError],
   );
