@@ -461,15 +461,22 @@ function getWindowsProcessCreationId(pid: number): Promise<string | null> {
 }
 
 async function getLinuxProcessCreationId(pid: number): Promise<string | null> {
-  const stat = await fs.readFile(`/proc/${pid}/stat`, "utf8").catch(() => null);
-  if (stat === null) return null;
+  const [bootId, stat] = await Promise.all([
+    fs
+      .readFile("/proc/sys/kernel/random/boot_id", "utf8")
+      .then(normalizeCreationId)
+      .catch(() => null),
+    fs.readFile(`/proc/${pid}/stat`, "utf8").catch(() => null),
+  ]);
+  if (bootId === null || stat === null) return null;
   const commandEnd = stat.lastIndexOf(")");
   if (commandEnd < 0) return null;
   const fields = stat
     .slice(commandEnd + 2)
     .trim()
     .split(/\s+/u);
-  return normalizeCreationId(fields[19] ?? "");
+  const startTime = normalizeCreationId(fields[19] ?? "");
+  return startTime === null ? null : `${bootId}:${startTime}`;
 }
 
 function getPsProcessCreationId(pid: number): Promise<string | null> {

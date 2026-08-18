@@ -142,6 +142,8 @@ describe("LauncherBackend running game PID state", () => {
   it.skipIf(process.platform !== "win32")("restores the identity produced by a detached game launch", async () => {
     const running = await spawnGameProcess(process.execPath, ["-e", "setInterval(() => {}, 1000)"], process.cwd(), {}, () => undefined);
     const waitForExit = waitForGameProcess(running);
+    let backend: LauncherBackend | undefined;
+    let internals: BackendInternals | undefined;
     try {
       expect(running.creationId).toBeTruthy();
       await expect(getProcessCreationId(running.pid)).resolves.toBe(running.creationId);
@@ -152,14 +154,25 @@ describe("LauncherBackend running game PID state", () => {
       await fs.writeFile(path.join(instancePath, "mmc-pack.json"), "{}", "utf8");
       await saveRunningGamePids(new Map([["alpha", { pid: running.pid, creationId: persistedCreationId }]]));
 
-      const backend = new LauncherBackend({ emit: vi.fn() });
-      const internals = backend as unknown as BackendInternals;
+      backend = new LauncherBackend({ emit: vi.fn() });
+      const restoredInternals = backend as unknown as BackendInternals;
+      internals = restoredInternals;
       await backend.invoke("get_instances", {});
-      expect(internals.state.running.get("alpha")).toMatchObject({ pid: running.pid, creationId: running.creationId });
+      expect(restoredInternals.state.running.get("alpha")).toMatchObject({ pid: running.pid, creationId: running.creationId });
       await backend.dispose();
     } finally {
       await killGameProcess(running).catch(() => undefined);
       await waitForExit.catch(() => undefined);
+      const restoredInternals = internals;
+      if (backend && restoredInternals) {
+        await vi.waitFor(
+          async () => {
+            expect(restoredInternals.state.running.has("alpha")).toBe(false);
+            await expect(loadRunningGamePids()).resolves.toEqual(new Map());
+          },
+          { timeout: 2_000 },
+        );
+      }
     }
   });
 

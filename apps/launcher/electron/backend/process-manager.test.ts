@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execFile, spawn } from "node:child_process";
-import { killGameProcess, spawnGameProcess, waitForGameProcess } from "./process-manager";
+import { getProcessCreationId, killGameProcess, spawnGameProcess, waitForGameProcess } from "./process-manager";
 
 const javawExecutable = process.platform === "win32" && process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, "bin", "javaw.exe") : null;
 
@@ -161,6 +161,21 @@ async function waitUntil(check: () => boolean | Promise<boolean>, timeoutMs: num
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
+
+describe("process creation identity", () => {
+  it.skipIf(process.platform !== "linux")("includes the Linux boot ID with the process start time", async () => {
+    const [bootId, stat] = await Promise.all([fs.readFile("/proc/sys/kernel/random/boot_id", "utf8"), fs.readFile(`/proc/${process.pid}/stat`, "utf8")]);
+    const commandEnd = stat.lastIndexOf(")");
+    if (commandEnd < 0) throw new Error("current process stat did not contain a command name");
+    const startTime = stat
+      .slice(commandEnd + 2)
+      .trim()
+      .split(/\s+/u)[19];
+    if (!startTime) throw new Error("current process stat did not contain a start time");
+
+    await expect(getProcessCreationId(process.pid)).resolves.toBe(`${bootId.trim()}:${startTime}`);
+  });
+});
 
 describe("detached game process logs", () => {
   it.skipIf(process.platform !== "win32")(
