@@ -1,0 +1,87 @@
+name: User request
+description: Suggest an improvement or describe something users need.
+title: "[Request]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing a user need or improvement idea!
+
+        Please search existing issues before submitting. Do not include passwords, tokens, account details, or other sensitive information.
+
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: Request type
+      options:
+        - New feature
+        - Improvement to an existing feature
+        - Usability or accessibility improvement
+        - Documentation or onboarding
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of the project would this improve?
+      options:
+        - Launcher
+        - Server CLI or daemon
+        - Dashboard
+        - Website
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: user_problem
+    attributes:
+      label: What user problem would this solve?
+      description: Describe the user's goal, pain point, or workflow that is currently difficult.
+      placeholder: As a user, I want to... / Users currently struggle with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Who would benefit and how?
+      description: Explain who needs this and what a successful outcome would look like.
+      placeholder: This would help ... because ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: If you have an idea for how to address the need, describe it here.
+      placeholder: Describe the behavior or experience you would like.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or alternative solutions have you tried?
+      placeholder: Describe any current workaround or alternative.
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add mockups, screenshots, links, examples, or other context. Remove sensitive information first.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I removed passwords, tokens, personal information, and other sensitive data.
+          required: true
