@@ -53,8 +53,9 @@ import {
 } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
 import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
+import { loadRunningGamePids, saveRunningGamePids } from "./running-game-pids";
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
-import { killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
+import { isProcessAlive, killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
 import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
 import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
@@ -153,8 +154,13 @@ export class LauncherBackend {
     deleteCancel: new Map(),
   };
   private readonly consoleLogWriter = new ConsoleLogWriter(consoleLogPath);
+  private readonly runningProcessReady: Promise<void>;
+  private runningProcessPersistence: Promise<void> = Promise.resolve();
+  private runningProcessEventsPublished = false;
+  private readonly restoredRunningInstanceIds = new Set<string>();
 
   constructor(private readonly host: BackendHost) {
+    this.runningProcessReady = this.restoreRunningProcesses();
     void evictExpiredPackCache();
   }
 
@@ -199,6 +205,7 @@ export class LauncherBackend {
   }
 
   private async loadInstances(): Promise<InstanceInfo[]> {
+    await this.runningProcessReady;
     const known = await this.knownInstanceIds();
     const list = await Promise.all(
       [...known].sort().map(async (id): Promise<InstanceInfo> => {
@@ -211,7 +218,48 @@ export class LauncherBackend {
         return { id, installed: true, size_bytes: settings.cached_size_bytes, settings, group: await getInstanceGroup(id, known), icon_path: icon };
       }),
     );
+    this.publishRestoredRunningProcesses(known);
     return list;
+  }
+
+  private async restoreRunningProcesses(): Promise<void> {
+    const persisted = await loadRunningGamePids();
+    for (const [id, pid] of persisted) {
+      if (!isProcessAlive(pid)) continue;
+      const running = { pid } satisfies RunningProcess;
+      this.state.running.set(id, running);
+      this.restoredRunningInstanceIds.add(id);
+      this.monitorRestoredProcess(id, running);
+    }
+    await this.persistRunningProcesses().catch(() => undefined);
+  }
+
+  private publishRestoredRunningProcesses(known: Set<string>): void {
+    if (this.runningProcessEventsPublished) return;
+    this.runningProcessEventsPublished = true;
+    for (const id of this.restoredRunningInstanceIds) {
+      if (known.has(id) && this.state.running.has(id)) this.emit("instance-started", { id });
+    }
+  }
+
+  private monitorRestoredProcess(id: string, running: RunningProcess): void {
+    void waitForGameProcess(running)
+      .then((exitCode) => this.handleRestoredProcessExit(id, running, exitCode))
+      .catch(() => this.handleRestoredProcessExit(id, running, 1));
+  }
+
+  private async handleRestoredProcessExit(id: string, running: RunningProcess, exitCode: number): Promise<void> {
+    if (this.state.running.get(id) !== running) return;
+    this.state.running.delete(id);
+    await this.persistRunningProcesses().catch(() => undefined);
+    this.emit("instance-stopped", { id, exit_code: exitCode });
+  }
+
+  private persistRunningProcesses(): Promise<void> {
+    const snapshot = new Map([...this.state.running].filter(([, running]) => isProcessAlive(running.pid)).map(([id, running]) => [id, running.pid] as const));
+    const write = this.runningProcessPersistence.then(() => saveRunningGamePids(snapshot));
+    this.runningProcessPersistence = write.catch(() => undefined);
+    return write;
   }
 
   private async resolveIconPath(id: string, settings: InstanceSettings): Promise<string | null> {
@@ -224,6 +272,7 @@ export class LauncherBackend {
   }
 
   async invoke(command: string, rawArgs: unknown): Promise<unknown> {
+    await this.runningProcessReady;
     const args = (rawArgs && typeof rawArgs === "object" ? rawArgs : {}) as LaunchArgs;
     switch (command) {
       case "get_versions":
@@ -694,9 +743,15 @@ export class LauncherBackend {
       for (const part of line.split(/\r?\n/u)) if (part) this.emitLog(id, stream, part);
     });
     this.state.running.set(id, running);
+    await this.persistRunningProcesses().catch((error) => {
+      this.emitLog(id, "system", `Could not remember game process ${running.pid}: ${String(error)}`);
+    });
     this.emit("instance-started", { id });
     const exitCode = await waitForGameProcess(running);
     this.state.running.delete(id);
+    await this.persistRunningProcesses().catch((error) => {
+      this.emitLog(id, "system", `Could not clear remembered game process: ${String(error)}`);
+    });
     this.emitLog(id, "system", `Process exited with code ${exitCode}`);
     try {
       if (settings.override_game_time && settings.record_game_time) {
@@ -790,8 +845,10 @@ export class LauncherBackend {
       this.emit("oauth-deep-link", { url });
     }
   }
-  dispose(): void {
-    /* detached game processes intentionally remain alive when Electron exits */
+  async dispose(): Promise<void> {
+    /* Detached game processes intentionally remain alive when Electron exits. */
+    await this.runningProcessReady;
+    await this.persistRunningProcesses();
   }
 }
 

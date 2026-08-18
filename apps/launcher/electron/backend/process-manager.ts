@@ -412,7 +412,7 @@ function startCaptureTail(capture: Omit<WindowsProcessCapture, "tailer">, emit: 
   };
 }
 
-function isAlive(pid: number): boolean {
+export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -420,6 +420,8 @@ function isAlive(pid: number): boolean {
     return false;
   }
 }
+
+const isAlive = isProcessAlive;
 
 async function terminateWindowsProcess(pid: number): Promise<void> {
   await new Promise<void>((resolve, reject) => {
