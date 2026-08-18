@@ -32,7 +32,11 @@ function Tabs({ value, onValueChange, className, children, ...props }: TabsProps
 
 function TabsList({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div role="tablist" className={cn("inline-flex h-7 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground", className)} {...props}>
+    <div
+      role="tablist"
+      className={cn("ui-tabs-list inline-flex h-7 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground", className)}
+      {...props}
+    >
       {children}
     </div>
   );
@@ -82,7 +86,7 @@ function TabsTrigger({ value, className, children, disabled, onClick, onKeyDown,
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        "h-7 rounded-sm px-2.5 py-0.5 text-xs font-medium shadow-none",
+        "ui-tabs-trigger h-7 rounded-sm px-2.5 py-0.5 text-xs font-medium shadow-none",
         isActive ? "bg-background text-foreground shadow" : "hover:text-foreground",
         className,
       )}

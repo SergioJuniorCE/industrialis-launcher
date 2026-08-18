@@ -870,7 +870,7 @@ function defaultLauncherSettings(): LauncherSettings {
     custom_theme_presets: [],
     default_account_id: null,
     default_java_path: null,
-    instance_grid_columns: 3,
+    instance_grid_columns: 4,
   };
 }
 

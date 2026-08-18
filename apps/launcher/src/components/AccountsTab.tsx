@@ -155,7 +155,7 @@ export function AccountsTab({
       )}
 
       {accounts.length > 0 && (
-        <div className="rounded-md border border-border divide-y">
+        <div className="account-list rounded-md border border-border divide-y">
           {accounts.map((acc) => {
             const isDefault = acc.id === defaultAccountId;
             const licenseStatus = microsoftLicenseStatus(acc);
@@ -207,7 +207,7 @@ export function AccountsTab({
 
       {accounts.length === 0 && !launchRedirect && <p className="text-muted-foreground text-xs">No accounts yet.</p>}
 
-      <div className="rounded-md border border-border p-3 space-y-2">
+      <div className="account-method rounded-md border border-border p-3 space-y-2">
         <div>
           <p className="text-xs font-medium">Microsoft account</p>
           <p className="text-[11px] text-muted-foreground">
@@ -219,7 +219,7 @@ export function AccountsTab({
         </Button>
       </div>
 
-      <div className="rounded-md border border-border p-3 space-y-2">
+      <div className="account-method rounded-md border border-border p-3 space-y-2">
         <div>
           <p className="text-xs font-medium">Offline account</p>
           <p className="text-[11px] text-muted-foreground">Play without signing in. Letters, numbers, underscores (up to 16 characters).</p>
@@ -240,7 +240,7 @@ export function AccountsTab({
       </div>
 
       {loggingIn && deviceCode && (
-        <div className="rounded-md border border-border p-3 space-y-2">
+        <div className="device-code-panel rounded-md border border-border p-3 space-y-2">
           <p className="text-xs font-medium">Complete Microsoft sign-in</p>
           <p className="text-[11px] text-muted-foreground">
             Paste the code below at{" "}
