@@ -83,7 +83,6 @@ const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 const PRIMARY_NAV_TABS = [
   { key: "instances", label: "Instances", Icon: Boxes },
   { key: "processes", label: "Processes", Icon: Activity },
-  { key: "settings", label: "Settings", Icon: Settings },
   { key: "accounts", label: "Accounts", Icon: Users },
 ] as const;
 
@@ -562,6 +561,17 @@ export default function App() {
             onManageAccounts={() => setTab("accounts")}
           />
           <ProcessesDropdown processes={processes} onDismiss={handleDismissProcess} onCancelDelete={handleCancelDelete} onOpenProcesses={openProcesses} />
+          <Button
+            variant={tab === "settings" ? "secondary" : "ghost"}
+            size="icon"
+            className="size-7"
+            data-active={tab === "settings"}
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => setTab("settings")}
+          >
+            <Settings className="size-4" />
+          </Button>
           <ThemeSwitcher />
         </div>
         <WindowControls />
@@ -1327,7 +1337,7 @@ function InstanceGroupSection({ section, commands }: { section: GroupSection; co
         onConfirm={confirmDeleteGroup}
       />
       {!collapsed && (
-        <div className="grid grid-cols-4 gap-2 px-1 pb-1">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,9rem))] justify-start gap-2 px-1 pb-1">
           {section.items.map((inst) => (
             <InstanceGridCard
               key={inst.id}
@@ -1818,12 +1828,9 @@ function SettingsTab({
   };
   return (
     <Tabs value={settingsTab} onValueChange={setSettingsTab}>
-      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-4 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
+      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-3 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
         <TabsTrigger value="java" className="h-9 rounded-md text-sm">
           Java
-        </TabsTrigger>
-        <TabsTrigger value="instances" className="h-9 rounded-md text-sm">
-          Instance Library
         </TabsTrigger>
         <TabsTrigger value="appearance" className="h-9 rounded-md text-sm">
           Appearance
@@ -1850,18 +1857,6 @@ function SettingsTab({
               onBrowse={browseDefaultJava}
               onSelect={onDefaultJavaChange}
             />
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="instances" className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Instance Library</CardTitle>
-            <CardDescription>Instances use a fixed four-column layout in the launcher.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
           </CardContent>
         </Card>
       </TabsContent>

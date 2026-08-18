@@ -29,7 +29,7 @@ export interface LauncherSettingsData {
   default_java_path?: string | null;
   /** @deprecated Renamed to default_account_id */
   active_account_id?: string | null;
-  /** @deprecated Instance cards use a fixed four-column layout. */
+  /** @deprecated Legacy setting retained for compatibility; card widths are fixed. */
   instance_grid_columns?: number;
 }
 
