@@ -55,7 +55,16 @@ import { evictExpiredPackCache } from "./pack-cache";
 import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
 import { killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
-import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
+import {
+  defaultLauncherSettings,
+  type AccountData,
+  type DownloadProgress,
+  type InstanceInfo,
+  type InstanceSettings,
+  type LauncherSettings,
+  type LauncherUpdateState,
+  type LaunchLogLine,
+} from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
 import { ConsoleLogWriter } from "./console-log-writer";
 
@@ -847,18 +856,6 @@ function defaultSettings(): InstanceSettings {
     custom_icon: null,
   };
 }
-function defaultLauncherSettings(): LauncherSettings {
-  return {
-    theme_mode: "dark",
-    theme_preset: "industrialis",
-    theme_overrides: {},
-    custom_theme_presets: [],
-    default_account_id: null,
-    default_java_path: null,
-    instance_grid_columns: 3,
-  };
-}
-
 function resolveJava(settings: InstanceSettings, defaultPath: string | null): string {
   if (settings.override_java_location && settings.java_path?.trim()) {
     if (!existsSync(settings.java_path)) throw new Error(`configured Java not found: ${settings.java_path}`);

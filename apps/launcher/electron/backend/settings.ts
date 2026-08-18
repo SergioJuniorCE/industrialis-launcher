@@ -1,5 +1,6 @@
 import { launcherSettingsPath, settingsPath } from "./paths";
 import { readJson, writeJson } from "./fs-utils";
+import { isValidLauncherWindowSettings, normalizeLauncherWindowSettings } from "../../src/lib/launcher-window";
 import { defaultInstanceSettings, defaultLauncherSettings, type InstanceSettings, type LauncherSettings } from "./types";
 
 export async function loadInstanceSettings(id: string): Promise<InstanceSettings> {
@@ -20,6 +21,7 @@ export async function loadLauncherSettings(): Promise<LauncherSettings> {
   return {
     ...defaultLauncherSettings(),
     ...saved,
+    ...normalizeLauncherWindowSettings(saved ?? {}),
     theme_overrides: { ...saved?.theme_overrides },
     custom_theme_presets: [...(saved?.custom_theme_presets ?? [])],
     default_account_id: saved?.default_account_id ?? null,
@@ -37,6 +39,9 @@ export function validateLauncherSettings(settings: LauncherSettings): void {
   }
   if (!Number.isInteger(settings.instance_grid_columns) || settings.instance_grid_columns < 2 || settings.instance_grid_columns > 5) {
     throw new Error("instance grid columns must be between 2 and 5");
+  }
+  if (!isValidLauncherWindowSettings(settings)) {
+    throw new Error("invalid launcher window settings");
   }
   if (settings.default_java_path && (settings.default_java_path.trim().length === 0 || settings.default_java_path.length > 4096)) {
     throw new Error("invalid default Java path");

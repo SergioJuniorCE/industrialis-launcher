@@ -70,8 +70,10 @@ import { validateAndSelectJava } from "./lib/java-selection";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
+import { Checkbox } from "./components/ui/checkbox";
 import { MAX_RETAINED_LOG_LINES } from "./lib/log-buffer";
 import { cn } from "./lib/utils";
+import { LAUNCHER_WINDOW_MAX_HEIGHT, LAUNCHER_WINDOW_MAX_WIDTH, LAUNCHER_WINDOW_MIN_HEIGHT, LAUNCHER_WINDOW_MIN_WIDTH } from "./lib/launcher-window";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./components/ui/context-menu";
 import { useLauncherStore, type GtnhVersion, type InstanceInfo, type LauncherAccount } from "./stores/launcher-store";
 import { useLauncherSession } from "./lib/launcher-session";
@@ -951,6 +953,21 @@ export default function App() {
                   updateSettings({ instance_grid_columns: columns });
                   void saveSettingsNow();
                 }}
+                launchMaximized={launcherSettings.launch_maximized}
+                onLaunchMaximizedChange={(launchMaximized) => {
+                  updateSettings({ launch_maximized: launchMaximized });
+                  void saveSettingsNow();
+                }}
+                windowWidth={launcherSettings.window_width}
+                onWindowWidthChange={(windowWidth) => {
+                  updateSettings({ window_width: windowWidth });
+                  void saveSettingsNow();
+                }}
+                windowHeight={launcherSettings.window_height}
+                onWindowHeightChange={(windowHeight) => {
+                  updateSettings({ window_height: windowHeight });
+                  void saveSettingsNow();
+                }}
                 onError={(message) => setError(`Settings failed: ${message}`)}
               />
             </div>
@@ -1791,6 +1808,12 @@ function SettingsTab({
   onDefaultJavaChange,
   gridColumns,
   onGridColumnsChange,
+  launchMaximized,
+  onLaunchMaximizedChange,
+  windowWidth,
+  onWindowWidthChange,
+  windowHeight,
+  onWindowHeightChange,
   onError,
 }: {
   javaOptions: JavaInfo[];
@@ -1800,6 +1823,12 @@ function SettingsTab({
   onDefaultJavaChange: (path: string | null) => void;
   gridColumns: number;
   onGridColumnsChange: (columns: number) => void;
+  launchMaximized: boolean;
+  onLaunchMaximizedChange: (maximized: boolean) => void;
+  windowWidth: number;
+  onWindowWidthChange: (width: number) => void;
+  windowHeight: number;
+  onWindowHeightChange: (height: number) => void;
   onError: (message: string) => void;
 }) {
   const [settingsTab, setSettingsTab] = useState("java");
@@ -1828,12 +1857,18 @@ function SettingsTab({
   };
   return (
     <Tabs value={settingsTab} onValueChange={setSettingsTab}>
-      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-4 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
+      <TabsList
+        aria-label="Settings sections"
+        className="grid h-auto w-full max-w-2xl grid-cols-2 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1 sm:grid-cols-5"
+      >
         <TabsTrigger value="java" className="h-9 rounded-md text-sm">
           Java
         </TabsTrigger>
         <TabsTrigger value="instances" className="h-9 rounded-md text-sm">
           Instance Library
+        </TabsTrigger>
+        <TabsTrigger value="window" className="h-9 rounded-md text-sm">
+          Window
         </TabsTrigger>
         <TabsTrigger value="appearance" className="h-9 rounded-md text-sm">
           Appearance
@@ -1879,6 +1914,59 @@ function SettingsTab({
               <option value="5">5 columns</option>
             </Select>
             <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="window" className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Launcher window</CardTitle>
+            <CardDescription>Choose how the launcher opens when it starts.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Checkbox checked={launchMaximized} onChange={(event) => onLaunchMaximizedChange(event.target.checked)} label="Start launcher maximized" />
+            <div className="grid max-w-md grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="launcher-window-width">Width</Label>
+                <Input
+                  id="launcher-window-width"
+                  type="number"
+                  min={LAUNCHER_WINDOW_MIN_WIDTH}
+                  max={LAUNCHER_WINDOW_MAX_WIDTH}
+                  step={1}
+                  value={windowWidth}
+                  disabled={launchMaximized}
+                  onChange={(event) => {
+                    const value = Number.parseInt(event.target.value, 10);
+                    if (Number.isInteger(value)) {
+                      onWindowWidthChange(Math.max(LAUNCHER_WINDOW_MIN_WIDTH, Math.min(LAUNCHER_WINDOW_MAX_WIDTH, value)));
+                    }
+                  }}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="launcher-window-height">Height</Label>
+                <Input
+                  id="launcher-window-height"
+                  type="number"
+                  min={LAUNCHER_WINDOW_MIN_HEIGHT}
+                  max={LAUNCHER_WINDOW_MAX_HEIGHT}
+                  step={1}
+                  value={windowHeight}
+                  disabled={launchMaximized}
+                  onChange={(event) => {
+                    const value = Number.parseInt(event.target.value, 10);
+                    if (Number.isInteger(value)) {
+                      onWindowHeightChange(Math.max(LAUNCHER_WINDOW_MIN_HEIGHT, Math.min(LAUNCHER_WINDOW_MAX_HEIGHT, value)));
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Resolution changes apply the next time the launcher starts. Minimum size is {LAUNCHER_WINDOW_MIN_WIDTH} × {LAUNCHER_WINDOW_MIN_HEIGHT} pixels.
+            </p>
           </CardContent>
         </Card>
       </TabsContent>
