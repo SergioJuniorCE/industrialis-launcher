@@ -163,6 +163,29 @@ async function waitUntil(check: () => boolean | Promise<boolean>, timeoutMs: num
 }
 
 describe("process creation identity", () => {
+  it("stops tracking a live PID whose creation ID no longer matches", async () => {
+    await expect(waitForGameProcess({ pid: process.pid, creationId: "stale-process-identity" })).resolves.toBe(0);
+  }, 1_000);
+
+  it("does not kill a live PID whose creation ID no longer matches", async () => {
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.once("spawn", () => resolve());
+        child.once("error", reject);
+      });
+      if (!child.pid) throw new Error("test process did not start");
+      const creationId = await getProcessCreationId(child.pid);
+      if (!creationId) throw new Error("test process creation ID was unavailable");
+
+      await killGameProcess({ pid: child.pid, creationId: `${creationId}-stale` });
+      expect(processIsAlive(child.pid)).toBe(true);
+    } finally {
+      if (child.exitCode === null) child.kill();
+      await waitUntil(() => child.exitCode !== null, 2_000).catch(() => undefined);
+    }
+  });
+
   it.skipIf(process.platform !== "linux")("includes the Linux boot ID with the process start time", async () => {
     const [bootId, stat] = await Promise.all([fs.readFile("/proc/sys/kernel/random/boot_id", "utf8"), fs.readFile(`/proc/${process.pid}/stat`, "utf8")]);
     const commandEnd = stat.lastIndexOf(")");

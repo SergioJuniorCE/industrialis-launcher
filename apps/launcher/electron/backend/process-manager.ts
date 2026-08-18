@@ -523,6 +523,13 @@ async function readCapturedExitCode(filePath: string): Promise<number | null> {
   return value !== null && /^-?\d+\s*$/u.test(value) ? Number.parseInt(value, 10) : null;
 }
 
+async function isTrackedProcessAlive(processInfo: RunningProcess): Promise<boolean> {
+  if (!isAlive(processInfo.pid)) return false;
+  if (!processInfo.creationId) return true;
+  const currentCreationId = await getProcessCreationId(processInfo.pid);
+  return currentCreationId === normalizeProcessCreationId(processInfo.creationId);
+}
+
 export async function spawnGameProcess(
   executable: string,
   args: string[],
@@ -557,7 +564,7 @@ export async function waitForGameProcess(processInfo: RunningProcess): Promise<n
     return new Promise((resolve) => processInfo.child?.once("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0))));
   }
   if (!processInfo.capture) {
-    while (isAlive(processInfo.pid)) await new Promise((resolve) => setTimeout(resolve, 500));
+    while (await isTrackedProcessAlive(processInfo)) await new Promise((resolve) => setTimeout(resolve, 500));
     return 0;
   }
 
@@ -575,7 +582,7 @@ export async function waitForGameProcess(processInfo: RunningProcess): Promise<n
     await cleanupCaptureFiles(processInfo.capture);
     return resolved;
   }
-  while (isAlive(processInfo.pid)) await new Promise((resolve) => setTimeout(resolve, 500));
+  while (await isTrackedProcessAlive(processInfo)) await new Promise((resolve) => setTimeout(resolve, 500));
   await cleanupCaptureFiles(processInfo.capture);
   return processInfo.stopRequested ? 0 : 1;
 }
@@ -585,6 +592,7 @@ export async function killGameProcess(processInfo: RunningProcess): Promise<void
     if (!processInfo.child.killed) processInfo.child.kill();
     return;
   }
+  if (!processInfo.capture && processInfo.creationId && !(await isTrackedProcessAlive(processInfo))) return;
   if (process.platform === "win32") {
     processInfo.stopRequested = true;
     try {
