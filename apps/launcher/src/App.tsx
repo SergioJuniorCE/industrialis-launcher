@@ -70,8 +70,16 @@ import { validateAndSelectJava } from "./lib/java-selection";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
+import { Checkbox } from "./components/ui/checkbox";
 import { MAX_RETAINED_LOG_LINES } from "./lib/log-buffer";
 import { cn } from "./lib/utils";
+import {
+  LAUNCHER_WINDOW_MAX_HEIGHT,
+  LAUNCHER_WINDOW_MAX_WIDTH,
+  LAUNCHER_WINDOW_MIN_HEIGHT,
+  LAUNCHER_WINDOW_MIN_WIDTH,
+  validateLauncherWindowDimension,
+} from "./lib/launcher-window";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./components/ui/context-menu";
 import { useLauncherStore, type GtnhVersion, type InstanceInfo, type LauncherAccount } from "./stores/launcher-store";
 import { useLauncherSession } from "./lib/launcher-session";
@@ -956,6 +964,21 @@ export default function App() {
                 onRefreshJava={refreshJava}
                 defaultJavaPath={launcherSettings.default_java_path ?? null}
                 onDefaultJavaChange={handleSetDefaultJava}
+                launchMaximized={launcherSettings.launch_maximized}
+                onLaunchMaximizedChange={(launchMaximized) => {
+                  updateSettings({ launch_maximized: launchMaximized });
+                  void saveSettingsNow();
+                }}
+                windowWidth={launcherSettings.window_width}
+                onWindowWidthChange={(windowWidth) => {
+                  updateSettings({ window_width: windowWidth });
+                  void saveSettingsNow();
+                }}
+                windowHeight={launcherSettings.window_height}
+                onWindowHeightChange={(windowHeight) => {
+                  updateSettings({ window_height: windowHeight });
+                  void saveSettingsNow();
+                }}
                 onError={(message) => setError(`Settings failed: ${message}`)}
               />
             </div>
@@ -1785,6 +1808,110 @@ function NewInstanceDialog({
   );
 }
 
+function LauncherWindowCard({
+  launchMaximized,
+  onLaunchMaximizedChange,
+  windowWidth,
+  onWindowWidthChange,
+  windowHeight,
+  onWindowHeightChange,
+}: {
+  launchMaximized: boolean;
+  onLaunchMaximizedChange: (maximized: boolean) => void;
+  windowWidth: number;
+  onWindowWidthChange: (width: number) => void;
+  windowHeight: number;
+  onWindowHeightChange: (height: number) => void;
+}) {
+  const [windowWidthDraft, setWindowWidthDraft] = useState(() => String(windowWidth));
+  const [windowHeightDraft, setWindowHeightDraft] = useState(() => String(windowHeight));
+  const [windowWidthError, setWindowWidthError] = useState<string | null>(null);
+  const [windowHeightError, setWindowHeightError] = useState<string | null>(null);
+
+  const commitWindowWidth = () => {
+    const result = validateLauncherWindowDimension(windowWidthDraft, "Width", LAUNCHER_WINDOW_MIN_WIDTH, LAUNCHER_WINDOW_MAX_WIDTH);
+    setWindowWidthError(result.error);
+    if (result.value !== null) onWindowWidthChange(result.value);
+  };
+
+  const commitWindowHeight = () => {
+    const result = validateLauncherWindowDimension(windowHeightDraft, "Height", LAUNCHER_WINDOW_MIN_HEIGHT, LAUNCHER_WINDOW_MAX_HEIGHT);
+    setWindowHeightError(result.error);
+    if (result.value !== null) onWindowHeightChange(result.value);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Launcher window</CardTitle>
+        <CardDescription>Choose how the launcher opens when it starts.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Checkbox checked={launchMaximized} onChange={(event) => onLaunchMaximizedChange(event.target.checked)} label="Start launcher maximized" />
+        <div className="grid max-w-md grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="launcher-window-width">Width</Label>
+            <Input
+              id="launcher-window-width"
+              type="number"
+              min={LAUNCHER_WINDOW_MIN_WIDTH}
+              max={LAUNCHER_WINDOW_MAX_WIDTH}
+              step={1}
+              value={windowWidthDraft}
+              disabled={launchMaximized}
+              aria-invalid={windowWidthError ? true : undefined}
+              aria-describedby={windowWidthError ? "launcher-window-width-error" : undefined}
+              onChange={(event) => {
+                setWindowWidthDraft(event.target.value);
+                if (windowWidthError) setWindowWidthError(null);
+              }}
+              onBlur={commitWindowWidth}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+            {windowWidthError && (
+              <p id="launcher-window-width-error" role="alert" className="text-xs text-destructive">
+                {windowWidthError}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="launcher-window-height">Height</Label>
+            <Input
+              id="launcher-window-height"
+              type="number"
+              min={LAUNCHER_WINDOW_MIN_HEIGHT}
+              max={LAUNCHER_WINDOW_MAX_HEIGHT}
+              step={1}
+              value={windowHeightDraft}
+              disabled={launchMaximized}
+              aria-invalid={windowHeightError ? true : undefined}
+              aria-describedby={windowHeightError ? "launcher-window-height-error" : undefined}
+              onChange={(event) => {
+                setWindowHeightDraft(event.target.value);
+                if (windowHeightError) setWindowHeightError(null);
+              }}
+              onBlur={commitWindowHeight}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+            {windowHeightError && (
+              <p id="launcher-window-height-error" role="alert" className="text-xs text-destructive">
+                {windowHeightError}
+              </p>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Window changes apply the next time the launcher starts. Minimum size is {LAUNCHER_WINDOW_MIN_WIDTH} × {LAUNCHER_WINDOW_MIN_HEIGHT} pixels.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Settings Tab ──
 
 function SettingsTab({
@@ -1793,6 +1920,12 @@ function SettingsTab({
   onRefreshJava,
   defaultJavaPath,
   onDefaultJavaChange,
+  launchMaximized,
+  onLaunchMaximizedChange,
+  windowWidth,
+  onWindowWidthChange,
+  windowHeight,
+  onWindowHeightChange,
   onError,
 }: {
   javaOptions: JavaInfo[];
@@ -1800,6 +1933,12 @@ function SettingsTab({
   onRefreshJava: () => Promise<JavaInfo[]>;
   defaultJavaPath: string | null;
   onDefaultJavaChange: (path: string | null) => void;
+  launchMaximized: boolean;
+  onLaunchMaximizedChange: (maximized: boolean) => void;
+  windowWidth: number;
+  onWindowWidthChange: (width: number) => void;
+  windowHeight: number;
+  onWindowHeightChange: (height: number) => void;
   onError: (message: string) => void;
 }) {
   const [settingsTab, setSettingsTab] = useState("java");
@@ -1827,66 +1966,89 @@ function SettingsTab({
     }
   };
   return (
-    <Tabs value={settingsTab} onValueChange={setSettingsTab}>
-      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-3 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
-        <TabsTrigger value="java" className="h-9 rounded-md text-sm">
-          Java
-        </TabsTrigger>
-        <TabsTrigger value="appearance" className="h-9 rounded-md text-sm">
-          Appearance
-        </TabsTrigger>
-        <TabsTrigger value="about" className="h-9 rounded-md text-sm">
-          About
-        </TabsTrigger>
-      </TabsList>
+    <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="flex w-full items-start gap-6">
+      <aside className="w-48 shrink-0 self-stretch border-r border-border/70 pr-4">
+        <div className="mb-4 px-2">
+          <p className="text-sm font-semibold">Settings</p>
+          <p className="mt-1 text-xs text-muted-foreground">Launcher preferences</p>
+        </div>
+        <TabsList
+          aria-label="Settings sections"
+          className="flex h-auto w-full flex-col items-stretch justify-start gap-1 rounded-none border-0 bg-transparent p-0"
+        >
+          <TabsTrigger value="java" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Terminal className="size-4" aria-hidden="true" />
+            Java
+          </TabsTrigger>
+          <TabsTrigger value="appearance" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <SlidersHorizontal className="size-4" aria-hidden="true" />
+            Appearance
+          </TabsTrigger>
+          <TabsTrigger value="about" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Info className="size-4" aria-hidden="true" />
+            About
+          </TabsTrigger>
+        </TabsList>
+      </aside>
 
-      <TabsContent value="java" className="mt-4">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2">
-            <CardTitle>Java Detection</CardTitle>
-            <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
-              <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
-              {javaRefreshing ? "Scanning..." : "Refresh"}
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <JavaInstallationPicker
-              installations={javaOptions}
-              refreshing={javaRefreshing}
-              selectedPath={defaultJavaPath}
-              onBrowse={browseDefaultJava}
-              onSelect={onDefaultJavaChange}
-            />
-          </CardContent>
-        </Card>
-      </TabsContent>
+      <div className="min-w-0 max-w-4xl flex-1">
+        <TabsContent value="java" className="mt-0">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between gap-2">
+              <CardTitle>Java Detection</CardTitle>
+              <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
+                <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
+                {javaRefreshing ? "Scanning..." : "Refresh"}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <JavaInstallationPicker
+                installations={javaOptions}
+                refreshing={javaRefreshing}
+                selectedPath={defaultJavaPath}
+                onBrowse={browseDefaultJava}
+                onSelect={onDefaultJavaChange}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <TabsContent value="appearance" className="mt-4">
-        <ThemePresetPicker />
-      </TabsContent>
+        <TabsContent value="appearance" className="mt-0 space-y-4">
+          <ThemePresetPicker />
+          <LauncherWindowCard
+            key={`${windowWidth}-${windowHeight}`}
+            launchMaximized={launchMaximized}
+            onLaunchMaximizedChange={onLaunchMaximizedChange}
+            windowWidth={windowWidth}
+            onWindowWidthChange={onWindowWidthChange}
+            windowHeight={windowHeight}
+            onWindowHeightChange={onWindowHeightChange}
+          />
+        </TabsContent>
 
-      <TabsContent value="about" className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>About</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-1">
-            <p>Industrialis Launcher v0.1.0</p>
-            <p>GT New Horizons modpack manager built with Electron.</p>
-            <a
-              href={GITHUB_URL}
-              className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
-              onClick={(e) => {
-                e.preventDefault();
-                void openUrl(GITHUB_URL).catch(() => undefined);
-              }}
-            >
-              <ExternalLink className="size-3.5" />
-              View on GitHub
-            </a>
-          </CardContent>
-        </Card>
-      </TabsContent>
+        <TabsContent value="about" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>About</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-1">
+              <p>Industrialis Launcher v0.1.0</p>
+              <p>GT New Horizons modpack manager built with Electron.</p>
+              <a
+                href={GITHUB_URL}
+                className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  void openUrl(GITHUB_URL).catch(() => undefined);
+                }}
+              >
+                <ExternalLink className="size-3.5" />
+                View on GitHub
+              </a>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </div>
     </Tabs>
   );
 }

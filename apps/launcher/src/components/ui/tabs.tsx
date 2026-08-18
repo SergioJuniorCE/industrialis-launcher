@@ -6,21 +6,23 @@ const TabsContext = React.createContext<{
   value: string;
   onValueChange: (value: string) => void;
   baseId: string;
+  orientation: "horizontal" | "vertical";
 } | null>(null);
 
 interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
   value: string;
   onValueChange: (value: string) => void;
+  orientation?: "horizontal" | "vertical";
 }
 
 function tabId(baseId: string, kind: "trigger" | "panel", value: string) {
   return `${baseId}-${kind}-${encodeURIComponent(value)}`;
 }
 
-function Tabs({ value, onValueChange, className, children, ...props }: TabsProps) {
+function Tabs({ value, onValueChange, orientation = "horizontal", className, children, ...props }: TabsProps) {
   const generatedId = React.useId();
   const baseId = `tabs-${generatedId.replaceAll(":", "")}`;
-  const contextValue = React.useMemo(() => ({ value, onValueChange, baseId }), [value, onValueChange, baseId]);
+  const contextValue = React.useMemo(() => ({ value, onValueChange, baseId, orientation }), [value, onValueChange, baseId, orientation]);
   return (
     <TabsContext.Provider value={contextValue}>
       <div className={cn("w-full", className)} {...props}>
@@ -31,9 +33,12 @@ function Tabs({ value, onValueChange, className, children, ...props }: TabsProps
 }
 
 function TabsList({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  const ctx = React.useContext(TabsContext);
+
   return (
     <div
       role="tablist"
+      aria-orientation={ctx?.orientation === "vertical" ? "vertical" : undefined}
       className={cn("ui-tabs-list inline-flex h-7 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground", className)}
       {...props}
     >
@@ -49,6 +54,7 @@ interface TabsTriggerProps extends Omit<React.ComponentProps<typeof Button>, "va
 function TabsTrigger({ value, className, children, disabled, onClick, onKeyDown, ...props }: TabsTriggerProps) {
   const ctx = React.useContext(TabsContext);
   const isActive = ctx?.value === value;
+  const orientation = ctx?.orientation ?? "horizontal";
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
@@ -57,7 +63,8 @@ function TabsTrigger({ value, className, children, disabled, onClick, onKeyDown,
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     onKeyDown?.(event);
-    if (event.defaultPrevented || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const navigationKeys = orientation === "vertical" ? ["ArrowUp", "ArrowDown", "Home", "End"] : ["ArrowLeft", "ArrowRight", "Home", "End"];
+    if (event.defaultPrevented || !navigationKeys.includes(event.key)) return;
 
     const tabList = event.currentTarget.closest<HTMLElement>('[role="tablist"]');
     const tabs = Array.from(tabList?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)') ?? []);
@@ -66,7 +73,11 @@ function TabsTrigger({ value, className, children, disabled, onClick, onKeyDown,
 
     event.preventDefault();
     const nextIndex =
-      event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? tabs.length - 1
+          : (currentIndex + (event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
     tabs[nextIndex]?.focus();
     tabs[nextIndex]?.click();
   };
@@ -87,7 +98,13 @@ function TabsTrigger({ value, className, children, disabled, onClick, onKeyDown,
       onKeyDown={handleKeyDown}
       className={cn(
         "ui-tabs-trigger h-7 rounded-sm px-2.5 py-0.5 text-xs font-medium shadow-none",
-        isActive ? "bg-background text-foreground shadow" : "hover:text-foreground",
+        isActive
+          ? orientation === "vertical"
+            ? "bg-primary/15 text-foreground"
+            : "bg-background text-foreground shadow"
+          : orientation === "vertical"
+            ? "hover:bg-muted/70 hover:text-foreground"
+            : "hover:text-foreground",
         className,
       )}
     >

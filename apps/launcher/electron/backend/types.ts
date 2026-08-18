@@ -1,3 +1,5 @@
+import { DEFAULT_LAUNCHER_WINDOW_HEIGHT, DEFAULT_LAUNCHER_WINDOW_WIDTH, type LauncherWindowSettings } from "../../src/lib/launcher-window";
+
 export interface GtnhVersion {
   title: string;
   description: string;
@@ -224,7 +226,7 @@ export interface AccountData {
   skin_png_base64?: string;
 }
 
-export interface LauncherSettings {
+export interface LauncherSettings extends LauncherWindowSettings {
   theme_mode: "dark" | "light";
   theme_preset: string;
   theme_overrides: Record<string, string | undefined>;
@@ -242,6 +244,9 @@ export const defaultLauncherSettings = (): LauncherSettings => ({
   default_account_id: null,
   default_java_path: null,
   instance_grid_columns: 4,
+  launch_maximized: false,
+  window_width: DEFAULT_LAUNCHER_WINDOW_WIDTH,
+  window_height: DEFAULT_LAUNCHER_WINDOW_HEIGHT,
 });
 
 export interface DeviceCodeInfo {

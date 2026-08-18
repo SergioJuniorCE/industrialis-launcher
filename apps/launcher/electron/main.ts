@@ -4,6 +4,8 @@ import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from "electro
 import squirrelStartup from "electron-squirrel-startup";
 import { LauncherBackend } from "./backend/index";
 import { dataDir } from "./backend/paths";
+import { loadLauncherSettings } from "./backend/settings";
+import type { LauncherSettings } from "./backend/types";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -22,10 +24,10 @@ function emitToRenderer(event: string, payload: unknown): void {
   }
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(settings: LauncherSettings): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1100,
-    height: 750,
+    width: settings.window_width,
+    height: settings.window_height,
     minWidth: 800,
     minHeight: 600,
     title: "Industrialis Launcher",
@@ -45,12 +47,6 @@ function createWindow(): BrowserWindow {
     return { action: "deny" };
   });
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    void window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    void window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
-  }
-
   window.on("closed", () => {
     if (mainWindow === window) mainWindow = null;
   });
@@ -62,6 +58,13 @@ function createWindow(): BrowserWindow {
   };
   window.on("maximize", emitMaximizedState);
   window.on("unmaximize", emitMaximizedState);
+  if (settings.launch_maximized) window.maximize();
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    void window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+  } else {
+    void window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+  }
   return window;
 }
 
@@ -140,13 +143,14 @@ if (!gotLock) {
     backend?.handleDeepLinks(commandLine.filter((value) => value.startsWith("industrialislauncher:")));
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
     app.setAsDefaultProtocolClient("industrialislauncher");
     registerFileProtocol();
     registerIpcHandlers();
+    const launcherSettings = await loadLauncherSettings();
     backend = new LauncherBackend({ emit: emitToRenderer });
-    mainWindow = createWindow();
+    mainWindow = createWindow(launcherSettings);
     backend.handleDeepLinks(process.argv.filter((value) => value.startsWith("industrialislauncher:")));
   });
 }
