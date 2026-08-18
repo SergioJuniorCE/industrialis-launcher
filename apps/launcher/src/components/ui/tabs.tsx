@@ -39,7 +39,7 @@ function TabsList({ className, children, ...props }: React.HTMLAttributes<HTMLDi
     <div
       role="tablist"
       aria-orientation={ctx?.orientation === "vertical" ? "vertical" : undefined}
-      className={cn("inline-flex h-7 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground", className)}
+      className={cn("ui-tabs-list inline-flex h-7 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground", className)}
       {...props}
     >
       {children}
@@ -97,7 +97,7 @@ function TabsTrigger({ value, className, children, disabled, onClick, onKeyDown,
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        "h-7 rounded-sm px-2.5 py-0.5 text-xs font-medium shadow-none",
+        "ui-tabs-trigger h-7 rounded-sm px-2.5 py-0.5 text-xs font-medium shadow-none",
         isActive
           ? orientation === "vertical"
             ? "bg-primary/15 text-foreground"

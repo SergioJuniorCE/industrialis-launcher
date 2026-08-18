@@ -243,7 +243,7 @@ export const defaultLauncherSettings = (): LauncherSettings => ({
   custom_theme_presets: [],
   default_account_id: null,
   default_java_path: null,
-  instance_grid_columns: 3,
+  instance_grid_columns: 4,
   launch_maximized: false,
   window_width: DEFAULT_LAUNCHER_WINDOW_WIDTH,
   window_height: DEFAULT_LAUNCHER_WINDOW_HEIGHT,

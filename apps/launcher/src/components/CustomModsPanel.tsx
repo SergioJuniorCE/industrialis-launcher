@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "../lib/desktop";
-import { PackagePlus, Trash2 } from "lucide-react";
+import { FolderOpen, PackagePlus, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 
@@ -62,6 +62,18 @@ export function CustomModsPanel({ instanceId }: { instanceId: string }) {
     }
   };
 
+  const openModsFolder = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await invoke("open_mods_folder", { id: instanceId });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-2 h-full min-h-[200px]">
       <p className="text-[11px] text-muted-foreground leading-snug">
@@ -72,6 +84,10 @@ export function CustomModsPanel({ instanceId }: { instanceId: string }) {
         <Button size="sm" disabled={loading} onClick={() => void addMod()}>
           <PackagePlus className="size-3.5" />
           Add mod
+        </Button>
+        <Button size="sm" variant="outline" disabled={loading} onClick={() => void openModsFolder()}>
+          <FolderOpen className="size-3.5" />
+          Open mods folder
         </Button>
         <span className="text-xs text-muted-foreground">
           {mods.length} custom mod{mods.length === 1 ? "" : "s"}
@@ -86,23 +102,14 @@ export function CustomModsPanel({ instanceId }: { instanceId: string }) {
             <p className="text-xs text-muted-foreground p-2">No custom mods added yet.</p>
           ) : (
             mods.map((mod) => (
-              <div
-                key={mod.identity}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 hover:bg-muted/30"
-              >
+              <div key={mod.identity} className="flex items-center justify-between gap-2 px-2 py-1.5 hover:bg-muted/30">
                 <div className="min-w-0">
                   <div className="font-medium text-xs truncate">{mod.filename}</div>
                   <div className="text-[10px] text-muted-foreground font-mono truncate">
                     {mod.identity} · {formatBytes(mod.size_bytes)}
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={loading}
-                  title="Remove custom mod"
-                  onClick={() => void removeMod(mod.identity)}
-                >
+                <Button size="sm" variant="ghost" disabled={loading} title="Remove custom mod" onClick={() => void removeMod(mod.identity)}>
                   <Trash2 className="size-3.5" />
                 </Button>
               </div>

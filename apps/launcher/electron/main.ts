@@ -16,6 +16,7 @@ if (squirrelStartup) {
 
 let mainWindow: BrowserWindow | null = null;
 let backend: LauncherBackend | null = null;
+let isQuitting = false;
 
 function emitToRenderer(event: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -163,6 +164,12 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
-  backend?.dispose();
+app.on("before-quit", (event) => {
+  if (isQuitting || !backend) return;
+  event.preventDefault();
+  isQuitting = true;
+  void backend
+    .dispose()
+    .catch(() => undefined)
+    .finally(() => app.quit());
 });
