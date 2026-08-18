@@ -269,12 +269,12 @@ async function spawnWindowsViaWmi(executable: string, args: string[], cwd: strin
       if (Date.now() >= readyDeadline) throw new Error("Windows process capture wrapper did not initialize");
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_POLL_MS));
     }
-    const [readyPidText, creationId] = (await fs.readFile(readyPath, "utf8").catch(() => "")).trim().split("|", 2);
+    const [readyPidText, rawCreationId] = (await fs.readFile(readyPath, "utf8").catch(() => "")).trim().split("|", 2);
     const readyPid = Number(readyPidText);
     const pid = Number.isInteger(readyPid) && readyPid > 0 ? readyPid : wrapperPid;
     return {
       pid,
-      creationId: creationId?.trim() || undefined,
+      creationId: normalizeWindowsCreationId(rawCreationId) ?? undefined,
       capture: { wrapperPid, directory, stdoutPath, stderrPath, readyPath, exitCodePath, acknowledgementPath, wrapperPath, payloadPath },
     };
   } catch (error) {
@@ -425,6 +425,21 @@ function normalizeCreationId(value: string): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function normalizeWindowsCreationId(value: string | undefined): string | null {
+  const normalized = normalizeCreationId(value ?? "");
+  if (normalized === null) return null;
+  try {
+    const ticks = BigInt(normalized);
+    return (ticks >= 1_000_000_000_000_000n ? ticks / 10_000n : ticks).toString();
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeProcessCreationId(value: string | undefined): string | null {
+  return process.platform === "win32" ? normalizeWindowsCreationId(value) : normalizeCreationId(value ?? "");
+}
+
 function getWindowsProcessCreationId(pid: number): Promise<string | null> {
   const script = [
     "$ErrorActionPreference = 'Stop'",
@@ -440,7 +455,7 @@ function getWindowsProcessCreationId(pid: number): Promise<string | null> {
         windowsHide: true,
         maxBuffer: 1024 * 1024,
       },
-      (error, stdout) => resolve(error ? null : normalizeCreationId(stdout)),
+      (error, stdout) => resolve(error ? null : normalizeWindowsCreationId(stdout)),
     );
   });
 }

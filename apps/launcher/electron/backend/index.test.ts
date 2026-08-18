@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_PERSISTED_CONSOLE_LOG_BYTES, type ConsoleLogWriter } from "./console-log-writer";
 import { consoleLogPath, instancesDir } from "./paths";
-import { getProcessCreationId } from "./process-manager";
+import { getProcessCreationId, killGameProcess, normalizeProcessCreationId, spawnGameProcess, waitForGameProcess } from "./process-manager";
 import { loadRunningGamePids, saveRunningGamePids } from "./running-game-pids";
 
 const electronState = vi.hoisted(() => ({ appData: "" }));
@@ -132,6 +132,30 @@ describe("LauncherBackend running game PID state", () => {
       await backend.dispose();
     } finally {
       if (child.exitCode === null) child.kill();
+    }
+  });
+
+  it.skipIf(process.platform !== "win32")("restores the identity produced by a detached game launch", async () => {
+    const running = await spawnGameProcess(process.execPath, ["-e", "setInterval(() => {}, 1000)"], process.cwd(), {}, () => undefined);
+    const waitForExit = waitForGameProcess(running);
+    try {
+      expect(running.creationId).toBeTruthy();
+      await expect(getProcessCreationId(running.pid)).resolves.toBe(running.creationId);
+      const persistedCreationId = process.platform === "win32" ? (BigInt(running.creationId!) * 10_000n + 4n).toString() : running.creationId!;
+      expect(normalizeProcessCreationId(persistedCreationId)).toBe(running.creationId);
+      const instancePath = path.join(instancesDir(), "alpha");
+      await fs.mkdir(instancePath, { recursive: true });
+      await fs.writeFile(path.join(instancePath, "mmc-pack.json"), "{}", "utf8");
+      await saveRunningGamePids(new Map([["alpha", { pid: running.pid, creationId: persistedCreationId }]]));
+
+      const backend = new LauncherBackend({ emit: vi.fn() });
+      const internals = backend as unknown as BackendInternals;
+      await backend.invoke("get_instances", {});
+      expect(internals.state.running.get("alpha")).toMatchObject({ pid: running.pid, creationId: running.creationId });
+      await backend.dispose();
+    } finally {
+      await killGameProcess(running).catch(() => undefined);
+      await waitForExit.catch(() => undefined);
     }
   });
 

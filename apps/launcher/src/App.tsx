@@ -846,7 +846,7 @@ export default function App() {
                       >
                         <ArrowUpCircle />
                       </Button>
-                      <Button variant="outline" size="icon" title="Change group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
+                      <Button variant="outline" size="icon" title="Change instance group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
                         <FolderInput />
                       </Button>
                       <Button
@@ -861,7 +861,7 @@ export default function App() {
                       <Button
                         variant="outline"
                         size="icon"
-                        title="Delete"
+                        title="Delete instance"
                         disabled={instanceBusy(selectedInstanceId!)}
                         onClick={() => handleDelete(selectedInstanceId!)}
                       >
@@ -886,7 +886,7 @@ export default function App() {
                       >
                         <ArrowUpCircle />
                       </Button>
-                      <Button variant="outline" size="icon" title="Change group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
+                      <Button variant="outline" size="icon" title="Change instance group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
                         <FolderInput />
                       </Button>
                       <Button
@@ -901,7 +901,7 @@ export default function App() {
                       <Button
                         variant="outline"
                         size="icon"
-                        title="Delete"
+                        title="Delete instance"
                         disabled={instanceBusy(selectedInstanceId!)}
                         onClick={() => handleDelete(selectedInstanceId!)}
                       >

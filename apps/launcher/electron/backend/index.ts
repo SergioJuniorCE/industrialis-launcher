@@ -55,7 +55,15 @@ import { evictExpiredPackCache } from "./pack-cache";
 import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
 import { loadRunningGamePids, saveRunningGamePids, type RunningGamePid } from "./running-game-pids";
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
-import { getProcessCreationId, isProcessAlive, killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
+import {
+  getProcessCreationId,
+  isProcessAlive,
+  killGameProcess,
+  normalizeProcessCreationId,
+  spawnGameProcess,
+  waitForGameProcess,
+  type RunningProcess,
+} from "./process-manager";
 import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
 import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
@@ -228,8 +236,8 @@ export class LauncherBackend {
       [...persisted].map(async ([id, saved]) => {
         if (!isProcessAlive(saved.pid)) return null;
         const creationId = await getProcessCreationId(saved.pid);
-        if (creationId !== saved.creationId) return null;
-        return { id, running: { pid: saved.pid, creationId: saved.creationId } satisfies RunningProcess };
+        if (!creationId || creationId !== normalizeProcessCreationId(saved.creationId)) return null;
+        return { id, running: { pid: saved.pid, creationId } satisfies RunningProcess };
       }),
     );
     for (const entry of restored) {
