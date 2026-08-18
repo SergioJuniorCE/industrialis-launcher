@@ -73,7 +73,13 @@ import { Label } from "./components/ui/label";
 import { Checkbox } from "./components/ui/checkbox";
 import { MAX_RETAINED_LOG_LINES } from "./lib/log-buffer";
 import { cn } from "./lib/utils";
-import { LAUNCHER_WINDOW_MAX_HEIGHT, LAUNCHER_WINDOW_MAX_WIDTH, LAUNCHER_WINDOW_MIN_HEIGHT, LAUNCHER_WINDOW_MIN_WIDTH } from "./lib/launcher-window";
+import {
+  LAUNCHER_WINDOW_MAX_HEIGHT,
+  LAUNCHER_WINDOW_MAX_WIDTH,
+  LAUNCHER_WINDOW_MIN_HEIGHT,
+  LAUNCHER_WINDOW_MIN_WIDTH,
+  validateLauncherWindowDimension,
+} from "./lib/launcher-window";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./components/ui/context-menu";
 import { useLauncherStore, type GtnhVersion, type InstanceInfo, type LauncherAccount } from "./stores/launcher-store";
 import { useLauncherSession } from "./lib/launcher-session";
@@ -1798,6 +1804,110 @@ function NewInstanceDialog({
   );
 }
 
+function LauncherWindowCard({
+  launchMaximized,
+  onLaunchMaximizedChange,
+  windowWidth,
+  onWindowWidthChange,
+  windowHeight,
+  onWindowHeightChange,
+}: {
+  launchMaximized: boolean;
+  onLaunchMaximizedChange: (maximized: boolean) => void;
+  windowWidth: number;
+  onWindowWidthChange: (width: number) => void;
+  windowHeight: number;
+  onWindowHeightChange: (height: number) => void;
+}) {
+  const [windowWidthDraft, setWindowWidthDraft] = useState(() => String(windowWidth));
+  const [windowHeightDraft, setWindowHeightDraft] = useState(() => String(windowHeight));
+  const [windowWidthError, setWindowWidthError] = useState<string | null>(null);
+  const [windowHeightError, setWindowHeightError] = useState<string | null>(null);
+
+  const commitWindowWidth = () => {
+    const result = validateLauncherWindowDimension(windowWidthDraft, "Width", LAUNCHER_WINDOW_MIN_WIDTH, LAUNCHER_WINDOW_MAX_WIDTH);
+    setWindowWidthError(result.error);
+    if (result.value !== null) onWindowWidthChange(result.value);
+  };
+
+  const commitWindowHeight = () => {
+    const result = validateLauncherWindowDimension(windowHeightDraft, "Height", LAUNCHER_WINDOW_MIN_HEIGHT, LAUNCHER_WINDOW_MAX_HEIGHT);
+    setWindowHeightError(result.error);
+    if (result.value !== null) onWindowHeightChange(result.value);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Launcher window</CardTitle>
+        <CardDescription>Choose how the launcher opens when it starts.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Checkbox checked={launchMaximized} onChange={(event) => onLaunchMaximizedChange(event.target.checked)} label="Start launcher maximized" />
+        <div className="grid max-w-md grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="launcher-window-width">Width</Label>
+            <Input
+              id="launcher-window-width"
+              type="number"
+              min={LAUNCHER_WINDOW_MIN_WIDTH}
+              max={LAUNCHER_WINDOW_MAX_WIDTH}
+              step={1}
+              value={windowWidthDraft}
+              disabled={launchMaximized}
+              aria-invalid={windowWidthError ? true : undefined}
+              aria-describedby={windowWidthError ? "launcher-window-width-error" : undefined}
+              onChange={(event) => {
+                setWindowWidthDraft(event.target.value);
+                if (windowWidthError) setWindowWidthError(null);
+              }}
+              onBlur={commitWindowWidth}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+            {windowWidthError && (
+              <p id="launcher-window-width-error" role="alert" className="text-xs text-destructive">
+                {windowWidthError}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="launcher-window-height">Height</Label>
+            <Input
+              id="launcher-window-height"
+              type="number"
+              min={LAUNCHER_WINDOW_MIN_HEIGHT}
+              max={LAUNCHER_WINDOW_MAX_HEIGHT}
+              step={1}
+              value={windowHeightDraft}
+              disabled={launchMaximized}
+              aria-invalid={windowHeightError ? true : undefined}
+              aria-describedby={windowHeightError ? "launcher-window-height-error" : undefined}
+              onChange={(event) => {
+                setWindowHeightDraft(event.target.value);
+                if (windowHeightError) setWindowHeightError(null);
+              }}
+              onBlur={commitWindowHeight}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+            {windowHeightError && (
+              <p id="launcher-window-height-error" role="alert" className="text-xs text-destructive">
+                {windowHeightError}
+              </p>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Window changes apply the next time the launcher starts. Minimum size is {LAUNCHER_WINDOW_MIN_WIDTH} × {LAUNCHER_WINDOW_MIN_HEIGHT} pixels.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Settings Tab ──
 
 function SettingsTab({
@@ -1856,147 +1966,108 @@ function SettingsTab({
     }
   };
   return (
-    <Tabs value={settingsTab} onValueChange={setSettingsTab}>
+    <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="flex w-full items-start gap-4">
       <TabsList
         aria-label="Settings sections"
-        className="grid h-auto w-full max-w-2xl grid-cols-2 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1 sm:grid-cols-5"
+        className="flex h-auto w-52 shrink-0 flex-col items-stretch justify-start gap-1 rounded-lg border border-border/70 bg-muted/60 p-1"
       >
-        <TabsTrigger value="java" className="h-9 rounded-md text-sm">
+        <TabsTrigger value="java" className="h-10 justify-start rounded-md px-3 text-left text-sm">
           Java
         </TabsTrigger>
-        <TabsTrigger value="instances" className="h-9 rounded-md text-sm">
+        <TabsTrigger value="instances" className="h-10 justify-start rounded-md px-3 text-left text-sm">
           Instance Library
         </TabsTrigger>
-        <TabsTrigger value="window" className="h-9 rounded-md text-sm">
+        <TabsTrigger value="window" className="h-10 justify-start rounded-md px-3 text-left text-sm">
           Window
         </TabsTrigger>
-        <TabsTrigger value="appearance" className="h-9 rounded-md text-sm">
+        <TabsTrigger value="appearance" className="h-10 justify-start rounded-md px-3 text-left text-sm">
           Appearance
         </TabsTrigger>
-        <TabsTrigger value="about" className="h-9 rounded-md text-sm">
+        <TabsTrigger value="about" className="h-10 justify-start rounded-md px-3 text-left text-sm">
           About
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="java" className="mt-4">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2">
-            <CardTitle>Java Detection</CardTitle>
-            <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
-              <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
-              {javaRefreshing ? "Scanning..." : "Refresh"}
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <JavaInstallationPicker
-              installations={javaOptions}
-              refreshing={javaRefreshing}
-              selectedPath={defaultJavaPath}
-              onBrowse={browseDefaultJava}
-              onSelect={onDefaultJavaChange}
-            />
-          </CardContent>
-        </Card>
-      </TabsContent>
+      <div className="min-w-0 flex-1">
+        <TabsContent value="java" className="mt-0">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between gap-2">
+              <CardTitle>Java Detection</CardTitle>
+              <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
+                <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
+                {javaRefreshing ? "Scanning..." : "Refresh"}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <JavaInstallationPicker
+                installations={javaOptions}
+                refreshing={javaRefreshing}
+                selectedPath={defaultJavaPath}
+                onBrowse={browseDefaultJava}
+                onSelect={onDefaultJavaChange}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <TabsContent value="instances" className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Instance Library</CardTitle>
-            <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Label htmlFor="instance-grid-columns">Grid columns</Label>
-            <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
-              <option value="2">2 columns</option>
-              <option value="3">3 columns</option>
-              <option value="4">4 columns</option>
-              <option value="5">5 columns</option>
-            </Select>
-            <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
-          </CardContent>
-        </Card>
-      </TabsContent>
+        <TabsContent value="instances" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>Instance Library</CardTitle>
+              <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Label htmlFor="instance-grid-columns">Grid columns</Label>
+              <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
+                <option value="2">2 columns</option>
+                <option value="3">3 columns</option>
+                <option value="4">4 columns</option>
+                <option value="5">5 columns</option>
+              </Select>
+              <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <TabsContent value="window" className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Launcher window</CardTitle>
-            <CardDescription>Choose how the launcher opens when it starts.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Checkbox checked={launchMaximized} onChange={(event) => onLaunchMaximizedChange(event.target.checked)} label="Start launcher maximized" />
-            <div className="grid max-w-md grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="launcher-window-width">Width</Label>
-                <Input
-                  id="launcher-window-width"
-                  type="number"
-                  min={LAUNCHER_WINDOW_MIN_WIDTH}
-                  max={LAUNCHER_WINDOW_MAX_WIDTH}
-                  step={1}
-                  value={windowWidth}
-                  disabled={launchMaximized}
-                  onChange={(event) => {
-                    const value = Number.parseInt(event.target.value, 10);
-                    if (Number.isInteger(value)) {
-                      onWindowWidthChange(Math.max(LAUNCHER_WINDOW_MIN_WIDTH, Math.min(LAUNCHER_WINDOW_MAX_WIDTH, value)));
-                    }
-                  }}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="launcher-window-height">Height</Label>
-                <Input
-                  id="launcher-window-height"
-                  type="number"
-                  min={LAUNCHER_WINDOW_MIN_HEIGHT}
-                  max={LAUNCHER_WINDOW_MAX_HEIGHT}
-                  step={1}
-                  value={windowHeight}
-                  disabled={launchMaximized}
-                  onChange={(event) => {
-                    const value = Number.parseInt(event.target.value, 10);
-                    if (Number.isInteger(value)) {
-                      onWindowHeightChange(Math.max(LAUNCHER_WINDOW_MIN_HEIGHT, Math.min(LAUNCHER_WINDOW_MAX_HEIGHT, value)));
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Resolution changes apply the next time the launcher starts. Minimum size is {LAUNCHER_WINDOW_MIN_WIDTH} × {LAUNCHER_WINDOW_MIN_HEIGHT} pixels.
-            </p>
-          </CardContent>
-        </Card>
-      </TabsContent>
+        <TabsContent value="window" className="mt-0">
+          <LauncherWindowCard
+            key={`${windowWidth}-${windowHeight}`}
+            launchMaximized={launchMaximized}
+            onLaunchMaximizedChange={onLaunchMaximizedChange}
+            windowWidth={windowWidth}
+            onWindowWidthChange={onWindowWidthChange}
+            windowHeight={windowHeight}
+            onWindowHeightChange={onWindowHeightChange}
+          />
+        </TabsContent>
 
-      <TabsContent value="appearance" className="mt-4">
-        <ThemePresetPicker />
-      </TabsContent>
+        <TabsContent value="appearance" className="mt-0">
+          <ThemePresetPicker />
+        </TabsContent>
 
-      <TabsContent value="about" className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>About</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-1">
-            <p>Industrialis Launcher v0.1.0</p>
-            <p>GT New Horizons modpack manager built with Electron.</p>
-            <a
-              href={GITHUB_URL}
-              className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
-              onClick={(e) => {
-                e.preventDefault();
-                void openUrl(GITHUB_URL).catch(() => undefined);
-              }}
-            >
-              <ExternalLink className="size-3.5" />
-              View on GitHub
-            </a>
-          </CardContent>
-        </Card>
-      </TabsContent>
+        <TabsContent value="about" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>About</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-1">
+              <p>Industrialis Launcher v0.1.0</p>
+              <p>GT New Horizons modpack manager built with Electron.</p>
+              <a
+                href={GITHUB_URL}
+                className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  void openUrl(GITHUB_URL).catch(() => undefined);
+                }}
+              >
+                <ExternalLink className="size-3.5" />
+                View on GitHub
+              </a>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </div>
     </Tabs>
   );
 }

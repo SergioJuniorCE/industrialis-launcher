@@ -11,8 +11,24 @@ export interface LauncherWindowSettings {
   window_height: number;
 }
 
+export interface LauncherWindowDimensionValidation {
+  value: number | null;
+  error: string | null;
+}
+
 function normalizeDimension(value: unknown, fallback: number, minimum: number, maximum: number): number {
   return typeof value === "number" && Number.isInteger(value) && value >= minimum && value <= maximum ? value : fallback;
+}
+
+export function validateLauncherWindowDimension(raw: string, label: string, minimum: number, maximum: number): LauncherWindowDimensionValidation {
+  const trimmed = raw.trim();
+  if (!/^\d+$/u.test(trimmed)) return { value: null, error: `${label} must be a whole number.` };
+
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value)) return { value: null, error: `${label} must be a whole number.` };
+  if (value < minimum) return { value: null, error: `${label} must be at least ${minimum} pixels.` };
+  if (value > maximum) return { value: null, error: `${label} must be at most ${maximum} pixels.` };
+  return { value, error: null };
 }
 
 export function normalizeLauncherWindowSettings(settings: Partial<LauncherWindowSettings>): LauncherWindowSettings {

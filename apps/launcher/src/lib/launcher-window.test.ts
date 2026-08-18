@@ -6,6 +6,7 @@ import {
   LAUNCHER_WINDOW_MIN_WIDTH,
   isValidLauncherWindowSettings,
   normalizeLauncherWindowSettings,
+  validateLauncherWindowDimension,
 } from "./launcher-window";
 
 describe("launcher window settings", () => {
@@ -31,5 +32,16 @@ describe("launcher window settings", () => {
         window_height: LAUNCHER_WINDOW_MIN_HEIGHT,
       }),
     ).toBe(false);
+  });
+
+  it("validates a draft without changing it while it is being typed", () => {
+    expect(validateLauncherWindowDimension("1", "Width", LAUNCHER_WINDOW_MIN_WIDTH, 7680)).toEqual({
+      value: null,
+      error: "Width must be at least 800 pixels.",
+    });
+    expect(validateLauncherWindowDimension("1280", "Width", LAUNCHER_WINDOW_MIN_WIDTH, 7680)).toEqual({
+      value: 1280,
+      error: null,
+    });
   });
 });
