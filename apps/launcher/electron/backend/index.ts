@@ -238,7 +238,7 @@ export class LauncherBackend {
     if (this.runningProcessEventsPublished) return;
     this.runningProcessEventsPublished = true;
     for (const id of this.restoredRunningInstanceIds) {
-      if (known.has(id) && this.state.running.has(id)) this.emit("instance-started", { id });
+      if (known.has(id) && this.state.running.has(id)) this.emit("instance-started", { id, restored: true });
     }
   }
 
@@ -256,7 +256,10 @@ export class LauncherBackend {
   }
 
   private persistRunningProcesses(): Promise<void> {
-    const snapshot = new Map([...this.state.running].filter(([, running]) => isProcessAlive(running.pid)).map(([id, running]) => [id, running.pid] as const));
+    const snapshot = new Map<string, number>();
+    for (const [id, running] of this.state.running) {
+      if (isProcessAlive(running.pid)) snapshot.set(id, running.pid);
+    }
     const write = this.runningProcessPersistence.then(() => saveRunningGamePids(snapshot));
     this.runningProcessPersistence = write.catch(() => undefined);
     return write;

@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_PERSISTED_CONSOLE_LOG_BYTES, type ConsoleLogWriter } from "./console-log-writer";
-import { consoleLogPath } from "./paths";
+import { consoleLogPath, instancesDir } from "./paths";
 import { loadRunningGamePids, saveRunningGamePids } from "./running-game-pids";
 
 const electronState = vi.hoisted(() => ({ appData: "" }));
@@ -110,18 +110,64 @@ describe("LauncherBackend running game PID state", () => {
         child.once("error", reject);
       });
       if (!child.pid) throw new Error("test game process did not start");
+      const instancePath = path.join(instancesDir(), "alpha");
+      await fs.mkdir(instancePath, { recursive: true });
+      await fs.writeFile(path.join(instancePath, "mmc-pack.json"), "{}", "utf8");
       await saveRunningGamePids(new Map([["alpha", child.pid]]));
 
-      const backend = new LauncherBackend({ emit: vi.fn() });
+      const emit = vi.fn();
+      const backend = new LauncherBackend({ emit });
       const internals = backend as unknown as BackendInternals;
       await backend.invoke("get_instances", {});
       expect(internals.state.running.get("alpha")).toMatchObject({ pid: child.pid });
+      expect(emit).toHaveBeenCalledWith("instance-started", { id: "alpha", restored: true });
 
       child.kill();
       await vi.waitFor(() => expect(internals.state.running.has("alpha")).toBe(false), { timeout: 2_000 });
       await backend.dispose();
     } finally {
       if (child.exitCode === null) child.kill();
+    }
+  });
+
+  it("keeps a live PID through repeated launcher recreations", async () => {
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+    const backends: Array<{ backend: LauncherBackend; internals: BackendInternals }> = [];
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.once("spawn", () => resolve());
+        child.once("error", reject);
+      });
+      if (!child.pid) throw new Error("test game process did not start");
+      const instancePath = path.join(instancesDir(), "alpha");
+      await fs.mkdir(instancePath, { recursive: true });
+      await fs.writeFile(path.join(instancePath, "mmc-pack.json"), "{}", "utf8");
+      await saveRunningGamePids(new Map([["alpha", child.pid]]));
+
+      for (let cycle = 0; cycle < 3; cycle += 1) {
+        const backend = new LauncherBackend({ emit: vi.fn() });
+        const internals = backend as unknown as BackendInternals;
+        backends.push({ backend, internals });
+
+        await backend.invoke("get_instances", {});
+        expect(internals.state.running.get("alpha")).toMatchObject({ pid: child.pid });
+        await expect(loadRunningGamePids()).resolves.toEqual(new Map([["alpha", child.pid]]));
+
+        await backend.dispose();
+        await expect(loadRunningGamePids()).resolves.toEqual(new Map([["alpha", child.pid]]));
+      }
+
+      child.kill();
+      await vi.waitFor(
+        async () => {
+          expect(backends.every(({ internals }) => !internals.state.running.has("alpha"))).toBe(true);
+          expect(await loadRunningGamePids()).toEqual(new Map());
+        },
+        { timeout: 2_000 },
+      );
+    } finally {
+      if (child.exitCode === null) child.kill();
+      await Promise.all(backends.map(({ backend }) => backend.dispose().catch(() => undefined)));
     }
   });
 });

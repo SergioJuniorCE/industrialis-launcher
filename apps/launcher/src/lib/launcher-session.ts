@@ -166,12 +166,13 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
     scheduleLogFlush();
   };
 
-  const handleInstanceStarted = (event: { payload: { id: string } }) => {
+  const handleInstanceStarted = (event: { payload: { id: string; restored?: boolean } }) => {
     if (disposed) return;
-    const { id } = event.payload;
+    const { id, restored } = event.payload;
     store.setState((state) => ({
       runningInstanceIds: new Set(state.runningInstanceIds).add(id),
       ...(state.launching === id ? { launching: null } : {}),
+      ...(restored ? { selectedInstanceId: id, detailTab: "logs" } : {}),
     }));
   };
 
@@ -471,7 +472,7 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
 
     attachListener<LauncherUpdateState>("launcher-update", (event) => updateLauncherState(event.payload), generation);
     attachListener<LaunchLogEvent>("launch-log", handleLaunchLog, generation);
-    attachListener<{ id: string }>("instance-started", handleInstanceStarted, generation);
+    attachListener<{ id: string; restored?: boolean }>("instance-started", handleInstanceStarted, generation);
     attachListener<{ id: string }>("instance-stopped", handleInstanceStopped, generation);
     attachListener<DlProgressEvent>("dl-progress", handleDownloadProgress, generation);
 

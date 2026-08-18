@@ -161,6 +161,18 @@ describe("launcher session", () => {
     expect(useLauncherStore.getState().detailTab).toBe("logs");
   });
 
+  it("selects a restored instance and opens its logs", async () => {
+    const harness = createHarness();
+    await harness.session.start();
+    useLauncherStore.setState({ detailTab: "settings", selectedInstanceId: null });
+
+    harness.emit("instance-started", { id: "alpha", restored: true });
+
+    expect(useLauncherStore.getState().runningInstanceIds).toEqual(new Set(["alpha"]));
+    expect(useLauncherStore.getState().selectedInstanceId).toBe("alpha");
+    expect(useLauncherStore.getState().detailTab).toBe("logs");
+  });
+
   it("publishes launch failures and opens the console when configured", async () => {
     const harness = createHarness({ launchError: "game process could not start" });
     await harness.session.start();
