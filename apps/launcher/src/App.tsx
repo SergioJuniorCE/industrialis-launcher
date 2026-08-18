@@ -947,7 +947,7 @@ export default function App() {
       ) : (
         <main className="min-w-0 flex-1 overflow-auto">
           {tab === "settings" && (
-            <div className="w-full max-w-5xl p-4">
+            <div className="mx-auto w-full max-w-5xl p-4">
               <SettingsTab
                 javaOptions={javaOptions}
                 javaRefreshing={javaRefreshing}
@@ -1966,29 +1966,36 @@ function SettingsTab({
     }
   };
   return (
-    <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="flex w-full items-start gap-4">
-      <TabsList
-        aria-label="Settings sections"
-        className="flex h-auto w-52 shrink-0 flex-col items-stretch justify-start gap-1 rounded-lg border border-border/70 bg-muted/60 p-1"
-      >
-        <TabsTrigger value="java" className="h-10 justify-start rounded-md px-3 text-left text-sm">
-          Java
-        </TabsTrigger>
-        <TabsTrigger value="instances" className="h-10 justify-start rounded-md px-3 text-left text-sm">
-          Instance Library
-        </TabsTrigger>
-        <TabsTrigger value="window" className="h-10 justify-start rounded-md px-3 text-left text-sm">
-          Window
-        </TabsTrigger>
-        <TabsTrigger value="appearance" className="h-10 justify-start rounded-md px-3 text-left text-sm">
-          Appearance
-        </TabsTrigger>
-        <TabsTrigger value="about" className="h-10 justify-start rounded-md px-3 text-left text-sm">
-          About
-        </TabsTrigger>
-      </TabsList>
+    <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="flex w-full items-start gap-6">
+      <aside className="w-48 shrink-0 self-stretch border-r border-border/70 pr-4">
+        <div className="mb-4 px-2">
+          <p className="text-sm font-semibold">Settings</p>
+          <p className="mt-1 text-xs text-muted-foreground">Launcher preferences</p>
+        </div>
+        <TabsList
+          aria-label="Settings sections"
+          className="flex h-auto w-full flex-col items-stretch justify-start gap-1 rounded-none border-0 bg-transparent p-0"
+        >
+          <TabsTrigger value="java" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Terminal className="size-4" aria-hidden="true" />
+            Java
+          </TabsTrigger>
+          <TabsTrigger value="instances" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Boxes className="size-4" aria-hidden="true" />
+            Instance Library
+          </TabsTrigger>
+          <TabsTrigger value="appearance" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <SlidersHorizontal className="size-4" aria-hidden="true" />
+            Appearance
+          </TabsTrigger>
+          <TabsTrigger value="about" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Info className="size-4" aria-hidden="true" />
+            About
+          </TabsTrigger>
+        </TabsList>
+      </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 max-w-4xl flex-1">
         <TabsContent value="java" className="mt-0">
           <Card>
             <CardHeader className="flex-row items-center justify-between gap-2">
@@ -2029,7 +2036,8 @@ function SettingsTab({
           </Card>
         </TabsContent>
 
-        <TabsContent value="window" className="mt-0">
+        <TabsContent value="appearance" className="mt-0 space-y-4">
+          <ThemePresetPicker />
           <LauncherWindowCard
             key={`${windowWidth}-${windowHeight}`}
             launchMaximized={launchMaximized}
@@ -2039,10 +2047,6 @@ function SettingsTab({
             windowHeight={windowHeight}
             onWindowHeightChange={onWindowHeightChange}
           />
-        </TabsContent>
-
-        <TabsContent value="appearance" className="mt-0">
-          <ThemePresetPicker />
         </TabsContent>
 
         <TabsContent value="about" className="mt-0">

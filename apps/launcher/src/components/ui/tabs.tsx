@@ -98,7 +98,13 @@ function TabsTrigger({ value, className, children, disabled, onClick, onKeyDown,
       onKeyDown={handleKeyDown}
       className={cn(
         "h-7 rounded-sm px-2.5 py-0.5 text-xs font-medium shadow-none",
-        isActive ? "bg-background text-foreground shadow" : "hover:text-foreground",
+        isActive
+          ? orientation === "vertical"
+            ? "bg-primary/15 text-foreground"
+            : "bg-background text-foreground shadow"
+          : orientation === "vertical"
+            ? "hover:bg-muted/70 hover:text-foreground"
+            : "hover:text-foreground",
         className,
       )}
     >
