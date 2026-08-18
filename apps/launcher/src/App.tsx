@@ -83,7 +83,6 @@ const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 const PRIMARY_NAV_TABS = [
   { key: "instances", label: "Instances", Icon: Boxes },
   { key: "processes", label: "Processes", Icon: Activity },
-  { key: "settings", label: "Settings", Icon: Settings },
   { key: "accounts", label: "Accounts", Icon: Users },
 ] as const;
 
@@ -562,23 +561,33 @@ export default function App() {
             onManageAccounts={() => setTab("accounts")}
           />
           <ProcessesDropdown processes={processes} onDismiss={handleDismissProcess} onCancelDelete={handleCancelDelete} onOpenProcesses={openProcesses} />
+          <Button
+            variant={tab === "settings" ? "secondary" : "ghost"}
+            size="icon"
+            className="size-7"
+            data-active={tab === "settings"}
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => setTab("settings")}
+          >
+            <Settings className="size-4" />
+          </Button>
           <ThemeSwitcher />
         </div>
         <WindowControls />
       </header>
 
       {tab === "instances" ? (
-        <div className="instance-workspace flex-1 flex overflow-hidden p-2 gap-2">
+        <div className="instance-workspace min-h-0 flex-1 flex overflow-hidden p-2 gap-2">
           {/* Instance list */}
-          <div className="surface-panel workspace-panel workspace-panel-library flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-auto flex flex-col rounded-lg border border-border/80 shadow-sm">
+          <div className="surface-panel workspace-panel workspace-panel-library min-h-0 flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-hidden flex flex-col rounded-lg border border-border/80 shadow-sm">
             {instances.length === 0 ? (
-              <div className="empty-state m-2 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
+              <div className="empty-state m-2 flex-1 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
                 <div className="font-medium text-foreground">No instances installed</div>
                 <p className="mt-1 text-xs text-muted-foreground">Add a pack instance to start building your launcher library.</p>
               </div>
             ) : (
               <InstanceGroupList
-                gridColumns={launcherSettings.instance_grid_columns ?? 3}
                 commands={{
                   launch: handleLaunch,
                   kill: handleKill,
@@ -947,11 +956,6 @@ export default function App() {
                 onRefreshJava={refreshJava}
                 defaultJavaPath={launcherSettings.default_java_path ?? null}
                 onDefaultJavaChange={handleSetDefaultJava}
-                gridColumns={launcherSettings.instance_grid_columns ?? 3}
-                onGridColumnsChange={(columns) => {
-                  updateSettings({ instance_grid_columns: columns });
-                  void saveSettingsNow();
-                }}
                 onError={(message) => setError(`Settings failed: ${message}`)}
               />
             </div>
@@ -1190,7 +1194,7 @@ function buildGroupSections(instances: InstanceInfo[], groupNames: string[], ins
   return sections;
 }
 
-function InstanceGroupList({ gridColumns, commands }: { gridColumns: number; commands: InstanceListCommands }) {
+function InstanceGroupList({ commands }: { commands: InstanceListCommands }) {
   const instances = useLauncherStore((state) => state.instances);
   const groupsState = useLauncherStore((state) => state.groupsState);
   const sections = useMemo(
@@ -1201,18 +1205,17 @@ function InstanceGroupList({ gridColumns, commands }: { gridColumns: number; com
   if (sections.length === 0) return null;
 
   return (
-    <div className="space-y-2 p-2">
+    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
       {sections.map((section) => (
-        <InstanceGroupSection key={section.id || "__ungrouped__"} section={section} gridColumns={gridColumns} commands={commands} />
+        <InstanceGroupSection key={section.id || "__ungrouped__"} section={section} commands={commands} />
       ))}
     </div>
   );
 }
 
-function InstanceGroupSection({ section, gridColumns, commands }: { section: GroupSection; gridColumns: number; commands: InstanceListCommands }) {
+function InstanceGroupSection({ section, commands }: { section: GroupSection; commands: InstanceListCommands }) {
   const collapsed = useLauncherStore((state) => state.groupsState.collapsed[section.id] ?? false);
   const ungroupedName = useLauncherStore((state) => state.groupsState.ungrouped_name);
-  const gridClass = gridColumns <= 2 ? "grid-cols-2" : gridColumns === 4 ? "grid-cols-4" : gridColumns >= 5 ? "grid-cols-5" : "grid-cols-3";
 
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
@@ -1334,7 +1337,7 @@ function InstanceGroupSection({ section, gridColumns, commands }: { section: Gro
         onConfirm={confirmDeleteGroup}
       />
       {!collapsed && (
-        <div className={cn("grid gap-2 px-1 pb-1", gridClass)}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,9rem))] justify-start gap-2 px-1 pb-1">
           {section.items.map((inst) => (
             <InstanceGridCard
               key={inst.id}
@@ -1790,8 +1793,6 @@ function SettingsTab({
   onRefreshJava,
   defaultJavaPath,
   onDefaultJavaChange,
-  gridColumns,
-  onGridColumnsChange,
   onError,
 }: {
   javaOptions: JavaInfo[];
@@ -1799,8 +1800,6 @@ function SettingsTab({
   onRefreshJava: () => Promise<JavaInfo[]>;
   defaultJavaPath: string | null;
   onDefaultJavaChange: (path: string | null) => void;
-  gridColumns: number;
-  onGridColumnsChange: (columns: number) => void;
   onError: (message: string) => void;
 }) {
   const [settingsTab, setSettingsTab] = useState("java");
@@ -1829,12 +1828,9 @@ function SettingsTab({
   };
   return (
     <Tabs value={settingsTab} onValueChange={setSettingsTab}>
-      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-4 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
+      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-3 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
         <TabsTrigger value="java" className="h-9 rounded-md text-sm">
           Java
-        </TabsTrigger>
-        <TabsTrigger value="instances" className="h-9 rounded-md text-sm">
-          Instance Library
         </TabsTrigger>
         <TabsTrigger value="appearance" className="h-9 rounded-md text-sm">
           Appearance
@@ -1861,25 +1857,6 @@ function SettingsTab({
               onBrowse={browseDefaultJava}
               onSelect={onDefaultJavaChange}
             />
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="instances" className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Instance Library</CardTitle>
-            <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Label htmlFor="instance-grid-columns">Grid columns</Label>
-            <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
-              <option value="2">2 columns</option>
-              <option value="3">3 columns</option>
-              <option value="4">4 columns</option>
-              <option value="5">5 columns</option>
-            </Select>
-            <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
           </CardContent>
         </Card>
       </TabsContent>

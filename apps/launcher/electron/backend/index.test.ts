@@ -6,11 +6,14 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_PERSISTED_CONSOLE_LOG_BYTES, type ConsoleLogWriter } from "./console-log-writer";
-import { consoleLogPath, instancesDir } from "./paths";
+import { consoleLogPath, instanceDir, instancesDir } from "./paths";
 import { getProcessCreationId, killGameProcess, normalizeProcessCreationId, spawnGameProcess, waitForGameProcess } from "./process-manager";
 import { loadRunningGamePids, saveRunningGamePids } from "./running-game-pids";
 
-const electronState = vi.hoisted(() => ({ appData: "" }));
+const electronState = vi.hoisted(() => ({
+  appData: "",
+  shell: { openExternal: vi.fn(), openPath: vi.fn(async () => "") },
+}));
 
 vi.mock("electron", () => ({
   app: {
@@ -25,7 +28,7 @@ vi.mock("electron", () => ({
     getAllWindows: () => [],
   },
   dialog: { showOpenDialog: vi.fn() },
-  shell: { openExternal: vi.fn(), openPath: vi.fn() },
+  shell: electronState.shell,
 }));
 
 import { LauncherBackend } from "./index";
@@ -41,6 +44,7 @@ let tempRoot = "";
 beforeEach(async () => {
   tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "industrialis-backend-"));
   electronState.appData = tempRoot;
+  vi.clearAllMocks();
 });
 
 afterEach(async () => {
@@ -238,5 +242,19 @@ describe("LauncherBackend running game PID state", () => {
       if (child.exitCode === null) child.kill();
       await Promise.all(backends.map(({ backend }) => backend.dispose().catch(() => undefined)));
     }
+  });
+});
+
+describe("LauncherBackend mods folder endpoint", () => {
+  it("creates and opens the active mods folder", async () => {
+    const backend = new LauncherBackend({ emit: vi.fn() });
+    const instance = instanceDir("alpha");
+    const modsDir = path.join(instance, ".minecraft", "mods");
+    await fs.mkdir(instance, { recursive: true });
+
+    await expect(backend.invoke("open_mods_folder", { id: "alpha" })).resolves.toBeUndefined();
+
+    expect((await fs.stat(modsDir)).isDirectory()).toBe(true);
+    expect(electronState.shell.openPath).toHaveBeenCalledWith(modsDir);
   });
 });
