@@ -29,13 +29,11 @@ export interface LauncherSettingsData {
   default_java_path?: string | null;
   /** @deprecated Renamed to default_account_id */
   active_account_id?: string | null;
-  /** Number of columns in the instance grid (2–5). */
+  /** @deprecated Instance cards use a fixed four-column layout. */
   instance_grid_columns?: number;
 }
 
-export function resolveDefaultAccountId(
-  settings: Partial<LauncherSettingsData>,
-): string | null {
+export function resolveDefaultAccountId(settings: Partial<LauncherSettingsData>): string | null {
   return settings.default_account_id ?? settings.active_account_id ?? null;
 }
 
@@ -46,5 +44,5 @@ export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
   custom_theme_presets: [],
   default_account_id: null,
   default_java_path: null,
-  instance_grid_columns: 3,
+  instance_grid_columns: 4,
 };
