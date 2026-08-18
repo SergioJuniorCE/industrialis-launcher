@@ -53,9 +53,9 @@ import {
 } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
 import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
-import { loadRunningGamePids, saveRunningGamePids } from "./running-game-pids";
+import { loadRunningGamePids, saveRunningGamePids, type RunningGamePid } from "./running-game-pids";
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
-import { isProcessAlive, killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
+import { getProcessCreationId, isProcessAlive, killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
 import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
 import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
@@ -224,9 +224,17 @@ export class LauncherBackend {
 
   private async restoreRunningProcesses(): Promise<void> {
     const persisted = await loadRunningGamePids();
-    for (const [id, pid] of persisted) {
-      if (!isProcessAlive(pid)) continue;
-      const running = { pid } satisfies RunningProcess;
+    const restored = await Promise.all(
+      [...persisted].map(async ([id, saved]) => {
+        if (!isProcessAlive(saved.pid)) return null;
+        const creationId = await getProcessCreationId(saved.pid);
+        if (creationId !== saved.creationId) return null;
+        return { id, running: { pid: saved.pid, creationId: saved.creationId } satisfies RunningProcess };
+      }),
+    );
+    for (const entry of restored) {
+      if (!entry) continue;
+      const { id, running } = entry;
       this.state.running.set(id, running);
       this.restoredRunningInstanceIds.add(id);
       this.monitorRestoredProcess(id, running);
@@ -256,9 +264,9 @@ export class LauncherBackend {
   }
 
   private persistRunningProcesses(): Promise<void> {
-    const snapshot = new Map<string, number>();
+    const snapshot = new Map<string, RunningGamePid>();
     for (const [id, running] of this.state.running) {
-      if (isProcessAlive(running.pid)) snapshot.set(id, running.pid);
+      if (running.creationId && isProcessAlive(running.pid)) snapshot.set(id, { pid: running.pid, creationId: running.creationId });
     }
     const write = this.runningProcessPersistence.then(() => saveRunningGamePids(snapshot));
     this.runningProcessPersistence = write.catch(() => undefined);

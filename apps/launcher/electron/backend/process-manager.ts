@@ -6,6 +6,7 @@ import { StringDecoder } from "node:string_decoder";
 
 export interface RunningProcess {
   pid: number;
+  creationId?: string;
   child?: ChildProcess;
   capture?: WindowsProcessCapture;
   stopRequested?: boolean;
@@ -34,6 +35,7 @@ interface WindowsProcessCapture {
 
 interface WindowsSpawnResult {
   pid: number;
+  creationId?: string;
   capture: Omit<WindowsProcessCapture, "tailer">;
 }
 
@@ -104,7 +106,7 @@ try {
   $readyTempPath = [string]$payload.ready_path + ".tmp"
   [System.IO.File]::WriteAllText(
     $readyTempPath,
-    [string]$child.Id,
+    "$($child.Id)|$($child.StartTime.ToUniversalTime().Ticks)",
     [System.Text.Encoding]::ASCII
   )
   [System.IO.File]::Move($readyTempPath, [string]$payload.ready_path)
@@ -192,7 +194,7 @@ async function spawnWindowsViaWmi(executable: string, args: string[], cwd: strin
   const acknowledgementPath = path.join(directory, "drained");
   const wrapperPath = path.join(directory, "capture.ps1");
   const payloadPath = path.join(directory, "launch.json");
-  const powershellExecutable = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const powershellExecutable = windowsPowerShellExecutable();
   const wrapperCommandLine = [
     powershellExecutable,
     "-NoLogo",
@@ -267,10 +269,12 @@ async function spawnWindowsViaWmi(executable: string, args: string[], cwd: strin
       if (Date.now() >= readyDeadline) throw new Error("Windows process capture wrapper did not initialize");
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_POLL_MS));
     }
-    const readyPid = Number((await fs.readFile(readyPath, "utf8").catch(() => "")).trim());
+    const [readyPidText, creationId] = (await fs.readFile(readyPath, "utf8").catch(() => "")).trim().split("|", 2);
+    const readyPid = Number(readyPidText);
     const pid = Number.isInteger(readyPid) && readyPid > 0 ? readyPid : wrapperPid;
     return {
       pid,
+      creationId: creationId?.trim() || undefined,
       capture: { wrapperPid, directory, stdoutPath, stderrPath, readyPath, exitCodePath, acknowledgementPath, wrapperPath, payloadPath },
     };
   } catch (error) {
@@ -412,6 +416,60 @@ function startCaptureTail(capture: Omit<WindowsProcessCapture, "tailer">, emit: 
   };
 }
 
+function windowsPowerShellExecutable(): string {
+  return path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+}
+
+function normalizeCreationId(value: string): string | null {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function getWindowsProcessCreationId(pid: number): Promise<string | null> {
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    '$process = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $env:INDUSTRIALIS_PROCESS_ID"',
+    "if ($null -ne $process) { [Console]::Out.Write(([datetime]$process.CreationDate).ToUniversalTime().Ticks) }",
+  ].join("\n");
+  return new Promise((resolve) => {
+    execFile(
+      windowsPowerShellExecutable(),
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+      {
+        env: { ...process.env, INDUSTRIALIS_PROCESS_ID: String(pid) },
+        windowsHide: true,
+        maxBuffer: 1024 * 1024,
+      },
+      (error, stdout) => resolve(error ? null : normalizeCreationId(stdout)),
+    );
+  });
+}
+
+async function getLinuxProcessCreationId(pid: number): Promise<string | null> {
+  const stat = await fs.readFile(`/proc/${pid}/stat`, "utf8").catch(() => null);
+  if (stat === null) return null;
+  const commandEnd = stat.lastIndexOf(")");
+  if (commandEnd < 0) return null;
+  const fields = stat
+    .slice(commandEnd + 2)
+    .trim()
+    .split(/\s+/u);
+  return normalizeCreationId(fields[19] ?? "");
+}
+
+function getPsProcessCreationId(pid: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile("ps", ["-o", "lstart=", "-p", String(pid)], { windowsHide: true }, (error, stdout) => resolve(error ? null : normalizeCreationId(stdout)));
+  });
+}
+
+export async function getProcessCreationId(pid: number): Promise<string | null> {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  if (process.platform === "win32") return getWindowsProcessCreationId(pid);
+  if (process.platform === "linux") return getLinuxProcessCreationId(pid);
+  return getPsProcessCreationId(pid);
+}
+
 export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -451,10 +509,10 @@ export async function spawnGameProcess(
   emit: EmitProcessLog,
 ): Promise<RunningProcess> {
   if (process.platform === "win32") {
-    const { pid, capture } = await spawnWindowsViaWmi(executable, args, cwd, environment);
+    const { pid, creationId, capture } = await spawnWindowsViaWmi(executable, args, cwd, environment);
     const tailer = startCaptureTail(capture, emit);
     emit("system", `Launched outside the launcher job as process ${pid}`);
-    return { pid, capture: { ...capture, tailer } };
+    return { pid, creationId, capture: { ...capture, tailer } };
   }
   const child = spawn(executable, args, {
     cwd,
@@ -467,7 +525,8 @@ export async function spawnGameProcess(
     child.once("spawn", () => resolve());
     child.once("error", reject);
   });
-  return { pid: child.pid ?? 0, child };
+  const pid = child.pid ?? 0;
+  return { pid, creationId: (await getProcessCreationId(pid)) ?? undefined, child };
 }
 
 export async function waitForGameProcess(processInfo: RunningProcess): Promise<number> {

@@ -226,18 +226,17 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
     void loadInstances();
   };
 
-  const attachListener = <T>(event: string, listener: (event: { payload: T }) => void, generation: number): void => {
-    const pendingUnsubscriber = desktop.listen(event, listener);
-    void pendingUnsubscriber.then(
-      (unsubscribe) => {
-        if (disposed || !started || lifecycle !== generation) {
-          unsubscribe();
-          return;
-        }
-        unsubscribers.add(unsubscribe);
-      },
-      () => undefined,
-    );
+  const attachListener = async <T>(event: string, listener: (event: { payload: T }) => void, generation: number): Promise<void> => {
+    try {
+      const unsubscribe = await desktop.listen(event, listener);
+      if (disposed || !started || lifecycle !== generation) {
+        unsubscribe();
+        return;
+      }
+      unsubscribers.add(unsubscribe);
+    } catch {
+      // Event registration is best-effort; the initial requests remain usable without optional events.
+    }
   };
 
   const loadGroups = async (generation = lifecycle): Promise<void> => {
@@ -470,27 +469,33 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
     started = true;
     const generation = ++lifecycle;
 
-    attachListener<LauncherUpdateState>("launcher-update", (event) => updateLauncherState(event.payload), generation);
-    attachListener<LaunchLogEvent>("launch-log", handleLaunchLog, generation);
-    attachListener<{ id: string; restored?: boolean }>("instance-started", handleInstanceStarted, generation);
-    attachListener<{ id: string }>("instance-stopped", handleInstanceStopped, generation);
-    attachListener<DlProgressEvent>("dl-progress", handleDownloadProgress, generation);
+    const listenersReady = Promise.all([
+      attachListener<LauncherUpdateState>("launcher-update", (event) => updateLauncherState(event.payload), generation),
+      attachListener<LaunchLogEvent>("launch-log", handleLaunchLog, generation),
+      attachListener<{ id: string; restored?: boolean }>("instance-started", handleInstanceStarted, generation),
+      attachListener<{ id: string }>("instance-stopped", handleInstanceStopped, generation),
+      attachListener<DlProgressEvent>("dl-progress", handleDownloadProgress, generation),
+    ]);
 
-    startPromise = Promise.all([
-      loadInstances(generation),
-      loadAccounts(generation),
-      refreshJava(generation),
-      desktop
-        .invoke<Record<string, GtnhVersion>>("get_versions")
-        .then((gtnhVersions) => {
-          if (isCurrent(generation)) store.setState({ gtnhVersions });
-        })
-        .catch(() => undefined),
-      desktop
-        .invoke<LauncherUpdateState>("check_launcher_update")
-        .then((state) => updateLauncherState(state, generation))
-        .catch(() => undefined),
-    ]).then(() => undefined);
+    startPromise = listenersReady
+      .then(() =>
+        Promise.all([
+          loadInstances(generation),
+          loadAccounts(generation),
+          refreshJava(generation),
+          desktop
+            .invoke<Record<string, GtnhVersion>>("get_versions")
+            .then((gtnhVersions) => {
+              if (isCurrent(generation)) store.setState({ gtnhVersions });
+            })
+            .catch(() => undefined),
+          desktop
+            .invoke<LauncherUpdateState>("check_launcher_update")
+            .then((state) => updateLauncherState(state, generation))
+            .catch(() => undefined),
+        ]),
+      )
+      .then(() => undefined);
 
     return startPromise;
   };
