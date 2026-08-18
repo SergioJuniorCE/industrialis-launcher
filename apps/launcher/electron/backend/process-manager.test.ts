@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execFile, spawn } from "node:child_process";
-import { killGameProcess, spawnGameProcess, waitForGameProcess } from "./process-manager";
+import { getProcessCreationId, killGameProcess, spawnGameProcess, waitForGameProcess } from "./process-manager";
 
 const javawExecutable = process.platform === "win32" && process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, "bin", "javaw.exe") : null;
 
@@ -161,6 +161,44 @@ async function waitUntil(check: () => boolean | Promise<boolean>, timeoutMs: num
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
+
+describe("process creation identity", () => {
+  it("stops tracking a live PID whose creation ID no longer matches", async () => {
+    await expect(waitForGameProcess({ pid: process.pid, creationId: "stale-process-identity" })).resolves.toBe(0);
+  }, 1_000);
+
+  it("does not kill a live PID whose creation ID no longer matches", async () => {
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.once("spawn", () => resolve());
+        child.once("error", reject);
+      });
+      if (!child.pid) throw new Error("test process did not start");
+      const creationId = await getProcessCreationId(child.pid);
+      if (!creationId) throw new Error("test process creation ID was unavailable");
+
+      await killGameProcess({ pid: child.pid, creationId: `${creationId}-stale` });
+      expect(processIsAlive(child.pid)).toBe(true);
+    } finally {
+      if (child.exitCode === null) child.kill();
+      await waitUntil(() => child.exitCode !== null, 2_000).catch(() => undefined);
+    }
+  });
+
+  it.skipIf(process.platform !== "linux")("includes the Linux boot ID with the process start time", async () => {
+    const [bootId, stat] = await Promise.all([fs.readFile("/proc/sys/kernel/random/boot_id", "utf8"), fs.readFile(`/proc/${process.pid}/stat`, "utf8")]);
+    const commandEnd = stat.lastIndexOf(")");
+    if (commandEnd < 0) throw new Error("current process stat did not contain a command name");
+    const startTime = stat
+      .slice(commandEnd + 2)
+      .trim()
+      .split(/\s+/u)[19];
+    if (!startTime) throw new Error("current process stat did not contain a start time");
+
+    await expect(getProcessCreationId(process.pid)).resolves.toBe(`${bootId.trim()}:${startTime}`);
+  });
+});
 
 describe("detached game process logs", () => {
   it.skipIf(process.platform !== "win32")(

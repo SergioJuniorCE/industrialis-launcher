@@ -12,8 +12,13 @@ const instance = {
   group: "",
 };
 
-function createHarness({ launchError }: { launchError?: string } = {}) {
+function createHarness({
+  launchError,
+  delayListen = false,
+  emitRestoredOnGetInstances = false,
+}: { launchError?: string; delayListen?: boolean; emitRestoredOnGetInstances?: boolean } = {}) {
   const listeners = new Map<string, Set<(event: { payload: unknown }) => void>>();
+  const pendingListenerRegistrations: Array<() => void> = [];
   const invoked: Array<{ command: string; args: unknown }> = [];
   let persistedLogCalls = 0;
   const persistedLogResolvers: Array<(lines: LaunchLogLine[]) => void> = [];
@@ -22,6 +27,7 @@ function createHarness({ launchError }: { launchError?: string } = {}) {
     invoked.push({ command, args });
     switch (command) {
       case "get_instances":
+        if (emitRestoredOnGetInstances) emit("instance-started", { id: "alpha", restored: true });
         return [instance] as T;
       case "get_instance_groups":
         return {
@@ -51,13 +57,18 @@ function createHarness({ launchError }: { launchError?: string } = {}) {
     }
   };
 
-  const listen: LauncherSessionDesktop["listen"] = async <T>(event: string, listener: (event: { payload: T }) => void) => {
-    const callback = (event: { payload: unknown }) => listener(event as { payload: T });
-    const callbacks = listeners.get(event) ?? new Set();
-    callbacks.add(callback);
-    listeners.set(event, callbacks);
-    return () => callbacks.delete(callback);
-  };
+  const listen: LauncherSessionDesktop["listen"] = <T>(event: string, listener: (event: { payload: T }) => void) =>
+    new Promise<() => void>((resolve) => {
+      const register = () => {
+        const callback = (event: { payload: unknown }) => listener(event as { payload: T });
+        const callbacks = listeners.get(event) ?? new Set();
+        callbacks.add(callback);
+        listeners.set(event, callbacks);
+        resolve(() => callbacks.delete(callback));
+      };
+      if (delayListen) pendingListenerRegistrations.push(register);
+      else register();
+    });
 
   const emit = <T>(event: string, payload: T) => {
     for (const callback of listeners.get(event) ?? []) callback({ payload });
@@ -71,6 +82,7 @@ function createHarness({ launchError }: { launchError?: string } = {}) {
   return {
     session,
     emit,
+    releaseListeners: () => pendingListenerRegistrations.splice(0).forEach((register) => register()),
     invoked,
     listeners,
     get persistedLogCalls() {
@@ -95,6 +107,22 @@ describe("launcher session", () => {
     expect(harness.session.snapshot.javaOptions).toEqual([{ path: "C:/Java/bin/java.exe", version: 17 }]);
     expect(harness.session.snapshot.launcherUpdate.status).toBe("up-to-date");
     expect([...harness.listeners.keys()].sort()).toEqual(["dl-progress", "instance-started", "instance-stopped", "launch-log", "launcher-update"]);
+  });
+
+  it("registers listeners before the initial instance request", async () => {
+    const harness = createHarness({ delayListen: true, emitRestoredOnGetInstances: true });
+    const start = harness.session.start();
+
+    await Promise.resolve();
+    expect(harness.invoked).toEqual([]);
+
+    harness.releaseListeners();
+    await start;
+
+    expect(harness.invoked.some(({ command }) => command === "get_instances")).toBe(true);
+    expect(useLauncherStore.getState().runningInstanceIds).toEqual(new Set(["alpha"]));
+    expect(useLauncherStore.getState().selectedInstanceId).toBe("alpha");
+    expect(useLauncherStore.getState().detailTab).toBe("logs");
   });
 
   it("owns process transitions and batches live log events", async () => {
@@ -158,6 +186,18 @@ describe("launcher session", () => {
     expect(useLauncherStore.getState().launching).toBe("alpha");
 
     await launch;
+    expect(useLauncherStore.getState().detailTab).toBe("logs");
+  });
+
+  it("selects a restored instance and opens its logs", async () => {
+    const harness = createHarness();
+    await harness.session.start();
+    useLauncherStore.setState({ detailTab: "settings", selectedInstanceId: null });
+
+    harness.emit("instance-started", { id: "alpha", restored: true });
+
+    expect(useLauncherStore.getState().runningInstanceIds).toEqual(new Set(["alpha"]));
+    expect(useLauncherStore.getState().selectedInstanceId).toBe("alpha");
     expect(useLauncherStore.getState().detailTab).toBe("logs");
   });
 
