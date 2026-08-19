@@ -50,12 +50,31 @@ import {
   persistentCustomModsDir,
   removeCustomMod,
   removeCustomModsExcept,
+  resolveModsDir,
 } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
 import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
+import { loadRunningGamePids, saveRunningGamePids, type RunningGamePid } from "./running-game-pids";
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
-import { killGameProcess, spawnGameProcess, waitForGameProcess, type RunningProcess } from "./process-manager";
-import type { AccountData, DownloadProgress, InstanceInfo, InstanceSettings, LauncherSettings, LauncherUpdateState, LaunchLogLine } from "./types";
+import {
+  getProcessCreationId,
+  isProcessAlive,
+  killGameProcess,
+  normalizeProcessCreationId,
+  spawnGameProcess,
+  waitForGameProcess,
+  type RunningProcess,
+} from "./process-manager";
+import {
+  defaultLauncherSettings,
+  type AccountData,
+  type DownloadProgress,
+  type InstanceInfo,
+  type InstanceSettings,
+  type LauncherSettings,
+  type LauncherUpdateState,
+  type LaunchLogLine,
+} from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
 import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
 
@@ -153,8 +172,13 @@ export class LauncherBackend {
     deleteCancel: new Map(),
   };
   private readonly consoleLogWriter = new ConsoleLogWriter(consoleLogPath);
+  private readonly runningProcessReady: Promise<void>;
+  private runningProcessPersistence: Promise<void> = Promise.resolve();
+  private runningProcessEventsPublished = false;
+  private readonly restoredRunningInstanceIds = new Set<string>();
 
   constructor(private readonly host: BackendHost) {
+    this.runningProcessReady = this.restoreRunningProcesses();
     void evictExpiredPackCache();
   }
 
@@ -199,6 +223,7 @@ export class LauncherBackend {
   }
 
   private async loadInstances(): Promise<InstanceInfo[]> {
+    await this.runningProcessReady;
     const known = await this.knownInstanceIds();
     const list = await Promise.all(
       [...known].sort().map(async (id): Promise<InstanceInfo> => {
@@ -211,7 +236,59 @@ export class LauncherBackend {
         return { id, installed: true, size_bytes: settings.cached_size_bytes, settings, group: await getInstanceGroup(id, known), icon_path: icon };
       }),
     );
+    this.publishRestoredRunningProcesses(known);
     return list;
+  }
+
+  private async restoreRunningProcesses(): Promise<void> {
+    const persisted = await loadRunningGamePids();
+    const restored = await Promise.all(
+      [...persisted].map(async ([id, saved]) => {
+        if (!isProcessAlive(saved.pid)) return null;
+        const creationId = await getProcessCreationId(saved.pid);
+        if (!creationId || creationId !== normalizeProcessCreationId(saved.creationId)) return null;
+        return { id, running: { pid: saved.pid, creationId } satisfies RunningProcess };
+      }),
+    );
+    for (const entry of restored) {
+      if (!entry) continue;
+      const { id, running } = entry;
+      this.state.running.set(id, running);
+      this.restoredRunningInstanceIds.add(id);
+      this.monitorRestoredProcess(id, running);
+    }
+    await this.persistRunningProcesses().catch(() => undefined);
+  }
+
+  private publishRestoredRunningProcesses(known: Set<string>): void {
+    if (this.runningProcessEventsPublished) return;
+    this.runningProcessEventsPublished = true;
+    for (const id of this.restoredRunningInstanceIds) {
+      if (known.has(id) && this.state.running.has(id)) this.emit("instance-started", { id, restored: true });
+    }
+  }
+
+  private monitorRestoredProcess(id: string, running: RunningProcess): void {
+    void waitForGameProcess(running)
+      .then((exitCode) => this.handleRestoredProcessExit(id, running, exitCode))
+      .catch(() => this.handleRestoredProcessExit(id, running, 1));
+  }
+
+  private async handleRestoredProcessExit(id: string, running: RunningProcess, exitCode: number): Promise<void> {
+    if (this.state.running.get(id) !== running) return;
+    this.state.running.delete(id);
+    await this.persistRunningProcesses().catch(() => undefined);
+    this.emit("instance-stopped", { id, exit_code: exitCode });
+  }
+
+  private persistRunningProcesses(): Promise<void> {
+    const snapshot = new Map<string, RunningGamePid>();
+    for (const [id, running] of this.state.running) {
+      if (running.creationId && isProcessAlive(running.pid)) snapshot.set(id, { pid: running.pid, creationId: running.creationId });
+    }
+    const write = this.runningProcessPersistence.then(() => saveRunningGamePids(snapshot));
+    this.runningProcessPersistence = write.catch(() => undefined);
+    return write;
   }
 
   private async resolveIconPath(id: string, settings: InstanceSettings): Promise<string | null> {
@@ -224,6 +301,7 @@ export class LauncherBackend {
   }
 
   async invoke(command: string, rawArgs: unknown): Promise<unknown> {
+    await this.runningProcessReady;
     const args = (rawArgs && typeof rawArgs === "object" ? rawArgs : {}) as LaunchArgs;
     switch (command) {
       case "get_versions":
@@ -254,6 +332,8 @@ export class LauncherBackend {
         return this.copyInstance(args);
       case "open_instance_folder":
         return this.openInstanceFolder(args.id);
+      case "open_mods_folder":
+        return this.openModsFolder(args.id);
       case "save_settings":
         return saveInstanceSettings(sanitizeName(args.id), args.settings ?? defaultSettings());
       case "get_settings":
@@ -427,6 +507,17 @@ export class LauncherBackend {
     await flattenNestedPack(instance);
     const error = await shell.openPath(instance);
     if (error) throw new Error(`failed to open instance folder: ${error}`);
+  }
+
+  private async openModsFolder(rawId: string): Promise<void> {
+    const id = sanitizeName(rawId);
+    const instance = instanceDir(id);
+    if (!(await exists(instance))) throw new Error("instance not installed");
+    await flattenNestedPack(instance);
+    const mods = await resolveModsDir(instance);
+    await fs.mkdir(mods, { recursive: true });
+    const error = await shell.openPath(mods);
+    if (error) throw new Error(`failed to open mods folder: ${error}`);
   }
 
   private async downloadInstall(args: LaunchArgs): Promise<void> {
@@ -694,9 +785,15 @@ export class LauncherBackend {
       for (const part of line.split(/\r?\n/u)) if (part) this.emitLog(id, stream, part);
     });
     this.state.running.set(id, running);
+    await this.persistRunningProcesses().catch((error) => {
+      this.emitLog(id, "system", `Could not remember game process ${running.pid}: ${String(error)}`);
+    });
     this.emit("instance-started", { id });
     const exitCode = await waitForGameProcess(running);
     this.state.running.delete(id);
+    await this.persistRunningProcesses().catch((error) => {
+      this.emitLog(id, "system", `Could not clear remembered game process: ${String(error)}`);
+    });
     this.emitLog(id, "system", `Process exited with code ${exitCode}`);
     try {
       if (settings.override_game_time && settings.record_game_time) {
@@ -790,8 +887,10 @@ export class LauncherBackend {
       this.emit("oauth-deep-link", { url });
     }
   }
-  dispose(): void {
-    /* detached game processes intentionally remain alive when Electron exits */
+  async dispose(): Promise<void> {
+    /* Detached game processes intentionally remain alive when Electron exits. */
+    await this.runningProcessReady;
+    await this.persistRunningProcesses();
   }
 }
 
@@ -848,18 +947,6 @@ function defaultSettings(): InstanceSettings {
     custom_icon: null,
   };
 }
-function defaultLauncherSettings(): LauncherSettings {
-  return {
-    theme_mode: "dark",
-    theme_preset: "industrialis",
-    theme_overrides: {},
-    custom_theme_presets: [],
-    default_account_id: null,
-    default_java_path: null,
-    instance_grid_columns: 3,
-  };
-}
-
 function resolveJava(settings: InstanceSettings, defaultPath: string | null): string {
   if (settings.override_java_location && settings.java_path?.trim()) {
     if (!existsSync(settings.java_path)) throw new Error(`configured Java not found: ${settings.java_path}`);

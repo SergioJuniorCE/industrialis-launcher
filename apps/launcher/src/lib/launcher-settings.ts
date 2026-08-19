@@ -1,5 +1,6 @@
 import type { BuiltinThemePresetId, SavedThemePreset } from "./theme-presets";
 import { DEFAULT_THEME_PRESET_ID } from "./theme-presets";
+import { DEFAULT_LAUNCHER_WINDOW_HEIGHT, DEFAULT_LAUNCHER_WINDOW_WIDTH, type LauncherWindowSettings } from "./launcher-window";
 
 export type ThemeMode = "dark" | "light";
 
@@ -18,7 +19,7 @@ export interface ThemeOverrides {
   radius?: string;
 }
 
-export interface LauncherSettingsData {
+export interface LauncherSettingsData extends LauncherWindowSettings {
   theme_mode: ThemeMode;
   theme_preset: ThemePresetId;
   theme_overrides: ThemeOverrides;
@@ -29,13 +30,11 @@ export interface LauncherSettingsData {
   default_java_path?: string | null;
   /** @deprecated Renamed to default_account_id */
   active_account_id?: string | null;
-  /** Number of columns in the instance grid (2–5). */
+  /** @deprecated Legacy setting retained for compatibility; card widths are fixed. */
   instance_grid_columns?: number;
 }
 
-export function resolveDefaultAccountId(
-  settings: Partial<LauncherSettingsData>,
-): string | null {
+export function resolveDefaultAccountId(settings: Partial<LauncherSettingsData>): string | null {
   return settings.default_account_id ?? settings.active_account_id ?? null;
 }
 
@@ -46,5 +45,8 @@ export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
   custom_theme_presets: [],
   default_account_id: null,
   default_java_path: null,
-  instance_grid_columns: 3,
+  instance_grid_columns: 4,
+  launch_maximized: false,
+  window_width: DEFAULT_LAUNCHER_WINDOW_WIDTH,
+  window_height: DEFAULT_LAUNCHER_WINDOW_HEIGHT,
 };

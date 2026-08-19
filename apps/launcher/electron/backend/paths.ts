@@ -29,6 +29,10 @@ export function launcherSettingsPath(): string {
   return path.join(dataDir(), "launcher-settings.json");
 }
 
+export function runningGamePidsPath(): string {
+  return path.join(dataDir(), "running-game-pids.json");
+}
+
 export function groupsPath(): string {
   return path.join(instancesDir(), "instgroups.json");
 }

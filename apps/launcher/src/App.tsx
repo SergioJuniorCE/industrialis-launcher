@@ -70,8 +70,16 @@ import { validateAndSelectJava } from "./lib/java-selection";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
+import { Checkbox } from "./components/ui/checkbox";
 import { MAX_RETAINED_LOG_LINES } from "./lib/log-buffer";
 import { cn } from "./lib/utils";
+import {
+  LAUNCHER_WINDOW_MAX_HEIGHT,
+  LAUNCHER_WINDOW_MAX_WIDTH,
+  LAUNCHER_WINDOW_MIN_HEIGHT,
+  LAUNCHER_WINDOW_MIN_WIDTH,
+  validateLauncherWindowDimension,
+} from "./lib/launcher-window";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "./components/ui/context-menu";
 import { useLauncherStore, type GtnhVersion, type InstanceInfo, type LauncherAccount } from "./stores/launcher-store";
 import { useLauncherSession } from "./lib/launcher-session";
@@ -83,7 +91,6 @@ const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 const PRIMARY_NAV_TABS = [
   { key: "instances", label: "Instances", Icon: Boxes },
   { key: "processes", label: "Processes", Icon: Activity },
-  { key: "settings", label: "Settings", Icon: Settings },
   { key: "accounts", label: "Accounts", Icon: Users },
 ] as const;
 
@@ -562,23 +569,33 @@ export default function App() {
             onManageAccounts={() => setTab("accounts")}
           />
           <ProcessesDropdown processes={processes} onDismiss={handleDismissProcess} onCancelDelete={handleCancelDelete} onOpenProcesses={openProcesses} />
+          <Button
+            variant={tab === "settings" ? "secondary" : "ghost"}
+            size="icon"
+            className="size-7"
+            data-active={tab === "settings"}
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => setTab("settings")}
+          >
+            <Settings className="size-4" />
+          </Button>
           <ThemeSwitcher />
         </div>
         <WindowControls />
       </header>
 
       {tab === "instances" ? (
-        <div className="instance-workspace flex-1 flex overflow-hidden p-2 gap-2">
+        <div className="instance-workspace min-h-0 flex-1 flex overflow-hidden p-2 gap-2">
           {/* Instance list */}
-          <div className="surface-panel workspace-panel workspace-panel-library flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-auto flex flex-col rounded-lg border border-border/80 shadow-sm">
+          <div className="surface-panel workspace-panel workspace-panel-library min-h-0 flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-hidden flex flex-col rounded-lg border border-border/80 shadow-sm">
             {instances.length === 0 ? (
-              <div className="empty-state m-2 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
+              <div className="empty-state m-2 flex-1 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
                 <div className="font-medium text-foreground">No instances installed</div>
                 <p className="mt-1 text-xs text-muted-foreground">Add a pack instance to start building your launcher library.</p>
               </div>
             ) : (
               <InstanceGroupList
-                gridColumns={launcherSettings.instance_grid_columns ?? 3}
                 commands={{
                   launch: handleLaunch,
                   kill: handleKill,
@@ -846,7 +863,7 @@ export default function App() {
                       >
                         <ArrowUpCircle />
                       </Button>
-                      <Button variant="outline" size="icon" title="Change group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
+                      <Button variant="outline" size="icon" title="Change instance group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
                         <FolderInput />
                       </Button>
                       <Button
@@ -861,7 +878,7 @@ export default function App() {
                       <Button
                         variant="outline"
                         size="icon"
-                        title="Delete"
+                        title="Delete instance"
                         disabled={instanceBusy(selectedInstanceId!)}
                         onClick={() => handleDelete(selectedInstanceId!)}
                       >
@@ -886,7 +903,7 @@ export default function App() {
                       >
                         <ArrowUpCircle />
                       </Button>
-                      <Button variant="outline" size="icon" title="Change group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
+                      <Button variant="outline" size="icon" title="Change instance group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
                         <FolderInput />
                       </Button>
                       <Button
@@ -901,7 +918,7 @@ export default function App() {
                       <Button
                         variant="outline"
                         size="icon"
-                        title="Delete"
+                        title="Delete instance"
                         disabled={instanceBusy(selectedInstanceId!)}
                         onClick={() => handleDelete(selectedInstanceId!)}
                       >
@@ -947,9 +964,19 @@ export default function App() {
                 onRefreshJava={refreshJava}
                 defaultJavaPath={launcherSettings.default_java_path ?? null}
                 onDefaultJavaChange={handleSetDefaultJava}
-                gridColumns={launcherSettings.instance_grid_columns ?? 3}
-                onGridColumnsChange={(columns) => {
-                  updateSettings({ instance_grid_columns: columns });
+                launchMaximized={launcherSettings.launch_maximized}
+                onLaunchMaximizedChange={(launchMaximized) => {
+                  updateSettings({ launch_maximized: launchMaximized });
+                  void saveSettingsNow();
+                }}
+                windowWidth={launcherSettings.window_width}
+                onWindowWidthChange={(windowWidth) => {
+                  updateSettings({ window_width: windowWidth });
+                  void saveSettingsNow();
+                }}
+                windowHeight={launcherSettings.window_height}
+                onWindowHeightChange={(windowHeight) => {
+                  updateSettings({ window_height: windowHeight });
                   void saveSettingsNow();
                 }}
                 onError={(message) => setError(`Settings failed: ${message}`)}
@@ -1190,7 +1217,7 @@ function buildGroupSections(instances: InstanceInfo[], groupNames: string[], ins
   return sections;
 }
 
-function InstanceGroupList({ gridColumns, commands }: { gridColumns: number; commands: InstanceListCommands }) {
+function InstanceGroupList({ commands }: { commands: InstanceListCommands }) {
   const instances = useLauncherStore((state) => state.instances);
   const groupsState = useLauncherStore((state) => state.groupsState);
   const sections = useMemo(
@@ -1201,18 +1228,17 @@ function InstanceGroupList({ gridColumns, commands }: { gridColumns: number; com
   if (sections.length === 0) return null;
 
   return (
-    <div className="space-y-2 p-2">
+    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
       {sections.map((section) => (
-        <InstanceGroupSection key={section.id || "__ungrouped__"} section={section} gridColumns={gridColumns} commands={commands} />
+        <InstanceGroupSection key={section.id || "__ungrouped__"} section={section} commands={commands} />
       ))}
     </div>
   );
 }
 
-function InstanceGroupSection({ section, gridColumns, commands }: { section: GroupSection; gridColumns: number; commands: InstanceListCommands }) {
+function InstanceGroupSection({ section, commands }: { section: GroupSection; commands: InstanceListCommands }) {
   const collapsed = useLauncherStore((state) => state.groupsState.collapsed[section.id] ?? false);
   const ungroupedName = useLauncherStore((state) => state.groupsState.ungrouped_name);
-  const gridClass = gridColumns <= 2 ? "grid-cols-2" : gridColumns === 4 ? "grid-cols-4" : gridColumns >= 5 ? "grid-cols-5" : "grid-cols-3";
 
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
@@ -1334,7 +1360,7 @@ function InstanceGroupSection({ section, gridColumns, commands }: { section: Gro
         onConfirm={confirmDeleteGroup}
       />
       {!collapsed && (
-        <div className={cn("grid gap-2 px-1 pb-1", gridClass)}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,9rem))] justify-start gap-2 px-1 pb-1">
           {section.items.map((inst) => (
             <InstanceGridCard
               key={inst.id}
@@ -1782,6 +1808,110 @@ function NewInstanceDialog({
   );
 }
 
+function LauncherWindowCard({
+  launchMaximized,
+  onLaunchMaximizedChange,
+  windowWidth,
+  onWindowWidthChange,
+  windowHeight,
+  onWindowHeightChange,
+}: {
+  launchMaximized: boolean;
+  onLaunchMaximizedChange: (maximized: boolean) => void;
+  windowWidth: number;
+  onWindowWidthChange: (width: number) => void;
+  windowHeight: number;
+  onWindowHeightChange: (height: number) => void;
+}) {
+  const [windowWidthDraft, setWindowWidthDraft] = useState(() => String(windowWidth));
+  const [windowHeightDraft, setWindowHeightDraft] = useState(() => String(windowHeight));
+  const [windowWidthError, setWindowWidthError] = useState<string | null>(null);
+  const [windowHeightError, setWindowHeightError] = useState<string | null>(null);
+
+  const commitWindowWidth = () => {
+    const result = validateLauncherWindowDimension(windowWidthDraft, "Width", LAUNCHER_WINDOW_MIN_WIDTH, LAUNCHER_WINDOW_MAX_WIDTH);
+    setWindowWidthError(result.error);
+    if (result.value !== null) onWindowWidthChange(result.value);
+  };
+
+  const commitWindowHeight = () => {
+    const result = validateLauncherWindowDimension(windowHeightDraft, "Height", LAUNCHER_WINDOW_MIN_HEIGHT, LAUNCHER_WINDOW_MAX_HEIGHT);
+    setWindowHeightError(result.error);
+    if (result.value !== null) onWindowHeightChange(result.value);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Launcher window</CardTitle>
+        <CardDescription>Choose how the launcher opens when it starts.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Checkbox checked={launchMaximized} onChange={(event) => onLaunchMaximizedChange(event.target.checked)} label="Start launcher maximized" />
+        <div className="grid max-w-md grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="launcher-window-width">Width</Label>
+            <Input
+              id="launcher-window-width"
+              type="number"
+              min={LAUNCHER_WINDOW_MIN_WIDTH}
+              max={LAUNCHER_WINDOW_MAX_WIDTH}
+              step={1}
+              value={windowWidthDraft}
+              disabled={launchMaximized}
+              aria-invalid={windowWidthError ? true : undefined}
+              aria-describedby={windowWidthError ? "launcher-window-width-error" : undefined}
+              onChange={(event) => {
+                setWindowWidthDraft(event.target.value);
+                if (windowWidthError) setWindowWidthError(null);
+              }}
+              onBlur={commitWindowWidth}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+            {windowWidthError && (
+              <p id="launcher-window-width-error" role="alert" className="text-xs text-destructive">
+                {windowWidthError}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="launcher-window-height">Height</Label>
+            <Input
+              id="launcher-window-height"
+              type="number"
+              min={LAUNCHER_WINDOW_MIN_HEIGHT}
+              max={LAUNCHER_WINDOW_MAX_HEIGHT}
+              step={1}
+              value={windowHeightDraft}
+              disabled={launchMaximized}
+              aria-invalid={windowHeightError ? true : undefined}
+              aria-describedby={windowHeightError ? "launcher-window-height-error" : undefined}
+              onChange={(event) => {
+                setWindowHeightDraft(event.target.value);
+                if (windowHeightError) setWindowHeightError(null);
+              }}
+              onBlur={commitWindowHeight}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+            {windowHeightError && (
+              <p id="launcher-window-height-error" role="alert" className="text-xs text-destructive">
+                {windowHeightError}
+              </p>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Window changes apply the next time the launcher starts. Minimum size is {LAUNCHER_WINDOW_MIN_WIDTH} × {LAUNCHER_WINDOW_MIN_HEIGHT} pixels.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Settings Tab ──
 
 function SettingsTab({
@@ -1790,8 +1920,12 @@ function SettingsTab({
   onRefreshJava,
   defaultJavaPath,
   onDefaultJavaChange,
-  gridColumns,
-  onGridColumnsChange,
+  launchMaximized,
+  onLaunchMaximizedChange,
+  windowWidth,
+  onWindowWidthChange,
+  windowHeight,
+  onWindowHeightChange,
   onError,
 }: {
   javaOptions: JavaInfo[];
@@ -1799,8 +1933,12 @@ function SettingsTab({
   onRefreshJava: () => Promise<JavaInfo[]>;
   defaultJavaPath: string | null;
   onDefaultJavaChange: (path: string | null) => void;
-  gridColumns: number;
-  onGridColumnsChange: (columns: number) => void;
+  launchMaximized: boolean;
+  onLaunchMaximizedChange: (maximized: boolean) => void;
+  windowWidth: number;
+  onWindowWidthChange: (width: number) => void;
+  windowHeight: number;
+  onWindowHeightChange: (height: number) => void;
   onError: (message: string) => void;
 }) {
   const [settingsTab, setSettingsTab] = useState("java");
@@ -1828,88 +1966,89 @@ function SettingsTab({
     }
   };
   return (
-    <Tabs value={settingsTab} onValueChange={setSettingsTab}>
-      <TabsList aria-label="Settings sections" className="grid h-auto w-full max-w-2xl grid-cols-4 gap-1 rounded-lg border border-border/70 bg-muted/60 p-1">
-        <TabsTrigger value="java" className="h-9 rounded-md text-sm">
-          Java
-        </TabsTrigger>
-        <TabsTrigger value="instances" className="h-9 rounded-md text-sm">
-          Instance Library
-        </TabsTrigger>
-        <TabsTrigger value="appearance" className="h-9 rounded-md text-sm">
-          Appearance
-        </TabsTrigger>
-        <TabsTrigger value="about" className="h-9 rounded-md text-sm">
-          About
-        </TabsTrigger>
-      </TabsList>
+    <Tabs value={settingsTab} onValueChange={setSettingsTab} orientation="vertical" className="flex w-full items-start gap-6">
+      <aside className="w-48 shrink-0 self-stretch border-r border-border/70 pr-4">
+        <div className="mb-4 px-2">
+          <p className="text-sm font-semibold">Settings</p>
+          <p className="mt-1 text-xs text-muted-foreground">Launcher preferences</p>
+        </div>
+        <TabsList
+          aria-label="Settings sections"
+          className="flex h-auto w-full flex-col items-stretch justify-start gap-1 rounded-none border-0 bg-transparent p-0"
+        >
+          <TabsTrigger value="java" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Terminal className="size-4" aria-hidden="true" />
+            Java
+          </TabsTrigger>
+          <TabsTrigger value="appearance" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <SlidersHorizontal className="size-4" aria-hidden="true" />
+            Appearance
+          </TabsTrigger>
+          <TabsTrigger value="about" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Info className="size-4" aria-hidden="true" />
+            About
+          </TabsTrigger>
+        </TabsList>
+      </aside>
 
-      <TabsContent value="java" className="mt-4">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2">
-            <CardTitle>Java Detection</CardTitle>
-            <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
-              <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
-              {javaRefreshing ? "Scanning..." : "Refresh"}
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <JavaInstallationPicker
-              installations={javaOptions}
-              refreshing={javaRefreshing}
-              selectedPath={defaultJavaPath}
-              onBrowse={browseDefaultJava}
-              onSelect={onDefaultJavaChange}
-            />
-          </CardContent>
-        </Card>
-      </TabsContent>
+      <div className="min-w-0 max-w-4xl flex-1">
+        <TabsContent value="java" className="mt-0">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between gap-2">
+              <CardTitle>Java Detection</CardTitle>
+              <Button type="button" variant="outline" size="sm" disabled={javaRefreshing} onClick={() => void onRefreshJava()}>
+                <RefreshCw className={javaRefreshing ? "animate-spin" : ""} />
+                {javaRefreshing ? "Scanning..." : "Refresh"}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <JavaInstallationPicker
+                installations={javaOptions}
+                refreshing={javaRefreshing}
+                selectedPath={defaultJavaPath}
+                onBrowse={browseDefaultJava}
+                onSelect={onDefaultJavaChange}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <TabsContent value="instances" className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Instance Library</CardTitle>
-            <CardDescription>Customize how instances appear in the launcher grid.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Label htmlFor="instance-grid-columns">Grid columns</Label>
-            <Select id="instance-grid-columns" value={String(gridColumns)} onChange={(e) => onGridColumnsChange(Number.parseInt(e.target.value, 10))}>
-              <option value="2">2 columns</option>
-              <option value="3">3 columns</option>
-              <option value="4">4 columns</option>
-              <option value="5">5 columns</option>
-            </Select>
-            <p className="text-xs text-muted-foreground">Drag instance cards to reorder them within a group. Order is saved per group.</p>
-          </CardContent>
-        </Card>
-      </TabsContent>
+        <TabsContent value="appearance" className="mt-0 space-y-4">
+          <ThemePresetPicker />
+          <LauncherWindowCard
+            key={`${windowWidth}-${windowHeight}`}
+            launchMaximized={launchMaximized}
+            onLaunchMaximizedChange={onLaunchMaximizedChange}
+            windowWidth={windowWidth}
+            onWindowWidthChange={onWindowWidthChange}
+            windowHeight={windowHeight}
+            onWindowHeightChange={onWindowHeightChange}
+          />
+        </TabsContent>
 
-      <TabsContent value="appearance" className="mt-4">
-        <ThemePresetPicker />
-      </TabsContent>
-
-      <TabsContent value="about" className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>About</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-1">
-            <p>Industrialis Launcher v0.1.0</p>
-            <p>GT New Horizons modpack manager built with Electron.</p>
-            <a
-              href={GITHUB_URL}
-              className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
-              onClick={(e) => {
-                e.preventDefault();
-                void openUrl(GITHUB_URL).catch(() => undefined);
-              }}
-            >
-              <ExternalLink className="size-3.5" />
-              View on GitHub
-            </a>
-          </CardContent>
-        </Card>
-      </TabsContent>
+        <TabsContent value="about" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>About</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-1">
+              <p>Industrialis Launcher v0.1.0</p>
+              <p>GT New Horizons modpack manager built with Electron.</p>
+              <a
+                href={GITHUB_URL}
+                className="inline-flex items-center gap-1.5 pt-1 text-primary hover:underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  void openUrl(GITHUB_URL).catch(() => undefined);
+                }}
+              >
+                <ExternalLink className="size-3.5" />
+                View on GitHub
+              </a>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </div>
     </Tabs>
   );
 }

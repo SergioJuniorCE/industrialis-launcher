@@ -106,7 +106,7 @@ export function InstanceGridCard({
         <div
           ref={cardRef}
           className={cn(
-            "instance-grid-card group/card relative flex flex-col rounded-lg p-2.5 transition-colors",
+            "instance-grid-card w-36 shrink-0 group/card relative flex flex-col rounded-lg p-2.5 transition-colors",
             packBusy && "opacity-80",
             isDragging && "opacity-40",
             isDragOver && "bg-primary/15 ring-2 ring-primary/35",

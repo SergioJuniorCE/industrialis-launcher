@@ -1,20 +1,8 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { invoke, isDesktop } from "../lib/desktop";
 import { Button } from "../components/ui/button";
-import {
-  DEFAULT_LAUNCHER_SETTINGS,
-  type LauncherSettingsData,
-  type ThemeMode,
-  type ThemeOverrides,
-  type ThemePresetId,
-} from "../lib/launcher-settings";
+import { DEFAULT_LAUNCHER_SETTINGS, type LauncherSettingsData, type ThemeMode, type ThemeOverrides, type ThemePresetId } from "../lib/launcher-settings";
+import { normalizeLauncherWindowSettings } from "../lib/launcher-window";
 import {
   buildCustomPresetFromSettings,
   deleteCustomPresetFromSettings,
@@ -22,27 +10,16 @@ import {
   parseSavedThemePresets,
   repairThemeSettings,
 } from "../lib/theme-store";
-import {
-  applyTheme,
-  mergeThemeCacheIntoSettings,
-  readThemeCache,
-  writeThemeCache,
-} from "../lib/theme";
-import {
-  LauncherSettingsContext,
-  type LauncherSettingsContextValue,
-} from "./launcher-settings-context";
+import { applyTheme, mergeThemeCacheIntoSettings, readThemeCache, writeThemeCache } from "../lib/theme";
+import { LauncherSettingsContext, type LauncherSettingsContextValue } from "./launcher-settings-context";
 
 function normalizeDiskSettings(disk: Partial<LauncherSettingsData>): LauncherSettingsData {
-  const defaultAccountId =
-    disk.default_account_id ?? disk.active_account_id ?? DEFAULT_LAUNCHER_SETTINGS.default_account_id;
-  const themeMode =
-    disk.theme_mode === "light" || disk.theme_mode === "dark"
-      ? disk.theme_mode
-      : DEFAULT_LAUNCHER_SETTINGS.theme_mode;
+  const defaultAccountId = disk.default_account_id ?? disk.active_account_id ?? DEFAULT_LAUNCHER_SETTINGS.default_account_id;
+  const themeMode = disk.theme_mode === "light" || disk.theme_mode === "dark" ? disk.theme_mode : DEFAULT_LAUNCHER_SETTINGS.theme_mode;
   return {
     ...DEFAULT_LAUNCHER_SETTINGS,
     ...disk,
+    ...normalizeLauncherWindowSettings(disk),
     theme_mode: themeMode,
     theme_preset: disk.theme_preset ?? DEFAULT_LAUNCHER_SETTINGS.theme_preset,
     custom_theme_presets: parseSavedThemePresets(disk.custom_theme_presets ?? []),
@@ -52,35 +29,18 @@ function normalizeDiskSettings(disk: Partial<LauncherSettingsData>): LauncherSet
   };
 }
 
-function mergeSettings(
-  prev: LauncherSettingsData,
-  patch: Partial<LauncherSettingsData>,
-): LauncherSettingsData {
+function mergeSettings(prev: LauncherSettingsData, patch: Partial<LauncherSettingsData>): LauncherSettingsData {
   return {
     ...prev,
     ...patch,
-    theme_overrides:
-      patch.theme_overrides !== undefined
-        ? { ...prev.theme_overrides, ...patch.theme_overrides }
-        : prev.theme_overrides,
-    custom_theme_presets:
-      patch.custom_theme_presets !== undefined
-        ? parseSavedThemePresets(patch.custom_theme_presets)
-        : prev.custom_theme_presets,
+    theme_overrides: patch.theme_overrides !== undefined ? { ...prev.theme_overrides, ...patch.theme_overrides } : prev.theme_overrides,
+    custom_theme_presets: patch.custom_theme_presets !== undefined ? parseSavedThemePresets(patch.custom_theme_presets) : prev.custom_theme_presets,
   };
 }
 
 function initialLauncherSettings(): LauncherSettingsData {
-  const settings = mergeThemeCacheIntoSettings(
-    DEFAULT_LAUNCHER_SETTINGS,
-    readThemeCache()
-  );
-  applyTheme(
-    settings.theme_mode,
-    settings.theme_preset,
-    settings.theme_overrides,
-    settings.custom_theme_presets
-  );
+  const settings = mergeThemeCacheIntoSettings(DEFAULT_LAUNCHER_SETTINGS, readThemeCache());
+  applyTheme(settings.theme_mode, settings.theme_preset, settings.theme_overrides, settings.custom_theme_presets);
   return settings;
 }
 
@@ -91,6 +51,7 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
   const [saveError, setSaveError] = useState<string | null>(null);
   const settingsRef = useRef(settings);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueueRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -109,14 +70,20 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
-      settingsRef.current = snapshot;
       if (!isDesktop()) return;
-      try {
-        await invoke("save_launcher_settings", { settings: snapshot });
-        clearSaveError();
-      } catch (e) {
-        setSaveError(`Save failed: ${e}`);
-      }
+
+      const queuedSave = (saveQueueRef.current ?? Promise.resolve())
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            await invoke("save_launcher_settings", { launcherSettings: snapshot });
+            clearSaveError();
+          } catch (e) {
+            setSaveError(`Save failed: ${e}`);
+          }
+        });
+      saveQueueRef.current = queuedSave;
+      await queuedSave;
     },
     [clearSaveError],
   );
@@ -177,12 +144,7 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
 
   const saveCustomPreset = useCallback(
     (name: string, description?: string) => {
-      const { settings: nextSettings } = buildCustomPresetFromSettings(
-        settingsRef.current,
-        settingsRef.current.custom_theme_presets,
-        name,
-        description,
-      );
+      const { settings: nextSettings } = buildCustomPresetFromSettings(settingsRef.current, settingsRef.current.custom_theme_presets, name, description);
       commitSettings(nextSettings);
       void persistSettings(nextSettings);
     },
@@ -191,11 +153,7 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
 
   const deleteCustomPreset = useCallback(
     (id: string) => {
-      const { settings: nextSettings } = deleteCustomPresetFromSettings(
-        settingsRef.current,
-        settingsRef.current.custom_theme_presets,
-        id,
-      );
+      const { settings: nextSettings } = deleteCustomPresetFromSettings(settingsRef.current, settingsRef.current.custom_theme_presets, id);
       commitSettings(nextSettings);
       void persistSettings(nextSettings);
     },
@@ -216,10 +174,7 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
     invoke<LauncherSettingsData>("get_launcher_settings")
       .then((disk) => {
         const migrated = migrateSettingsFromLegacyStorage(normalizeDiskSettings(disk));
-        const repaired = repairThemeSettings(
-          migrated.settings,
-          migrated.settings.custom_theme_presets,
-        );
+        const repaired = repairThemeSettings(migrated.settings, migrated.settings.custom_theme_presets);
         commitSettings(repaired.settings);
         setPresetRepaired(repaired.repaired);
         if (migrated.migrated || repaired.repaired) {
@@ -231,24 +186,9 @@ export function LauncherSettingsProvider({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => {
-    applyTheme(
-      settings.theme_mode,
-      settings.theme_preset,
-      settings.theme_overrides,
-      settings.custom_theme_presets
-    );
-    writeThemeCache(
-      settings.theme_mode,
-      settings.theme_preset,
-      settings.theme_overrides,
-      settings.custom_theme_presets
-    );
-  }, [
-    settings.theme_mode,
-    settings.theme_preset,
-    settings.theme_overrides,
-    settings.custom_theme_presets,
-  ]);
+    applyTheme(settings.theme_mode, settings.theme_preset, settings.theme_overrides, settings.custom_theme_presets);
+    writeThemeCache(settings.theme_mode, settings.theme_preset, settings.theme_overrides, settings.custom_theme_presets);
+  }, [settings.theme_mode, settings.theme_preset, settings.theme_overrides, settings.custom_theme_presets]);
 
   useEffect(() => {
     return () => {
