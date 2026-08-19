@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import launcherPackage from "../package.json";
 import { desktopPlatform, invoke, openUrl } from "./lib/desktop";
 import {
   Plus,
@@ -2032,7 +2033,7 @@ function SettingsTab({
               <CardTitle>About</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-1">
-              <p>Industrialis Launcher v0.1.0</p>
+              <p>Industrialis Launcher v{launcherPackage.version}</p>
               <p>GT New Horizons modpack manager built with Electron.</p>
               <a
                 href={GITHUB_URL}
