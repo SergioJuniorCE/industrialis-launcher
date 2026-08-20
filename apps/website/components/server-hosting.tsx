@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Server, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,13 +20,13 @@ export function ServerHosting() {
           </p>
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Spin up GregTech servers from the CLI.</h2>
           <p className="mt-3 text-muted-foreground">
-            Industrialis ships a Linux daemon, lightweight dashboard, and Docker integration for hosting GT New Horizons. Install once on your VPS, then create
-            worlds from the browser UI.
+            The repository also ships a Linux CLI, daemon, and dashboard for hosting GT New Horizons on a VPS. It talks directly to Docker Engine, keeps world
+            and backup data on disk, and lets you create and manage servers from the browser UI.
           </p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-2">
+          <div className="min-w-0 rounded-2xl border border-border bg-card p-6 sm:p-8">
             <p className="mb-3 font-mono text-xs uppercase tracking-widest text-muted-foreground">Install</p>
             <p className="mb-4 text-sm text-muted-foreground">
               Requires Linux, Docker Engine, and Node.js 22+. Prefer inspecting the script before piping to bash.
@@ -40,13 +41,13 @@ export function ServerHosting() {
             </pre>
             <p className="mt-3 font-mono text-[11px] text-muted-foreground">
               Script:{" "}
-              <a href="/install.sh" className="text-primary underline-offset-2 hover:underline">
+              <Link href="/install.sh" className="text-primary underline-offset-2 hover:underline">
                 /install.sh
-              </a>
+              </Link>
             </p>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+          <div className="min-w-0 rounded-2xl border border-border bg-card p-6 sm:p-8">
             <p className="mb-3 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted-foreground">
               <Terminal className="size-3.5" />
               Commands

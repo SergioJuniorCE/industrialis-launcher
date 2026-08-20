@@ -19,32 +19,29 @@ export default function HomePage() {
             <div>
               <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-xs text-muted-foreground">
                 <span className="size-1.5 rounded-full bg-accent" />
-                GT New Horizons
+                GT New Horizons - Windows launcher
               </p>
-              <h1 className="text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.25rem]">
-                Launch long modpack sessions without the friction.
-              </h1>
+              <h1 className="text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.25rem]">A clear home for every long GTNH run.</h1>
               <p className="mt-5 max-w-lg text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Industrialis is a desktop launcher for GTNH — install instances,
-                manage Java and memory, sign in with Microsoft, and watch your
-                game output in one place.
+                Industrialis is a Windows desktop launcher for GT New Horizons. Keep installed packs in one focused library, choose Java and memory per
+                instance, manage accounts, and inspect launch logs without leaving the app.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <a
                   href="#download"
                   className={cn(
                     "inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5",
-                    "text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                    "text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90",
                   )}
                 >
-                  Download launcher
+                  Get the Windows launcher
                   <ArrowRight className="size-4" />
                 </a>
                 <a
                   href="#features"
                   className="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  See features
+                  Explore the launcher
                 </a>
               </div>
             </div>

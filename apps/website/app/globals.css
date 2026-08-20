@@ -10,8 +10,8 @@
   --color-border: #2a2a2a;
   --color-primary: #c9a227;
   --color-primary-foreground: #0a0a0a;
-  --color-accent: #1a1610;
-  --color-accent-foreground: #f0ebe0;
+  --color-accent: #c9a227;
+  --color-accent-foreground: #0a0a0a;
   --color-ring: #d4d4d4;
   --font-sans: var(--font-sans-family);
   --font-mono: var(--font-mono-family);
@@ -29,9 +29,11 @@
   body {
     @apply bg-background text-foreground antialiased;
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgb(201 162 39 / 0.08), transparent),
-      linear-gradient(rgb(255 255 255 / 0.02) 1px, transparent 1px),
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgb(201 162 39 / 0.08), transparent), linear-gradient(rgb(255 255 255 / 0.02) 1px, transparent 1px),
       linear-gradient(90deg, rgb(255 255 255 / 0.02) 1px, transparent 1px);
-    background-size: auto, 64px 64px, 64px 64px;
+    background-size:
+      auto,
+      64px 64px,
+      64px 64px;
   }
 }

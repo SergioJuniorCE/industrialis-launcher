@@ -13,9 +13,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Industrialis — GT New Horizons Launcher",
-  description:
-    "Desktop launcher for GT New Horizons. Install instances, manage Java, sign in with Microsoft, and play.",
+  title: "Industrialis - GT New Horizons Launcher",
+  description: "A Windows launcher for GT New Horizons. Manage instances, Java, memory, accounts, and launch logs in one focused library.",
 };
 
 export default function RootLayout({
