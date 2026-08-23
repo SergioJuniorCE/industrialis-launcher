@@ -112,7 +112,10 @@ async function readRemoteManifest(store: BackupStore, key: string, tempDirectory
   await store.download(key, target);
   try {
     try {
-      return parseManifest(JSON.parse(await fs.readFile(target, "utf8")) as unknown);
+      const manifest = parseManifest(JSON.parse(await fs.readFile(target, "utf8")) as unknown);
+      const expectedKey = `${snapshotPrefix(manifest.instance_id, manifest.snapshot_id)}/${MANIFEST_NAME}`;
+      if (key !== expectedKey) invalidManifest();
+      return manifest;
     } catch (error) {
       if (error instanceof InvalidBackupManifestError) throw error;
       throw new InvalidBackupManifestError();

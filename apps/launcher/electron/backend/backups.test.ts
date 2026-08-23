@@ -154,4 +154,27 @@ describe("BackupService", () => {
     await expect(service.downloadRemoteBackup("alpha", snapshot.snapshot_id, store)).rejects.toThrow("invalid backup manifest");
     await expect(fs.access(path.join(directory, "..", "escaped.zip"))).rejects.toThrow();
   });
+
+  it("rejects a manifest whose snapshot identity differs from its object key", async () => {
+    const directory = instanceBackupsDir("alpha");
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, "world.zip"), "minecraft world");
+    const service = new BackupService();
+    const store = new MemoryBackupStore();
+    const snapshot = await service.uploadLocalBackup("alpha", "world.zip", store);
+    const manifestKey = [...store.objects.keys()].find((key) => key.endsWith("/manifest.json"));
+    expect(manifestKey).toBeDefined();
+    const manifest = JSON.parse(new TextDecoder().decode(store.objects.get(manifestKey!))) as {
+      snapshot_id: string;
+      artifacts: Array<{ id: string; sha256: string }>;
+    };
+    const differentSnapshotId = "f".repeat(64);
+    manifest.snapshot_id = differentSnapshotId;
+    manifest.artifacts[0]!.id = differentSnapshotId;
+    manifest.artifacts[0]!.sha256 = differentSnapshotId;
+    store.objects.set(manifestKey!, new TextEncoder().encode(JSON.stringify(manifest)));
+
+    await expect(service.listRemoteBackups("alpha", store)).resolves.toEqual([]);
+    await expect(service.downloadRemoteBackup("alpha", snapshot.snapshot_id, store)).rejects.toThrow("invalid backup manifest");
+  });
 });
