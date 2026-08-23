@@ -17,6 +17,7 @@ import { instanceBackupsDir } from "./paths";
 class MemoryBackupStore implements BackupStore {
   readonly objects = new Map<string, Uint8Array>();
   readonly uploads: string[] = [];
+  readonly downloadFailures = new Set<string>();
 
   async list(prefix: string): Promise<RemoteObject[]> {
     return [...this.objects.entries()]
@@ -37,6 +38,7 @@ class MemoryBackupStore implements BackupStore {
   }
 
   async download(key: string, destination: string, _options?: DownloadOptions): Promise<void> {
+    if (this.downloadFailures.has(key)) throw new Error(`download failed: ${key}`);
     const data = this.objects.get(key);
     if (!data) throw new Error(`missing object: ${key}`);
     await fs.mkdir(path.dirname(destination), { recursive: true });
@@ -108,6 +110,28 @@ describe("BackupService", () => {
     store.objects.set(malformedKey!, new TextEncoder().encode("{"));
 
     await expect(service.listRemoteBackups("alpha", store)).resolves.toEqual([expect.objectContaining({ snapshot_id: second.snapshot_id })]);
+  });
+
+  it("isolates one manifest download failure but reports a provider-wide failure", async () => {
+    const directory = instanceBackupsDir("alpha");
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, "first.zip"), "first world");
+    await fs.writeFile(path.join(directory, "second.zip"), "second world");
+    const service = new BackupService();
+    const store = new MemoryBackupStore();
+    const first = await service.uploadLocalBackup("alpha", "first.zip", store);
+    const second = await service.uploadLocalBackup("alpha", "second.zip", store);
+    const manifestKeys = [...store.objects.keys()].filter((key) => key.endsWith("/manifest.json"));
+    const firstManifestKey = manifestKeys.find((key) => key.includes(first.snapshot_id));
+    const secondManifestKey = manifestKeys.find((key) => key.includes(second.snapshot_id));
+    expect(firstManifestKey).toBeDefined();
+    expect(secondManifestKey).toBeDefined();
+    store.downloadFailures.add(firstManifestKey!);
+
+    await expect(service.listRemoteBackups("alpha", store)).resolves.toEqual([expect.objectContaining({ snapshot_id: second.snapshot_id })]);
+
+    store.downloadFailures.add(secondManifestKey!);
+    await expect(service.listRemoteBackups("alpha", store)).rejects.toThrow("download failed");
   });
 
   it("rejects remote archive filenames that escape the backups directory", async () => {
