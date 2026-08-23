@@ -1,14 +1,17 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 import { Label } from "./ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
+import { Switch } from "./ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Textarea } from "./ui/textarea";
 import { formatPlayTime, type InstanceSettings } from "../lib/instance-settings";
+import { invoke, listen } from "../lib/desktop";
 
 export interface AccountOption {
   id: string;
@@ -207,16 +210,34 @@ function LauncherSettingsLink({ onOpen }: { onOpen?: () => void }) {
 }
 
 function GeneralSettingsTab({
+  instanceId,
   settings,
   packVersion,
   accounts,
   update,
 }: {
+  instanceId: string;
   settings: InstanceSettings;
   packVersion: string;
   accounts: AccountOption[];
   update: (patch: Partial<InstanceSettings>) => void;
 }) {
+  const [backupHealth, setBackupHealth] = useState<string>(settings.backups_enabled ? "Checking" : "Disabled");
+  const refreshBackupHealth = useCallback(async () => {
+    const dashboard = await invoke<{ instances: Array<{ instance_id: string; status: string }> }>("get_backup_dashboard");
+    const status = dashboard.instances.find((instance) => instance.instance_id === instanceId)?.status;
+    if (status) setBackupHealth(status.replaceAll("-", " "));
+  }, [instanceId]);
+
+  useEffect(() => {
+    void refreshBackupHealth().catch(() => undefined);
+    let unsubscribe: (() => void) | undefined;
+    void listen("backup-status", () => void refreshBackupHealth().catch(() => undefined)).then((cleanup) => {
+      unsubscribe = cleanup;
+    });
+    return () => unsubscribe?.();
+  }, [refreshBackupHealth]);
+
   return (
     <TabsContent value="general" className="space-y-2 mt-2">
       <Card className="settings-section shadow-none">
@@ -226,6 +247,56 @@ function GeneralSettingsTab({
         <CardContent>
           <FieldLabel>Display name</FieldLabel>
           <Input className="mt-1" value={settings.name} onChange={(e) => update({ name: e.target.value })} placeholder={`GTNH ${packVersion}`} />
+        </CardContent>
+      </Card>
+
+      <Card className="settings-section shadow-none">
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="text-sm">Cloud backups</CardTitle>
+              <CardDescription className="mt-0.5 text-xs">
+                Allow this instance to upload new files from its backups folder through the launcher&apos;s backup settings.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={backupHealth === "healthy" ? "success" : "outline"} className="capitalize">
+                {backupHealth}
+              </Badge>
+              <Switch
+                checked={settings.backups_enabled}
+                onCheckedChange={(backups_enabled) => {
+                  setBackupHealth(backups_enabled ? "Checking" : "Disabled");
+                  update({ backups_enabled });
+                }}
+                aria-label="Enable cloud backups for this instance"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2 pt-0">
+          <FieldLabel hint="Use the launcher default or keep a different number of cloud snapshots for this instance.">Retention</FieldLabel>
+          <div className="flex items-center gap-2">
+            <Select
+              aria-label="Backup retention mode"
+              value={settings.backup_retention_override === null ? "default" : "custom"}
+              onChange={(event) => update({ backup_retention_override: event.target.value === "default" ? null : 10 })}
+            >
+              <option value="default">Use launcher default</option>
+              <option value="custom">Custom limit</option>
+            </Select>
+            {settings.backup_retention_override !== null ? (
+              <Input
+                type="number"
+                min={1}
+                max={1000}
+                className="w-24"
+                aria-label="Instance backup retention limit"
+                value={settings.backup_retention_override}
+                onChange={(event) => update({ backup_retention_override: Math.max(1, Math.min(1000, Number(event.target.value) || 1)) })}
+              />
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
@@ -443,7 +514,7 @@ export function InstanceSettingsTabs({
           <TabsTrigger value="commands">Custom Commands</TabsTrigger>
           <TabsTrigger value="environment">Environment</TabsTrigger>
         </TabsList>
-        <GeneralSettingsTab settings={settings} packVersion={packVersion} accounts={accounts} update={onUpdate} />
+        <GeneralSettingsTab instanceId={instanceId} settings={settings} packVersion={packVersion} accounts={accounts} update={onUpdate} />
         <JavaSettingsTab
           settings={settings}
           javaRefreshing={javaRefreshing}

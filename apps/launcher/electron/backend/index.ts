@@ -3,6 +3,9 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { app, BrowserWindow, dialog, shell } from "electron";
 import { accountToInfo, createOfflineAccount, ensureFreshToken, handleOauthCallback, loadAccounts, startMicrosoftLogin } from "./auth";
+import { BackupService } from "./backups";
+import { BackupManager, type BackupInstancePolicy } from "./backup-manager";
+import { GoogleDriveAdapter } from "./google-drive";
 import { applyConfigPreset, getConfigPresetStatus } from "./config-presets";
 import {
   deleteGroup,
@@ -53,7 +56,7 @@ import {
   resolveModsDir,
 } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
-import { consoleLogPath, iconsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
+import { backupStatePath, consoleLogPath, iconsDir, instanceBackupsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
 import { loadRunningGamePids, saveRunningGamePids, type RunningGamePid } from "./running-game-pids";
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
 import {
@@ -115,6 +118,10 @@ interface LaunchArgs {
   instanceId?: string;
   enabled?: boolean;
   launcherSettings?: LauncherSettings;
+  fileName?: string;
+  snapshotId?: string;
+  clientId?: string;
+  providerId?: string;
 }
 
 interface LaunchState {
@@ -176,9 +183,27 @@ export class LauncherBackend {
   private runningProcessPersistence: Promise<void> = Promise.resolve();
   private runningProcessEventsPublished = false;
   private readonly restoredRunningInstanceIds = new Set<string>();
+  private readonly backupService = new BackupService();
+  private readonly googleDrive = new GoogleDriveAdapter();
+  private readonly backupManager: BackupManager;
 
   constructor(private readonly host: BackendHost) {
     this.runningProcessReady = this.restoreRunningProcesses();
+    this.backupManager = new BackupManager({
+      service: this.backupService,
+      providers: [
+        {
+          id: "google-drive",
+          label: "Google Drive",
+          store: this.googleDrive,
+          getStatus: () => this.googleDrive.getStatus(),
+        },
+      ],
+      listInstances: () => this.backupInstancePolicies(),
+      statePath: backupStatePath(),
+      emit: (event, payload) => this.emit(event, payload),
+    });
+    void this.backupManager.start().catch(() => undefined);
     void evictExpiredPackCache();
   }
 
@@ -220,6 +245,36 @@ export class LauncherBackend {
   private async saveAndRefreshSize(id: string, settings: InstanceSettings): Promise<void> {
     settings.cached_size_bytes = await dirSize(instanceDir(id));
     await saveInstanceSettings(id, settings);
+  }
+
+  private async saveSettingsAndRefreshBackups(id: string, settings: InstanceSettings): Promise<void> {
+    if (
+      settings.backup_retention_override !== null &&
+      (!Number.isInteger(settings.backup_retention_override) || settings.backup_retention_override < 1 || settings.backup_retention_override > 1_000)
+    ) {
+      throw new Error("instance backup retention limit must be between 1 and 1000");
+    }
+    await saveInstanceSettings(id, settings);
+    await this.backupManager.wake();
+  }
+
+  private async saveLauncherSettingsAndRefreshBackups(settings: LauncherSettings): Promise<void> {
+    await saveLauncherSettings(settings);
+    await this.backupManager.wake();
+  }
+
+  private async backupInstancePolicies(): Promise<BackupInstancePolicy[]> {
+    const [known, launcherSettings] = await Promise.all([this.knownInstanceIds(), loadLauncherSettings()]);
+    return Promise.all(
+      [...known].map(async (instanceId) => {
+        const settings = await loadInstanceSettings(instanceId);
+        return {
+          instance_id: instanceId,
+          enabled: settings.backups_enabled,
+          retention_limit: settings.backup_retention_override ?? launcherSettings.backup_retention_limit,
+        };
+      }),
+    );
   }
 
   private async loadInstances(): Promise<InstanceInfo[]> {
@@ -334,8 +389,43 @@ export class LauncherBackend {
         return this.openInstanceFolder(args.id);
       case "open_mods_folder":
         return this.openModsFolder(args.id);
+      case "open_backups_folder":
+        return this.openBackupsFolder(args.id);
+      case "get_google_drive_status":
+        return this.googleDrive.getStatus();
+      case "configure_google_drive":
+        return this.googleDrive.configure(String(args.clientId ?? ""));
+      case "connect_google_drive": {
+        const result = await this.googleDrive.connect();
+        await this.backupManager.wake();
+        return result;
+      }
+      case "disconnect_google_drive": {
+        const result = await this.googleDrive.disconnect();
+        await this.backupManager.wake();
+        return result;
+      }
+      case "get_backup_dashboard":
+        return this.backupManager.getDashboard();
+      case "scan_backups":
+        return this.backupManager.runOnce();
+      case "retry_backup":
+        return this.backupManager.retry(args.id || undefined, args.snapshotId, args.providerId);
+      case "list_local_backups":
+        return this.backupService.listLocalBackups(args.id);
+      case "list_cloud_backups":
+        return this.backupManager.listSnapshots(args.id);
+      case "upload_backup":
+        if (!args.fileName) throw new Error("backup file name is required");
+        return this.backupManager.uploadNow(sanitizeName(args.id), args.fileName);
+      case "download_backup":
+        if (!args.snapshotId) throw new Error("backup snapshot id is required");
+        return this.backupManager.download(args.id, args.snapshotId, args.providerId);
+      case "delete_backup":
+        if (!args.snapshotId) throw new Error("backup snapshot id is required");
+        return this.backupManager.delete(args.id, args.snapshotId);
       case "save_settings":
-        return saveInstanceSettings(sanitizeName(args.id), args.settings ?? defaultSettings());
+        return this.saveSettingsAndRefreshBackups(sanitizeName(args.id), args.settings ?? defaultSettings());
       case "get_settings":
         return loadInstanceSettings(sanitizeName(args.id));
       case "download_install":
@@ -408,7 +498,7 @@ export class LauncherBackend {
       case "get_launcher_settings":
         return loadLauncherSettings();
       case "save_launcher_settings":
-        return saveLauncherSettings(args.launcherSettings ?? defaultLauncherSettings());
+        return this.saveLauncherSettingsAndRefreshBackups(args.launcherSettings ?? defaultLauncherSettings());
       case "start_microsoft_login":
         return startMicrosoftLogin((event, payload) => this.emit(event, payload));
       case "check_launcher_update":
@@ -518,6 +608,16 @@ export class LauncherBackend {
     await fs.mkdir(mods, { recursive: true });
     const error = await shell.openPath(mods);
     if (error) throw new Error(`failed to open mods folder: ${error}`);
+  }
+
+  private async openBackupsFolder(rawId: string): Promise<void> {
+    const id = sanitizeName(rawId);
+    const instance = instanceDir(id);
+    if (!(await exists(instance))) throw new Error("instance not installed");
+    const backups = instanceBackupsDir(id);
+    await fs.mkdir(backups, { recursive: true });
+    const error = await shell.openPath(backups);
+    if (error) throw new Error(`failed to open backups folder: ${error}`);
   }
 
   private async downloadInstall(args: LaunchArgs): Promise<void> {
@@ -889,6 +989,7 @@ export class LauncherBackend {
   }
   async dispose(): Promise<void> {
     /* Detached game processes intentionally remain alive when Electron exits. */
+    await this.backupManager.stop();
     await this.runningProcessReady;
     await this.persistRunningProcesses();
   }
@@ -907,6 +1008,8 @@ function defaultSettings(): InstanceSettings {
     name: "",
     pack_version: "",
     pack_java_type: "java17+",
+    backups_enabled: false,
+    backup_retention_override: null,
     java_path: null,
     min_ram_mb: 4096,
     max_ram_mb: 6144,

@@ -102,6 +102,18 @@ the Accounts tab and enter the displayed code.
 Use of the application ID is subject to the
 [Microsoft Identity Platform terms of use](https://learn.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use).
 
+## Cloud backups
+
+The launcher can automatically upload completed files from each enabled
+instance's `.minecraft/backups` folder. Google Drive is available first;
+S3-compatible storage, OneDrive, FTP/FTPS, and SFTP are planned.
+
+- [Connect Google Drive and troubleshoot cloud backups](docs/cloud-backups.md)
+- [Public cloud-backup guide](https://industrialislauncher.yoggan.dev/docs/cloud-backups)
+
+Provider configuration lives in **Launcher Settings > Backups**. Enable backups
+for an individual pack under **Instance Settings > General > Cloud backups**.
+
 ## Project structure
 
 ```
@@ -113,7 +125,9 @@ industrialis/
 |   `-- dashboard/         # Astro server console
 |-- packages/
 |   `-- server-contracts/
-|-- docs/server-hosting.md
+|-- docs/
+|   |-- cloud-backups.md
+|   `-- server-hosting.md
 |-- package.json
 |-- pnpm-workspace.yaml
 `-- turbo.json

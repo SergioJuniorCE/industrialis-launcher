@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_PERSISTED_CONSOLE_LOG_BYTES, type ConsoleLogWriter } from "./console-log-writer";
-import { consoleLogPath, instanceDir, instancesDir } from "./paths";
+import { consoleLogPath, instanceBackupsDir, instanceDir, instancesDir } from "./paths";
 import { getProcessCreationId, killGameProcess, normalizeProcessCreationId, spawnGameProcess, waitForGameProcess } from "./process-manager";
 import { loadRunningGamePids, saveRunningGamePids } from "./running-game-pids";
 
@@ -269,5 +269,16 @@ describe("LauncherBackend mods folder endpoint", () => {
 
     expect((await fs.stat(modsDir)).isDirectory()).toBe(true);
     expect(electronState.shell.openPath).toHaveBeenCalledWith(modsDir);
+  });
+});
+
+describe("LauncherBackend backup endpoint", () => {
+  it("rejects uploads for an instance with cloud backups disabled", async () => {
+    const backend = new LauncherBackend({ emit: vi.fn() });
+    const backups = instanceBackupsDir("alpha");
+    await fs.mkdir(backups, { recursive: true });
+    await fs.writeFile(path.join(backups, "world.zip"), "world", "utf8");
+
+    await expect(backend.invoke("upload_backup", { id: "alpha", fileName: "world.zip" })).rejects.toThrow("cloud backups are disabled");
   });
 });
