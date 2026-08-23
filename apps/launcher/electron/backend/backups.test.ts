@@ -177,4 +177,25 @@ describe("BackupService", () => {
     await expect(service.listRemoteBackups("alpha", store)).resolves.toEqual([]);
     await expect(service.downloadRemoteBackup("alpha", snapshot.snapshot_id, store)).rejects.toThrow("invalid backup manifest");
   });
+
+  it("rejects artifact hashes that differ from the content-addressed snapshot", async () => {
+    const directory = instanceBackupsDir("alpha");
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, "world.zip"), "minecraft world");
+    const service = new BackupService();
+    const store = new MemoryBackupStore();
+    const snapshot = await service.uploadLocalBackup("alpha", "world.zip", store);
+    const manifestKey = [...store.objects.keys()].find((key) => key.endsWith("/manifest.json"));
+    expect(manifestKey).toBeDefined();
+    const manifest = JSON.parse(new TextDecoder().decode(store.objects.get(manifestKey!))) as {
+      artifacts: Array<{ id: string; sha256: string }>;
+    };
+    const replacementHash = "f".repeat(64);
+    manifest.artifacts[0]!.id = replacementHash;
+    manifest.artifacts[0]!.sha256 = replacementHash;
+    store.objects.set(manifestKey!, new TextEncoder().encode(JSON.stringify(manifest)));
+
+    await expect(service.listRemoteBackups("alpha", store)).resolves.toEqual([]);
+    await expect(service.downloadRemoteBackup("alpha", snapshot.snapshot_id, store)).rejects.toThrow("invalid backup manifest");
+  });
 });

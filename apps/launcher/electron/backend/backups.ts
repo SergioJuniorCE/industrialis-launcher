@@ -97,6 +97,8 @@ function parseManifest(value: unknown): BackupManifest {
       artifact.size_bytes < 0 ||
       typeof artifact.sha256 !== "string" ||
       !SHA256_PATTERN.test(artifact.sha256) ||
+      artifact.id !== candidate.snapshot_id ||
+      artifact.sha256 !== candidate.snapshot_id ||
       typeof artifact.content_type !== "string"
     ) {
       invalidManifest();
