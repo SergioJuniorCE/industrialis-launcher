@@ -214,17 +214,15 @@ export class BackupService {
     const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "industrialis-backup-manifests-"));
     try {
       const summaries: RemoteBackupSummary[] = [];
-      let completedManifestRead = false;
+      let validManifestRead = false;
       let firstProviderError: unknown;
       for (const manifestKey of manifestKeys) {
         let manifest: BackupManifest;
         try {
           manifest = await readRemoteManifest(store, manifestKey, tempDirectory);
-          completedManifestRead = true;
+          validManifestRead = true;
         } catch (error) {
-          if (error instanceof InvalidBackupManifestError) {
-            completedManifestRead = true;
-          } else {
+          if (!(error instanceof InvalidBackupManifestError)) {
             firstProviderError ??= error;
           }
           continue;
@@ -241,7 +239,7 @@ export class BackupService {
           sha256: artifact.sha256,
         });
       }
-      if (!completedManifestRead && firstProviderError) throw firstProviderError;
+      if (!validManifestRead && firstProviderError) throw firstProviderError;
       return summaries.sort((left, right) => right.created_at.localeCompare(left.created_at));
     } finally {
       await fs.rm(tempDirectory, { recursive: true, force: true });

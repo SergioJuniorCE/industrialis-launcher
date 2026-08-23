@@ -132,6 +132,10 @@ describe("BackupService", () => {
 
     store.downloadFailures.add(secondManifestKey!);
     await expect(service.listRemoteBackups("alpha", store)).rejects.toThrow("download failed");
+
+    store.downloadFailures.delete(firstManifestKey!);
+    store.objects.set(firstManifestKey!, new TextEncoder().encode("{"));
+    await expect(service.listRemoteBackups("alpha", store)).rejects.toThrow("download failed");
   });
 
   it("rejects remote archive filenames that escape the backups directory", async () => {
