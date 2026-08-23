@@ -32,6 +32,8 @@ export interface LauncherSettingsData extends LauncherWindowSettings {
   active_account_id?: string | null;
   /** @deprecated Legacy setting retained for compatibility; card widths are fixed. */
   instance_grid_columns?: number;
+  /** Number of cloud snapshots retained per instance and provider. */
+  backup_retention_limit: number;
 }
 
 export function resolveDefaultAccountId(settings: Partial<LauncherSettingsData>): string | null {
@@ -46,6 +48,7 @@ export const DEFAULT_LAUNCHER_SETTINGS: LauncherSettingsData = {
   default_account_id: null,
   default_java_path: null,
   instance_grid_columns: 4,
+  backup_retention_limit: 10,
   launch_maximized: false,
   window_width: DEFAULT_LAUNCHER_WINDOW_WIDTH,
   window_height: DEFAULT_LAUNCHER_WINDOW_HEIGHT,

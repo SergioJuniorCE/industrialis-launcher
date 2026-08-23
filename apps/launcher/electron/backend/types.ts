@@ -33,6 +33,8 @@ export interface InstanceSettings {
   name: string;
   pack_version: string;
   pack_java_type: string;
+  backups_enabled: boolean;
+  backup_retention_override: number | null;
   java_path: string | null;
   min_ram_mb: number;
   max_ram_mb: number;
@@ -77,6 +79,8 @@ export const defaultInstanceSettings = (): InstanceSettings => ({
   name: "",
   pack_version: "",
   pack_java_type: "java17+",
+  backups_enabled: false,
+  backup_retention_override: null,
   java_path: null,
   min_ram_mb: 4096,
   max_ram_mb: 6144,
@@ -234,6 +238,7 @@ export interface LauncherSettings extends LauncherWindowSettings {
   default_account_id: string | null;
   default_java_path: string | null;
   instance_grid_columns: number;
+  backup_retention_limit: number;
 }
 
 export const defaultLauncherSettings = (): LauncherSettings => ({
@@ -244,6 +249,7 @@ export const defaultLauncherSettings = (): LauncherSettings => ({
   default_account_id: null,
   default_java_path: null,
   instance_grid_columns: 4,
+  backup_retention_limit: 10,
   launch_maximized: false,
   window_width: DEFAULT_LAUNCHER_WINDOW_WIDTH,
   window_height: DEFAULT_LAUNCHER_WINDOW_HEIGHT,
