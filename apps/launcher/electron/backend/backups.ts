@@ -9,6 +9,33 @@ import type { BackupArtifact, BackupManifest, BackupStore, LocalBackupFile, Prep
 const BACKUP_ROOT = "instances";
 const MANIFEST_NAME = "manifest.json";
 const TEMP_FILE_PATTERN = /(?:\.tmp|\.part|\.partial|\.crdownload)$/iu;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/iu;
+
+class InvalidBackupManifestError extends Error {
+  constructor() {
+    super("invalid backup manifest");
+    this.name = "InvalidBackupManifestError";
+  }
+}
+
+function invalidManifest(): never {
+  throw new InvalidBackupManifestError();
+}
+
+function backupFileName(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value === "." ||
+    value === ".." ||
+    value.includes("\0") ||
+    path.posix.basename(value) !== value ||
+    path.win32.basename(value) !== value
+  ) {
+    invalidManifest();
+  }
+  return value;
+}
 
 function remoteSegment(value: string): string {
   const sanitized = sanitizeName(value).trim();
@@ -41,27 +68,55 @@ async function assertStable(filePath: string, before: { size: number; mtimeMs: n
 }
 
 function parseManifest(value: unknown): BackupManifest {
-  if (typeof value !== "object" || value === null) throw new Error("invalid backup manifest");
+  if (typeof value !== "object" || value === null) invalidManifest();
   const candidate = value as Partial<BackupManifest>;
   if (
     candidate.format !== "industrialis-backup" ||
     candidate.schema_version !== 1 ||
     typeof candidate.snapshot_id !== "string" ||
+    !SHA256_PATTERN.test(candidate.snapshot_id) ||
     typeof candidate.instance_id !== "string" ||
     typeof candidate.created_at !== "string" ||
     !Array.isArray(candidate.artifacts) ||
     candidate.artifacts.length === 0
   ) {
-    throw new Error("invalid backup manifest");
+    invalidManifest();
   }
-  return candidate as BackupManifest;
+
+  const artifacts = candidate.artifacts.map((value) => {
+    if (typeof value !== "object" || value === null) invalidManifest();
+    const artifact = value as Partial<BackupArtifact>;
+    const fileName = backupFileName(artifact.file_name);
+    if (
+      artifact.kind !== "world-archive" ||
+      typeof artifact.id !== "string" ||
+      !SHA256_PATTERN.test(artifact.id) ||
+      artifact.logical_path !== `artifacts/${fileName}` ||
+      typeof artifact.size_bytes !== "number" ||
+      !Number.isSafeInteger(artifact.size_bytes) ||
+      artifact.size_bytes < 0 ||
+      typeof artifact.sha256 !== "string" ||
+      !SHA256_PATTERN.test(artifact.sha256) ||
+      typeof artifact.content_type !== "string"
+    ) {
+      invalidManifest();
+    }
+    return { ...artifact, file_name: fileName } as BackupArtifact;
+  });
+
+  return { ...candidate, artifacts } as BackupManifest;
 }
 
 async function readRemoteManifest(store: BackupStore, key: string, tempDirectory: string): Promise<BackupManifest> {
   const target = path.join(tempDirectory, `${randomUUID()}.json`);
   await store.download(key, target);
   try {
-    return parseManifest(JSON.parse(await fs.readFile(target, "utf8")) as unknown);
+    try {
+      return parseManifest(JSON.parse(await fs.readFile(target, "utf8")) as unknown);
+    } catch (error) {
+      if (error instanceof InvalidBackupManifestError) throw error;
+      throw new InvalidBackupManifestError();
+    }
   } finally {
     await fs.rm(target, { force: true });
   }
@@ -160,7 +215,13 @@ export class BackupService {
     try {
       const summaries: RemoteBackupSummary[] = [];
       for (const manifestKey of manifestKeys) {
-        const manifest = await readRemoteManifest(store, manifestKey, tempDirectory);
+        let manifest: BackupManifest;
+        try {
+          manifest = await readRemoteManifest(store, manifestKey, tempDirectory);
+        } catch (error) {
+          if (error instanceof InvalidBackupManifestError) continue;
+          throw error;
+        }
         if (manifest.instance_id !== sanitizeName(instanceId)) continue;
         const artifact = manifest.artifacts.find((entry) => entry.kind === "world-archive");
         if (!artifact) continue;

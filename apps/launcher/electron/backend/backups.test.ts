@@ -93,4 +93,37 @@ describe("BackupService", () => {
     await service.deleteRemoteBackup("alpha", snapshot.snapshot_id, store);
     await expect(service.listRemoteBackups("alpha", store)).resolves.toEqual([]);
   });
+
+  it("skips malformed manifests while listing valid snapshots", async () => {
+    const directory = instanceBackupsDir("alpha");
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, "first.zip"), "first world");
+    await fs.writeFile(path.join(directory, "second.zip"), "second world");
+    const service = new BackupService();
+    const store = new MemoryBackupStore();
+    const first = await service.uploadLocalBackup("alpha", "first.zip", store);
+    const second = await service.uploadLocalBackup("alpha", "second.zip", store);
+    const malformedKey = [...store.objects.keys()].find((key) => key.includes(first.snapshot_id) && key.endsWith("/manifest.json"));
+    expect(malformedKey).toBeDefined();
+    store.objects.set(malformedKey!, new TextEncoder().encode("{"));
+
+    await expect(service.listRemoteBackups("alpha", store)).resolves.toEqual([expect.objectContaining({ snapshot_id: second.snapshot_id })]);
+  });
+
+  it("rejects remote archive filenames that escape the backups directory", async () => {
+    const directory = instanceBackupsDir("alpha");
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, "world.zip"), "minecraft world");
+    const service = new BackupService();
+    const store = new MemoryBackupStore();
+    const snapshot = await service.uploadLocalBackup("alpha", "world.zip", store);
+    const manifestKey = [...store.objects.keys()].find((key) => key.endsWith("/manifest.json"));
+    expect(manifestKey).toBeDefined();
+    const manifest = JSON.parse(new TextDecoder().decode(store.objects.get(manifestKey!))) as { artifacts: Array<{ file_name: string }> };
+    manifest.artifacts[0]!.file_name = "../escaped.zip";
+    store.objects.set(manifestKey!, new TextEncoder().encode(JSON.stringify(manifest)));
+
+    await expect(service.downloadRemoteBackup("alpha", snapshot.snapshot_id, store)).rejects.toThrow("invalid backup manifest");
+    await expect(fs.access(path.join(directory, "..", "escaped.zip"))).rejects.toThrow();
+  });
 });
