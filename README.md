@@ -1,4 +1,5 @@
-<img width="1086" height="743" alt="image" src="https://github.com/user-attachments/assets/f2ee98ce-3847-4c94-978f-eb56dd53640d" />
+<img width="1602" height="901" alt="image" src="https://github.com/user-attachments/assets/ffbaadd1-0724-471e-9c13-cc6333adad12" />
+
 
 # Industrialis
 
