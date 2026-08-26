@@ -1,6 +1,5 @@
 <img width="1602" height="901" alt="image" src="https://github.com/user-attachments/assets/ffbaadd1-0724-471e-9c13-cc6333adad12" />
 
-
 # Industrialis
 
 Turborepo monorepo for the Industrialis GT New Horizons launcher and website.
@@ -89,10 +88,16 @@ Build only one format with `pnpm build:launcher:installer` or
 `pnpm build:launcher:portable`. On Windows you can target the installer with
 `powershell -File scripts/build-launcher.ps1 -Target installer`.
 
-The launcher release workflow runs on pushes to `master` and can also be started
-manually from GitHub Actions. Pushes to `master` run the Windows, macOS, and
-Linux packaging jobs and publish a GitHub Release
-(`launcher-v0.1.<run number>`) with all artifacts.
+The launcher release workflow runs when a `launcher-v*` tag is pushed. It runs
+the Windows, macOS, and Linux packaging jobs and publishes a GitHub Release
+with all artifacts. Ordinary pushes to `master` do not build the launcher.
+
+To publish a launcher release from a chosen commit:
+
+```bash
+git tag launcher-v0.1.56
+git push origin launcher-v0.1.56
+```
 
 ## Microsoft login
 
