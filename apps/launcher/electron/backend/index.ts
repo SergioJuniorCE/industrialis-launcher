@@ -77,6 +77,7 @@ import {
 } from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
 import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
+import { downloadLauncherInstaller, isTrustedLauncherDownloadUrl } from "./launcher-updater";
 
 export interface BackendHost {
   emit(event: string, payload: unknown): void;
@@ -842,7 +843,7 @@ export class LauncherBackend {
         draft?: boolean;
         prerelease?: boolean;
         html_url?: string;
-        assets?: Array<{ name?: string; browser_download_url?: string }>;
+        assets?: Array<{ name?: string; browser_download_url?: string; digest?: string }>;
       };
       const version = release.tag_name?.replace(/^launcher-v/u, "");
       if (!version || release.draft || release.prerelease || !isNewerVersion(version, current_version)) return { status: "up-to-date", current_version };
@@ -861,6 +862,7 @@ export class LauncherBackend {
         body: release.body ?? "",
         release_url: release.html_url ?? "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest",
         ...(asset?.browser_download_url ? { download_url: asset.browser_download_url } : {}),
+        ...(asset?.digest ? { sha256: asset.digest } : {}),
       } satisfies LauncherUpdateState;
       this.emit("launcher-update", state);
       return state;
@@ -872,6 +874,37 @@ export class LauncherBackend {
   private async installLauncherUpdate(): Promise<LauncherUpdateState> {
     const state = await this.checkLauncherUpdate();
     if (state.status === "available") {
+      if (process.platform === "win32" && state.download_url && isTrustedLauncherDownloadUrl(state.download_url)) {
+        const updateDirectory = await fs.mkdtemp(path.join(app.getPath("temp"), "industrialis-launcher-update-"));
+        const installer = path.join(updateDirectory, "IndustrialisLauncherSetup.exe");
+        try {
+          await downloadLauncherInstaller({
+            url: state.download_url,
+            destination: installer,
+            expectedSha256: state.sha256,
+            onProgress: ({ progress }) => {
+              const downloading = { ...state, status: "downloading", progress } satisfies LauncherUpdateState;
+              this.emit("launcher-update", downloading);
+            },
+          });
+
+          const { spawn } = await import("node:child_process");
+          const child = spawn(installer, [], { detached: true, stdio: "ignore", windowsHide: true });
+          await new Promise<void>((resolve, reject) => {
+            child.once("spawn", resolve);
+            child.once("error", reject);
+          });
+          child.unref();
+          const installing = { ...state, status: "installing", progress: 1 } satisfies LauncherUpdateState;
+          this.emit("launcher-update", installing);
+          setTimeout(() => app.quit(), 300);
+          return installing;
+        } catch (error) {
+          await fs.rm(updateDirectory, { recursive: true, force: true }).catch(() => undefined);
+          throw error;
+        }
+      }
+
       const releaseUrl = state.release_url ?? "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest";
       await shell.openExternal(releaseUrl);
       const manual = { ...state, status: "manual" } satisfies LauncherUpdateState;

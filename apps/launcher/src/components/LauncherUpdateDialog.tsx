@@ -5,22 +5,24 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 export function LauncherUpdateDialog({
   state,
+  open,
   onInstall,
   onDismiss,
   onRetry,
 }: {
   state: LauncherUpdateState;
+  open?: boolean;
   onInstall: () => void;
   onDismiss: () => void;
   onRetry: () => void;
 }) {
-  const open = ["available", "downloading", "deferred", "manual", "installing", "failed"].includes(state.status);
+  const dialogOpen = open ?? ["available", "downloading", "deferred", "manual", "installing", "failed"].includes(state.status);
   const busy = state.status === "downloading" || state.status === "installing";
   const progress = Math.round((state.progress ?? 0) * 100);
 
   return (
     <Dialog
-      open={open}
+      open={dialogOpen}
       onOpenChange={(nextOpen) => {
         if (!nextOpen && !busy) onDismiss();
       }}
@@ -94,14 +96,8 @@ export function LauncherUpdateDialog({
                 Later
               </Button>
               <Button onClick={onInstall} disabled={busy}>
-                {state.status === "available" ? (
-                  <ExternalLink className="size-4" />
-                ) : busy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Download className="size-4" />
-                )}
-                {state.status === "available" ? "Open release page" : state.status === "installing" ? "Restarting…" : "Download and restart"}
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                {state.status === "available" ? "Install update" : state.status === "installing" ? "Restarting…" : `Downloading ${progress}%`}
               </Button>
             </>
           )}

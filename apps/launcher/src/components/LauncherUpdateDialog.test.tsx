@@ -1,0 +1,69 @@
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LauncherUpdateDialog } from "./LauncherUpdateDialog";
+
+let container: HTMLDivElement;
+let root: Root;
+const reactActGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+const originalActEnvironment = reactActGlobal.IS_REACT_ACT_ENVIRONMENT;
+const originalDialogMethods = {
+  showModal: Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal"),
+  close: Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close"),
+};
+
+beforeEach(() => {
+  reactActGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+  Object.defineProperties(HTMLDialogElement.prototype, {
+    showModal: {
+      configurable: true,
+      value(this: HTMLDialogElement) {
+        this.setAttribute("open", "");
+      },
+    },
+    close: {
+      configurable: true,
+      value(this: HTMLDialogElement) {
+        this.removeAttribute("open");
+      },
+    },
+  });
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  if (originalDialogMethods.showModal) Object.defineProperty(HTMLDialogElement.prototype, "showModal", originalDialogMethods.showModal);
+  else Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal");
+  if (originalDialogMethods.close) Object.defineProperty(HTMLDialogElement.prototype, "close", originalDialogMethods.close);
+  else Reflect.deleteProperty(HTMLDialogElement.prototype, "close");
+  if (originalActEnvironment === undefined) delete reactActGlobal.IS_REACT_ACT_ENVIRONMENT;
+  else reactActGlobal.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment;
+});
+
+describe("LauncherUpdateDialog", () => {
+  it("offers to install an available launcher release inside the app", async () => {
+    const onInstall = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <LauncherUpdateDialog
+          state={{ status: "available", current_version: "0.1.55", version: "0.1.56" }}
+          onInstall={onInstall}
+          onDismiss={() => undefined}
+          onRetry={() => undefined}
+        />,
+      );
+    });
+
+    const installButton = [...document.body.querySelectorAll("button")].find((button) => button.textContent?.includes("Install update"));
+    expect(installButton).toBeDefined();
+    expect(document.body.textContent).not.toContain("Open release page");
+
+    await act(async () => installButton?.click());
+    expect(onInstall).toHaveBeenCalledOnce();
+  });
+});

@@ -62,7 +62,6 @@ export interface LauncherSession {
   dismissProcess(key: string): void;
   installLauncherUpdate(): Promise<void>;
   retryLauncherUpdate(): Promise<void>;
-  dismissLauncherUpdate(): void;
 }
 
 export interface UseLauncherSessionResult extends LauncherSessionSnapshot {
@@ -445,6 +444,7 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
   const retryLauncherUpdate = async (): Promise<void> => {
     const generation = lifecycle;
     try {
+      updateLauncherState({ ...currentSnapshot.launcherUpdate, status: "checking", error: undefined }, generation);
       updateLauncherState(await desktop.invoke<LauncherUpdateState>("check_launcher_update"), generation);
     } catch (error) {
       if (isCurrent(generation)) {
@@ -457,10 +457,6 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
         });
       }
     }
-  };
-
-  const dismissLauncherUpdate = () => {
-    updateLauncherState({ ...currentSnapshot.launcherUpdate, status: "idle" });
   };
 
   const start = (): Promise<void> => {
@@ -539,7 +535,6 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
     dismissProcess,
     installLauncherUpdate,
     retryLauncherUpdate,
-    dismissLauncherUpdate,
   };
 
   return session;
