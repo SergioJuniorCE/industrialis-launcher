@@ -1,67 +1,64 @@
-import {
-  Boxes,
-  Coffee,
-  Shield,
-  Terminal,
-  type LucideIcon,
-} from "lucide-react";
+import Image from "next/image";
+import { Boxes, Coffee, Shield, Terminal, type LucideIcon } from "lucide-react";
 
 const features: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Boxes,
-    title: "Instance-first workflow",
-    body: "Only installed GTNH versions appear in your library. Add new instances when you are ready — no clutter from packs you do not use.",
+    title: "Keep the library clean",
+    body: "Only installed GTNH versions stay in the library. Add another instance when you actually need it.",
   },
   {
     icon: Coffee,
-    title: "Java handled for you",
-    body: "Detects Java on PATH, JAVA_HOME, and common install paths. Override per instance when a pack needs Java 8 or 17.",
+    title: "Use the right Java",
+    body: "Detect Java from PATH, JAVA_HOME, and common install locations. Override it per instance when a pack needs a specific version.",
   },
   {
     icon: Shield,
-    title: "Microsoft authentication",
-    body: "Sign in with your Microsoft account. OAuth in the browser with device-code fallback, plus automatic token refresh.",
+    title: "Sign in without friction",
+    body: "Connect a Microsoft account in the browser with a device-code fallback and automatic token refresh.",
   },
   {
     icon: Terminal,
-    title: "Launch console",
-    body: "Live stdout and stderr from every launch, persisted per instance so you can debug without digging through log folders.",
+    title: "See what the game is doing",
+    body: "Read live stdout and stderr in the launcher. Output is persisted per instance for the next time something breaks.",
   },
 ];
 
 export function Features() {
   return (
-    <section id="features" className="border-t border-border/60 py-20">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="mb-12 max-w-2xl">
-          <p className="mb-2 font-mono text-xs uppercase tracking-widest text-accent">
-            Features
-          </p>
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Everything you need for GTNH, nothing you do not.
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            Built around how long modpack sessions actually work — install once,
-            tune RAM and JVM args, launch, and read the console when something
-            breaks.
+    <section id="features" className="section-shell">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+        <div className="section-heading max-w-2xl">
+          <h2 className="text-3xl font-semibold leading-tight tracking-[-0.04em] sm:text-4xl">The useful parts stay close.</h2>
+          <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+            Industrialis keeps the setup work visible, local, and easy to pick up again after a long break.
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {features.map(({ icon: Icon, title, body }) => (
-            <article
-              key={title}
-              className="rounded-xl border border-border bg-card/60 p-5 transition-colors hover:border-border hover:bg-card"
-            >
-              <div className="mb-4 flex size-10 items-center justify-center rounded-lg border border-border bg-muted">
-                <Icon className="size-5 text-accent" strokeWidth={1.75} />
-              </div>
-              <h3 className="mb-2 font-medium">{title}</h3>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {body}
-              </p>
-            </article>
-          ))}
+        <div className="mt-14 grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start lg:gap-16">
+          <div className="feature-image-frame">
+            <Image
+              src="/industrialis-control-room.png"
+              alt="Stylized industrial control room with copper machinery and technical drawings"
+              width={1536}
+              height={1024}
+              className="h-full w-full object-cover"
+            />
+          </div>
+
+          <div className="feature-list">
+            {features.map(({ icon: Icon, title, body }) => (
+              <article key={title} className="feature-row">
+                <div className="feature-icon" aria-hidden>
+                  <Icon className="size-4" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium tracking-[-0.02em]">{title}</h3>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{body}</p>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     </section>

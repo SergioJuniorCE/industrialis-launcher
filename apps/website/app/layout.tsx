@@ -13,9 +13,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Industrialis — GT New Horizons Launcher",
-  description:
-    "Desktop launcher for GT New Horizons. Install instances, manage Java, sign in with Microsoft, and play.",
+  title: "Industrialis - GT New Horizons Launcher",
+  description: "Desktop launcher for GT New Horizons. Install instances, manage Java, sign in with Microsoft, and play.",
 };
 
 export default function RootLayout({
@@ -24,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html id="top" lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body className="font-sans">{children}</body>
     </html>
   );

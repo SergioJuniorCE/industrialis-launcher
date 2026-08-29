@@ -1,47 +1,39 @@
+import { Boxes, Play, SlidersHorizontal } from "lucide-react";
+
 const steps = [
   {
-    step: "01",
+    icon: Boxes,
     title: "Pick a version",
-    body: "Browse stable and beta GTNH releases from the official manifest and install with one click.",
+    body: "Browse stable and beta GTNH releases from the official manifest.",
   },
   {
-    step: "02",
-    title: "Configure",
-    body: "Set RAM, JVM arguments, Java path, and auth mode per instance. Theme the launcher while you are at it.",
+    icon: SlidersHorizontal,
+    title: "Configure the instance",
+    body: "Set RAM, JVM arguments, Java path, and auth mode where they belong.",
   },
   {
-    step: "03",
-    title: "Launch",
-    body: "Hit Play. Watch the console in-app, fix issues fast, and get back to GregTech.",
+    icon: Play,
+    title: "Launch and inspect",
+    body: "Start the game, watch the console, and get back to GregTech quickly.",
   },
 ];
 
 export function Workflow() {
   return (
-    <section id="workflow" className="py-20">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="mb-12 max-w-2xl">
-          <p className="mb-2 font-mono text-xs uppercase tracking-widest text-accent">
-            Workflow
-          </p>
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            From download to first boot in three steps.
-          </h2>
+    <section id="workflow" className="section-shell section-shell-tight">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+        <div className="section-heading max-w-2xl">
+          <h2 className="text-3xl font-semibold leading-tight tracking-[-0.04em] sm:text-4xl">Download to first boot, without the scavenger hunt.</h2>
         </div>
 
-        <ol className="grid gap-6 md:grid-cols-3">
-          {steps.map(({ step, title, body }) => (
-            <li
-              key={step}
-              className="relative rounded-xl border border-border bg-card/40 p-6"
-            >
-              <span className="font-mono text-3xl font-bold text-muted-foreground/30">
-                {step}
-              </span>
-              <h3 className="mt-2 mb-2 text-lg font-medium">{title}</h3>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {body}
-              </p>
+        <ol className="workflow-list mt-12 grid md:grid-cols-3">
+          {steps.map(({ icon: Icon, title, body }) => (
+            <li key={title} className="workflow-item">
+              <div className="workflow-icon" aria-hidden>
+                <Icon className="size-4" strokeWidth={1.75} />
+              </div>
+              <h3 className="mt-5 text-lg font-medium tracking-[-0.02em]">{title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
             </li>
           ))}
         </ol>
