@@ -37,6 +37,7 @@ interface BackendInternals {
   consoleLogWriter: ConsoleLogWriter;
   emitLog(id: string, stream: string, line: string): void;
   notifyInstanceOperationWaiters(): void;
+  trackFilesystemOperation<T>(operation: () => Promise<T>): Promise<T>;
   state: {
     running: Map<string, { pid: number; creationId?: string }>;
     installInProgress: Set<string>;
@@ -115,6 +116,30 @@ describe("LauncherBackend shutdown", () => {
 
     internals.state.updateInProgress.delete("alpha");
     internals.notifyInstanceOperationWaiters();
+    await disposal;
+    expect(disposed).toBe(true);
+  });
+
+  it("waits for other filesystem mutations before completing disposal", async () => {
+    const backend = new LauncherBackend({ emit: vi.fn() });
+    const internals = backend as unknown as BackendInternals;
+    let release!: () => void;
+    const mutation = internals.trackFilesystemOperation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+
+    let disposed = false;
+    const disposal = backend.dispose().then(() => {
+      disposed = true;
+    });
+    await Promise.resolve();
+    expect(disposed).toBe(false);
+
+    release();
+    await mutation;
     await disposal;
     expect(disposed).toBe(true);
   });

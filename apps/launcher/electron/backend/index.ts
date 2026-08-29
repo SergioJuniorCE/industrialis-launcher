@@ -181,6 +181,7 @@ export class LauncherBackend {
   private runningProcessEventsPublished = false;
   private readonly restoredRunningInstanceIds = new Set<string>();
   private readonly instanceOperationWaiters = new Set<() => void>();
+  private activeFilesystemOperations = 0;
   private launcherUpdateRequest: Promise<LauncherUpdateState> | null = null;
   private launcherUpdateResult: LauncherUpdateState | null = null;
   private disposing = false;
@@ -200,6 +201,7 @@ export class LauncherBackend {
 
   private hasActiveInstanceOperations(): boolean {
     return (
+      this.activeFilesystemOperations > 0 ||
       this.state.installInProgress.size > 0 ||
       this.state.updateInProgress.size > 0 ||
       this.state.reinstallInProgress.size > 0 ||
@@ -211,6 +213,16 @@ export class LauncherBackend {
   private waitForInstanceOperations(): Promise<void> {
     if (!this.hasActiveInstanceOperations()) return Promise.resolve();
     return new Promise((resolve) => this.instanceOperationWaiters.add(resolve));
+  }
+
+  private async trackFilesystemOperation<T>(operation: () => Promise<T>): Promise<T> {
+    this.activeFilesystemOperations += 1;
+    try {
+      return await operation();
+    } finally {
+      this.activeFilesystemOperations -= 1;
+      this.notifyInstanceOperationWaiters();
+    }
   }
 
   private notifyInstanceOperationWaiters(): void {
@@ -334,61 +346,66 @@ export class LauncherBackend {
     await this.runningProcessReady;
     if (this.disposing) throw new Error("launcher is shutting down");
     const args = (rawArgs && typeof rawArgs === "object" ? rawArgs : {}) as LaunchArgs;
+    const track = <T>(operation: () => Promise<T>): Promise<T> => this.trackFilesystemOperation(operation);
     switch (command) {
       case "get_versions":
         return this.getVersions();
       case "get_instances":
-        return this.loadInstances();
+        return track(() => this.loadInstances());
       case "refresh_instance_sizes":
-        return this.refreshSizes(args.ids);
+        return track(() => this.refreshSizes(args.ids));
       case "get_instance_groups":
         return getGroupsState(await this.knownInstanceIds());
       case "set_instance_group":
-        return setInstanceGroup(sanitizeName(args.id.trim()), String(args.group ?? ""), await this.knownInstanceIds());
+        return track(async () => setInstanceGroup(sanitizeName(args.id.trim()), String(args.group ?? ""), await this.knownInstanceIds()));
       case "rename_group":
-        return renameGroup(String(args.oldName ?? ""), String(args.newName ?? ""), await this.knownInstanceIds());
+        return track(async () => renameGroup(String(args.oldName ?? ""), String(args.newName ?? ""), await this.knownInstanceIds()));
       case "delete_group":
-        return deleteGroup(String(args.name ?? ""), await this.knownInstanceIds());
+        return track(async () => deleteGroup(String(args.name ?? ""), await this.knownInstanceIds()));
       case "move_instance_in_group":
-        return moveInstanceInGroup(sanitizeName(args.id.trim()), String(args.direction), await this.knownInstanceIds());
+        return track(async () => moveInstanceInGroup(sanitizeName(args.id.trim()), String(args.direction), await this.knownInstanceIds()));
       case "set_group_instance_order":
-        return setGroupInstanceOrder(String(args.group ?? ""), args.order ?? [], await this.knownInstanceIds());
+        return track(async () => setGroupInstanceOrder(String(args.group ?? ""), args.order ?? [], await this.knownInstanceIds()));
       case "set_group_collapsed":
-        return setGroupCollapsed(String(args.group ?? ""), Boolean(args.collapsed), await this.knownInstanceIds());
+        return track(async () => setGroupCollapsed(String(args.group ?? ""), Boolean(args.collapsed), await this.knownInstanceIds()));
       case "delete_instance":
-        return this.deleteInstance(args.id);
+        return track(() => this.deleteInstance(args.id));
       case "cancel_delete_instance":
         return this.cancelDelete(args.id);
       case "copy_instance":
-        return this.copyInstance(args);
+        return track(() => this.copyInstance(args));
       case "open_instance_folder":
-        return this.openInstanceFolder(args.id);
+        return track(() => this.openInstanceFolder(args.id));
       case "open_mods_folder":
-        return this.openModsFolder(args.id);
+        return track(() => this.openModsFolder(args.id));
       case "save_settings":
-        return saveInstanceSettings(sanitizeName(args.id), args.settings ?? defaultSettings());
+        return track(() => saveInstanceSettings(sanitizeName(args.id), args.settings ?? defaultSettings()));
       case "get_settings":
         return loadInstanceSettings(sanitizeName(args.id));
       case "download_install":
-        return this.downloadInstall(args);
+        return track(() => this.downloadInstall(args));
       case "preview_update_mods":
-        return this.previewUpdate(args);
+        return track(() => this.previewUpdate(args));
       case "update_instance":
-        return this.updateInstance(args);
+        return track(() => this.updateInstance(args));
       case "reinstall_instance":
-        return this.reinstallInstance(args);
+        return track(() => this.reinstallInstance(args));
       case "list_minecraft_entries":
         return listMinecraftEntries(instanceDir(sanitizeName(args.id)), args.subpath ?? "");
       case "read_minecraft_file":
         return readMinecraftFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? ""));
       case "write_minecraft_file":
-        return writeMinecraftFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? ""), String(args.content ?? ""), Boolean(args.persist));
+        return track(() =>
+          writeMinecraftFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? ""), String(args.content ?? ""), Boolean(args.persist)),
+        );
       case "delete_persistent_file":
-        return deletePersistentFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? ""));
+        return track(() => deletePersistentFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? "")));
       case "list_persistent_files":
         return listPersistentFiles(instanceDir(sanitizeName(args.id)));
       case "apply_config_preset":
-        return applyConfigPreset(String(args.idPreset ?? args.id), instanceDir(sanitizeName(String(args.instanceId ?? args.id))), Boolean(args.enabled));
+        return track(() =>
+          applyConfigPreset(String(args.idPreset ?? args.id), instanceDir(sanitizeName(String(args.instanceId ?? args.id))), Boolean(args.enabled)),
+        );
       case "get_config_preset_status":
         return getConfigPresetStatus(String(args.idPreset ?? args.id), instanceDir(sanitizeName(String(args.instanceId ?? args.id))));
       case "list_custom_mods":
@@ -396,23 +413,23 @@ export class LauncherBackend {
       case "browse_custom_mod":
         return this.pickFile("Choose a mod", [{ name: "Mods", extensions: ["jar", "zip"] }]);
       case "add_custom_mod":
-        return addCustomMod(instanceDir(sanitizeName(args.id)), String(args.sourcePath));
+        return track(() => addCustomMod(instanceDir(sanitizeName(args.id)), String(args.sourcePath)));
       case "remove_custom_mod":
-        return removeCustomMod(instanceDir(sanitizeName(args.id)), String(args.identity));
+        return track(() => removeCustomMod(instanceDir(sanitizeName(args.id)), String(args.identity)));
       case "browse_instance_icon_file":
         return this.pickFile("Choose an instance icon", [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico"] }]);
       case "list_instance_icons":
         return listInstanceIcons();
       case "import_instance_icon":
-        return importInstanceIcon(String(args.sourcePath ?? ""));
+        return track(() => importInstanceIcon(String(args.sourcePath ?? "")));
       case "set_instance_icon_from_library":
-        return this.setInstanceIconFromLibrary(args);
+        return track(() => this.setInstanceIconFromLibrary(args));
       case "open_instance_icons_folder":
-        return this.openInstanceIconsFolder();
+        return track(() => this.openInstanceIconsFolder());
       case "set_instance_icon":
-        return this.setInstanceIcon(args);
+        return track(() => this.setInstanceIcon(args));
       case "clear_instance_icon":
-        return this.clearInstanceIcon(args.id);
+        return track(() => this.clearInstanceIcon(args.id));
       case "detect_java":
         return detectJava();
       case "browse_java_executable":
@@ -427,19 +444,19 @@ export class LauncherBackend {
       case "kill_instance":
         return this.killInstance(args.id);
       case "get_instance_console_log":
-        return this.getConsoleLog(args.id, Boolean(args.full));
+        return track(() => this.getConsoleLog(args.id, Boolean(args.full)));
       case "clear_instance_console_log":
-        return fs.rm(consoleLogPath(sanitizeName(args.id)), { force: true });
+        return track(() => fs.rm(consoleLogPath(sanitizeName(args.id)), { force: true }));
       case "get_accounts":
         return (await loadAccounts()).map(accountToInfo);
       case "add_offline_account":
-        return createOfflineAccount(String(args.username ?? ""));
+        return track(() => createOfflineAccount(String(args.username ?? "")));
       case "remove_account":
-        return this.removeAccount(String(args.id));
+        return track(() => this.removeAccount(String(args.id)));
       case "get_launcher_settings":
         return loadLauncherSettings();
       case "save_launcher_settings":
-        return saveLauncherSettings(args.launcherSettings ?? defaultLauncherSettings());
+        return track(() => saveLauncherSettings(args.launcherSettings ?? defaultLauncherSettings()));
       case "start_microsoft_login":
         return startMicrosoftLogin((event, payload) => this.emit(event, payload));
       case "check_launcher_update":
