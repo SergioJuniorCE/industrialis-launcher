@@ -62,6 +62,7 @@ import { PackVersionStatus } from "./components/PackVersionStatus";
 import { InstanceAvatar } from "./components/InstanceAvatar";
 import { InstanceGridCard, type InstanceGridCardCommands } from "./components/InstanceGridCard";
 import { LauncherUpdateDialog } from "./components/LauncherUpdateDialog";
+import { LauncherUpdateStatus } from "./components/LauncherUpdateStatus";
 import { VirtualizedLogList } from "./components/VirtualizedLogList";
 import { WindowControls } from "./components/WindowControls";
 import { JavaInstallationPicker } from "./components/JavaInstallationPicker";
@@ -230,6 +231,7 @@ export default function App() {
   const handleProcessFailed = session.failProcess;
   const handleKill = session.kill;
   const [notice, setNotice] = useState<string | null>(null);
+  const [launcherUpdateDialogOpen, setLauncherUpdateDialogOpen] = useState(false);
   const [lastUsedGroup, setLastUsedGroup] = useState("");
   const [accountsLaunchRedirect, setAccountsLaunchRedirect] = useState<{
     instanceId: string;
@@ -239,13 +241,15 @@ export default function App() {
     id: string;
     name: string;
   } | null>(null);
-  const installLauncherUpdate = useCallback(() => {
-    void session.installLauncherUpdate();
-  }, [session]);
+  const installLauncherUpdate = useCallback(() => session.installLauncherUpdate(), [session]);
 
   const retryLauncherUpdate = useCallback(() => {
     void session.retryLauncherUpdate();
   }, [session]);
+
+  useEffect(() => {
+    if (["available", "deferred", "manual", "failed"].includes(launcherUpdate.status)) setLauncherUpdateDialogOpen(true);
+  }, [launcherUpdate.status, launcherUpdate.version, launcherUpdate.error]);
 
   useEffect(() => {
     if (!launcherSettingsLoaded || !accountsLoaded) return;
@@ -1009,6 +1013,7 @@ export default function App() {
             {runningProcessCount(processes)} background process{runningProcessCount(processes) === 1 ? "" : "es"}
           </span>
         )}
+        <LauncherUpdateStatus state={launcherUpdate} onCheck={retryLauncherUpdate} onOpen={() => setLauncherUpdateDialogOpen(true)} />
       </footer>
 
       {updatePackInstanceId &&
@@ -1118,8 +1123,9 @@ export default function App() {
 
       <LauncherUpdateDialog
         state={launcherUpdate}
+        open={launcherUpdateDialogOpen}
         onInstall={installLauncherUpdate}
-        onDismiss={() => session.dismissLauncherUpdate()}
+        onDismiss={() => setLauncherUpdateDialogOpen(false)}
         onRetry={retryLauncherUpdate}
       />
 

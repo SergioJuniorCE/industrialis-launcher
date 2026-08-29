@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { ArrowUpCircle, Download, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import type { LauncherUpdateState } from "../lib/launcher-update";
@@ -5,24 +6,41 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 export function LauncherUpdateDialog({
   state,
+  open,
   onInstall,
   onDismiss,
   onRetry,
 }: {
   state: LauncherUpdateState;
-  onInstall: () => void;
+  open?: boolean;
+  onInstall: () => void | Promise<void>;
   onDismiss: () => void;
   onRetry: () => void;
 }) {
-  const open = ["available", "downloading", "deferred", "manual", "installing", "failed"].includes(state.status);
+  const [installRequested, setInstallRequested] = useState(false);
+  const installRequestRef = useRef(false);
+  const dialogOpen = open ?? ["available", "downloading", "deferred", "manual", "installing", "failed"].includes(state.status);
   const busy = state.status === "downloading" || state.status === "installing";
+  const installBusy = busy || installRequested;
   const progress = Math.round((state.progress ?? 0) * 100);
+
+  const handleInstall = async () => {
+    if (installRequestRef.current || busy) return;
+    installRequestRef.current = true;
+    setInstallRequested(true);
+    try {
+      await onInstall();
+    } finally {
+      installRequestRef.current = false;
+      setInstallRequested(false);
+    }
+  };
 
   return (
     <Dialog
-      open={open}
+      open={dialogOpen}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen && !busy) onDismiss();
+        if (!nextOpen && !installBusy) onDismiss();
       }}
     >
       <DialogContent>
@@ -75,7 +93,7 @@ export function LauncherUpdateDialog({
               <Button variant="ghost" onClick={onDismiss}>
                 Later
               </Button>
-              <Button onClick={onInstall}>
+              <Button onClick={handleInstall} disabled={installBusy}>
                 <RefreshCw className="size-4" /> Try again
               </Button>
             </>
@@ -84,24 +102,18 @@ export function LauncherUpdateDialog({
               <Button variant="ghost" onClick={onDismiss}>
                 Later
               </Button>
-              <Button onClick={onInstall}>
+              <Button onClick={handleInstall} disabled={installBusy}>
                 <ExternalLink className="size-4" /> Open release page
               </Button>
             </>
           ) : (
             <>
-              <Button variant="ghost" onClick={onDismiss} disabled={busy}>
+              <Button variant="ghost" onClick={onDismiss} disabled={installBusy}>
                 Later
               </Button>
-              <Button onClick={onInstall} disabled={busy}>
-                {state.status === "available" ? (
-                  <ExternalLink className="size-4" />
-                ) : busy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Download className="size-4" />
-                )}
-                {state.status === "available" ? "Open release page" : state.status === "installing" ? "Restarting…" : "Download and restart"}
+              <Button onClick={handleInstall} disabled={installBusy}>
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                {state.status === "available" ? "Install update" : state.status === "installing" ? "Restarting…" : `Downloading ${progress}%`}
               </Button>
             </>
           )}

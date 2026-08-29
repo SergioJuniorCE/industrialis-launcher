@@ -262,6 +262,8 @@ export interface LauncherUpdateState {
   body?: string;
   progress?: number;
   error?: string;
+  download_url?: string;
+  sha256?: string;
   release_url?: string;
 }
 

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawn as spawnChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { app, BrowserWindow, dialog, shell } from "electron";
 import { accountToInfo, createOfflineAccount, ensureFreshToken, handleOauthCallback, loadAccounts, startMicrosoftLogin } from "./auth";
@@ -77,6 +78,7 @@ import {
 } from "./types";
 import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
 import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
+import { downloadLauncherInstaller, isTrustedLauncherDownloadUrl } from "./launcher-updater";
 
 export interface BackendHost {
   emit(event: string, payload: unknown): void;
@@ -119,6 +121,7 @@ interface LaunchArgs {
 
 interface LaunchState {
   running: Map<string, RunningProcess>;
+  installInProgress: Set<string>;
   updateInProgress: Set<string>;
   reinstallInProgress: Set<string>;
   copyInProgress: Set<string>;
@@ -166,6 +169,7 @@ function parseConsoleLog(contents: string, full: boolean): LaunchLogLine[] {
 export class LauncherBackend {
   private readonly state: LaunchState = {
     running: new Map(),
+    installInProgress: new Set(),
     updateInProgress: new Set(),
     reinstallInProgress: new Set(),
     copyInProgress: new Set(),
@@ -176,6 +180,11 @@ export class LauncherBackend {
   private runningProcessPersistence: Promise<void> = Promise.resolve();
   private runningProcessEventsPublished = false;
   private readonly restoredRunningInstanceIds = new Set<string>();
+  private readonly instanceOperationWaiters = new Set<() => void>();
+  private activeFilesystemOperations = 0;
+  private launcherUpdateRequest: Promise<LauncherUpdateState> | null = null;
+  private launcherUpdateResult: LauncherUpdateState | null = null;
+  private disposing = false;
 
   constructor(private readonly host: BackendHost) {
     this.runningProcessReady = this.restoreRunningProcesses();
@@ -188,6 +197,39 @@ export class LauncherBackend {
 
   private emitProgress(payload: DownloadProgress): void {
     this.emit("dl-progress", payload);
+  }
+
+  private hasActiveInstanceOperations(): boolean {
+    return (
+      this.activeFilesystemOperations > 0 ||
+      this.state.installInProgress.size > 0 ||
+      this.state.updateInProgress.size > 0 ||
+      this.state.reinstallInProgress.size > 0 ||
+      this.state.copyInProgress.size > 0 ||
+      this.state.deleteCancel.size > 0
+    );
+  }
+
+  private waitForInstanceOperations(): Promise<void> {
+    if (!this.hasActiveInstanceOperations()) return Promise.resolve();
+    return new Promise((resolve) => this.instanceOperationWaiters.add(resolve));
+  }
+
+  private async trackFilesystemOperation<T>(operation: () => Promise<T>): Promise<T> {
+    this.activeFilesystemOperations += 1;
+    try {
+      return await operation();
+    } finally {
+      this.activeFilesystemOperations -= 1;
+      this.notifyInstanceOperationWaiters();
+    }
+  }
+
+  private notifyInstanceOperationWaiters(): void {
+    if (this.hasActiveInstanceOperations()) return;
+    const waiters = [...this.instanceOperationWaiters];
+    this.instanceOperationWaiters.clear();
+    for (const resolve of waiters) resolve();
   }
 
   private emitLog(id: string, stream: string, line: string): void {
@@ -302,62 +344,68 @@ export class LauncherBackend {
 
   async invoke(command: string, rawArgs: unknown): Promise<unknown> {
     await this.runningProcessReady;
+    if (this.disposing) throw new Error("launcher is shutting down");
     const args = (rawArgs && typeof rawArgs === "object" ? rawArgs : {}) as LaunchArgs;
+    const track = <T>(operation: () => Promise<T>): Promise<T> => this.trackFilesystemOperation(operation);
     switch (command) {
       case "get_versions":
         return this.getVersions();
       case "get_instances":
-        return this.loadInstances();
+        return track(() => this.loadInstances());
       case "refresh_instance_sizes":
-        return this.refreshSizes(args.ids);
+        return track(() => this.refreshSizes(args.ids));
       case "get_instance_groups":
         return getGroupsState(await this.knownInstanceIds());
       case "set_instance_group":
-        return setInstanceGroup(sanitizeName(args.id.trim()), String(args.group ?? ""), await this.knownInstanceIds());
+        return track(async () => setInstanceGroup(sanitizeName(args.id.trim()), String(args.group ?? ""), await this.knownInstanceIds()));
       case "rename_group":
-        return renameGroup(String(args.oldName ?? ""), String(args.newName ?? ""), await this.knownInstanceIds());
+        return track(async () => renameGroup(String(args.oldName ?? ""), String(args.newName ?? ""), await this.knownInstanceIds()));
       case "delete_group":
-        return deleteGroup(String(args.name ?? ""), await this.knownInstanceIds());
+        return track(async () => deleteGroup(String(args.name ?? ""), await this.knownInstanceIds()));
       case "move_instance_in_group":
-        return moveInstanceInGroup(sanitizeName(args.id.trim()), String(args.direction), await this.knownInstanceIds());
+        return track(async () => moveInstanceInGroup(sanitizeName(args.id.trim()), String(args.direction), await this.knownInstanceIds()));
       case "set_group_instance_order":
-        return setGroupInstanceOrder(String(args.group ?? ""), args.order ?? [], await this.knownInstanceIds());
+        return track(async () => setGroupInstanceOrder(String(args.group ?? ""), args.order ?? [], await this.knownInstanceIds()));
       case "set_group_collapsed":
-        return setGroupCollapsed(String(args.group ?? ""), Boolean(args.collapsed), await this.knownInstanceIds());
+        return track(async () => setGroupCollapsed(String(args.group ?? ""), Boolean(args.collapsed), await this.knownInstanceIds()));
       case "delete_instance":
-        return this.deleteInstance(args.id);
+        return track(() => this.deleteInstance(args.id));
       case "cancel_delete_instance":
         return this.cancelDelete(args.id);
       case "copy_instance":
-        return this.copyInstance(args);
+        return track(() => this.copyInstance(args));
       case "open_instance_folder":
-        return this.openInstanceFolder(args.id);
+        return track(() => this.openInstanceFolder(args.id));
       case "open_mods_folder":
-        return this.openModsFolder(args.id);
+        return track(() => this.openModsFolder(args.id));
       case "save_settings":
-        return saveInstanceSettings(sanitizeName(args.id), args.settings ?? defaultSettings());
+        return track(() => saveInstanceSettings(sanitizeName(args.id), args.settings ?? defaultSettings()));
       case "get_settings":
         return loadInstanceSettings(sanitizeName(args.id));
       case "download_install":
-        return this.downloadInstall(args);
+        return track(() => this.downloadInstall(args));
       case "preview_update_mods":
-        return this.previewUpdate(args);
+        return track(() => this.previewUpdate(args));
       case "update_instance":
-        return this.updateInstance(args);
+        return track(() => this.updateInstance(args));
       case "reinstall_instance":
-        return this.reinstallInstance(args);
+        return track(() => this.reinstallInstance(args));
       case "list_minecraft_entries":
         return listMinecraftEntries(instanceDir(sanitizeName(args.id)), args.subpath ?? "");
       case "read_minecraft_file":
         return readMinecraftFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? ""));
       case "write_minecraft_file":
-        return writeMinecraftFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? ""), String(args.content ?? ""), Boolean(args.persist));
+        return track(() =>
+          writeMinecraftFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? ""), String(args.content ?? ""), Boolean(args.persist)),
+        );
       case "delete_persistent_file":
-        return deletePersistentFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? ""));
+        return track(() => deletePersistentFile(instanceDir(sanitizeName(args.id)), String(args.relPath ?? "")));
       case "list_persistent_files":
         return listPersistentFiles(instanceDir(sanitizeName(args.id)));
       case "apply_config_preset":
-        return applyConfigPreset(String(args.idPreset ?? args.id), instanceDir(sanitizeName(String(args.instanceId ?? args.id))), Boolean(args.enabled));
+        return track(() =>
+          applyConfigPreset(String(args.idPreset ?? args.id), instanceDir(sanitizeName(String(args.instanceId ?? args.id))), Boolean(args.enabled)),
+        );
       case "get_config_preset_status":
         return getConfigPresetStatus(String(args.idPreset ?? args.id), instanceDir(sanitizeName(String(args.instanceId ?? args.id))));
       case "list_custom_mods":
@@ -365,23 +413,23 @@ export class LauncherBackend {
       case "browse_custom_mod":
         return this.pickFile("Choose a mod", [{ name: "Mods", extensions: ["jar", "zip"] }]);
       case "add_custom_mod":
-        return addCustomMod(instanceDir(sanitizeName(args.id)), String(args.sourcePath));
+        return track(() => addCustomMod(instanceDir(sanitizeName(args.id)), String(args.sourcePath)));
       case "remove_custom_mod":
-        return removeCustomMod(instanceDir(sanitizeName(args.id)), String(args.identity));
+        return track(() => removeCustomMod(instanceDir(sanitizeName(args.id)), String(args.identity)));
       case "browse_instance_icon_file":
         return this.pickFile("Choose an instance icon", [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico"] }]);
       case "list_instance_icons":
         return listInstanceIcons();
       case "import_instance_icon":
-        return importInstanceIcon(String(args.sourcePath ?? ""));
+        return track(() => importInstanceIcon(String(args.sourcePath ?? "")));
       case "set_instance_icon_from_library":
-        return this.setInstanceIconFromLibrary(args);
+        return track(() => this.setInstanceIconFromLibrary(args));
       case "open_instance_icons_folder":
-        return this.openInstanceIconsFolder();
+        return track(() => this.openInstanceIconsFolder());
       case "set_instance_icon":
-        return this.setInstanceIcon(args);
+        return track(() => this.setInstanceIcon(args));
       case "clear_instance_icon":
-        return this.clearInstanceIcon(args.id);
+        return track(() => this.clearInstanceIcon(args.id));
       case "detect_java":
         return detectJava();
       case "browse_java_executable":
@@ -396,19 +444,19 @@ export class LauncherBackend {
       case "kill_instance":
         return this.killInstance(args.id);
       case "get_instance_console_log":
-        return this.getConsoleLog(args.id, Boolean(args.full));
+        return track(() => this.getConsoleLog(args.id, Boolean(args.full)));
       case "clear_instance_console_log":
-        return fs.rm(consoleLogPath(sanitizeName(args.id)), { force: true });
+        return track(() => fs.rm(consoleLogPath(sanitizeName(args.id)), { force: true }));
       case "get_accounts":
         return (await loadAccounts()).map(accountToInfo);
       case "add_offline_account":
-        return createOfflineAccount(String(args.username ?? ""));
+        return track(() => createOfflineAccount(String(args.username ?? "")));
       case "remove_account":
-        return this.removeAccount(String(args.id));
+        return track(() => this.removeAccount(String(args.id)));
       case "get_launcher_settings":
         return loadLauncherSettings();
       case "save_launcher_settings":
-        return saveLauncherSettings(args.launcherSettings ?? defaultLauncherSettings());
+        return track(() => saveLauncherSettings(args.launcherSettings ?? defaultLauncherSettings()));
       case "start_microsoft_login":
         return startMicrosoftLogin((event, payload) => this.emit(event, payload));
       case "check_launcher_update":
@@ -442,6 +490,7 @@ export class LauncherBackend {
 
   private async deleteInstance(rawId: string): Promise<void> {
     const id = sanitizeName(rawId.trim());
+    if (this.state.deleteCancel.has(id)) throw new Error("delete already in progress for this instance");
     const cancel = { cancelled: false };
     this.state.deleteCancel.set(id, cancel);
     try {
@@ -458,6 +507,7 @@ export class LauncherBackend {
       this.emitProgress({ stage: "done", operation: "delete", pct: 1, id });
     } finally {
       this.state.deleteCancel.delete(id);
+      this.notifyInstanceOperationWaiters();
     }
   }
 
@@ -475,13 +525,15 @@ export class LauncherBackend {
     if (sourceId === newId) throw new Error("new instance id must differ from the source");
     if (this.state.running.has(sourceId)) throw new Error("cannot copy while instance is running");
     if (this.state.copyInProgress.has(sourceId)) throw new Error("copy already in progress for this instance");
-    const known = await this.knownInstanceIds();
-    if (!known.has(sourceId)) throw new Error("source instance not found");
-    if (known.has(newId)) throw new Error("an instance with that id already exists");
     this.state.copyInProgress.add(sourceId);
+    let ownsDestination = false;
     try {
+      const known = await this.knownInstanceIds();
+      if (!known.has(sourceId)) throw new Error("source instance not found");
+      if (known.has(newId)) throw new Error("an instance with that id already exists");
       const source = instanceDir(sourceId);
       const destination = instanceDir(newId);
+      ownsDestination = true;
       this.emitProgress({ stage: "copying", operation: "copy", pct: 0, id: newId, name: newName });
       await copyTree(source, destination);
       const settings = await loadInstanceSettings(newId);
@@ -493,10 +545,11 @@ export class LauncherBackend {
       if (group) await setInstanceGroup(newId, group, new Set([...known, newId]));
       this.emitProgress({ stage: "done", operation: "copy", pct: 1, id: newId, name: newName });
     } catch (error) {
-      await removeIfExists(instanceDir(newId));
+      if (ownsDestination) await removeIfExists(instanceDir(newId));
       throw error;
     } finally {
       this.state.copyInProgress.delete(sourceId);
+      this.notifyInstanceOperationWaiters();
     }
   }
 
@@ -522,35 +575,42 @@ export class LauncherBackend {
 
   private async downloadInstall(args: LaunchArgs): Promise<void> {
     const id = validateInstanceId(String(args.id));
-    const known = await this.knownInstanceIds();
-    if (known.has(id)) throw new Error("an instance with that id already exists");
     const instance = instanceDir(id);
     const packVersion = String(args.packVersion);
     const javaType = String(args.javaType ?? "java17+");
-    await fs.mkdir(instance, { recursive: true });
-    const staging = await downloadAndExtractToStaging(
-      (payload) => this.emitProgress({ ...payload, id, operation: payload.operation ?? "install" } as DownloadProgress),
-      packVersion,
-      javaType,
-      instance,
-      "install",
-      id,
-    );
-    await installStagingContents(staging, instance);
-    await removeIfExists(staging);
-    await flattenNestedPack(instance);
-    await prepareInstanceConfigs(instance, true);
-    const customIcon = await installDefaultInstanceIcon(instance);
-    const settings = {
-      ...defaultSettings(),
-      name: String(args.name ?? "").trim() || `GTNH ${packVersion}`,
-      pack_version: packVersion,
-      pack_java_type: javaType,
-      custom_icon: customIcon,
-    };
-    await this.saveAndRefreshSize(id, settings);
-    if (args.group) await setInstanceGroup(id, args.group, await this.knownInstanceIds());
-    this.emitProgress({ stage: "done", pct: 1, id, operation: "install" });
+    if (this.state.installInProgress.has(id)) throw new Error("install already in progress for this instance");
+    this.state.installInProgress.add(id);
+    try {
+      const known = await this.knownInstanceIds();
+      if (known.has(id)) throw new Error("an instance with that id already exists");
+      await fs.mkdir(instance, { recursive: true });
+      const staging = await downloadAndExtractToStaging(
+        (payload) => this.emitProgress({ ...payload, id, operation: payload.operation ?? "install" } as DownloadProgress),
+        packVersion,
+        javaType,
+        instance,
+        "install",
+        id,
+      );
+      await installStagingContents(staging, instance);
+      await removeIfExists(staging);
+      await flattenNestedPack(instance);
+      await prepareInstanceConfigs(instance, true);
+      const customIcon = await installDefaultInstanceIcon(instance);
+      const settings = {
+        ...defaultSettings(),
+        name: String(args.name ?? "").trim() || `GTNH ${packVersion}`,
+        pack_version: packVersion,
+        pack_java_type: javaType,
+        custom_icon: customIcon,
+      };
+      await this.saveAndRefreshSize(id, settings);
+      if (args.group) await setInstanceGroup(id, args.group, await this.knownInstanceIds());
+      this.emitProgress({ stage: "done", pct: 1, id, operation: "install" });
+    } finally {
+      this.state.installInProgress.delete(id);
+      this.notifyInstanceOperationWaiters();
+    }
   }
 
   private async previewUpdate(args: LaunchArgs): Promise<unknown> {
@@ -581,6 +641,7 @@ export class LauncherBackend {
       await this.reinstallCore(id, String(args.packVersion), String(args.javaType ?? "java17+"), args.keepModIdentities ?? [], "update-pack");
     } finally {
       this.state.updateInProgress.delete(id);
+      this.notifyInstanceOperationWaiters();
     }
   }
 
@@ -594,6 +655,7 @@ export class LauncherBackend {
       await this.reinstallCore(id, String(args.packVersion), String(args.javaType ?? "java17+"), [], "reinstall");
     } finally {
       this.state.reinstallInProgress.delete(id);
+      this.notifyInstanceOperationWaiters();
     }
   }
 
@@ -842,7 +904,7 @@ export class LauncherBackend {
         draft?: boolean;
         prerelease?: boolean;
         html_url?: string;
-        assets?: Array<{ name?: string; browser_download_url?: string }>;
+        assets?: Array<{ name?: string; browser_download_url?: string; digest?: string }>;
       };
       const version = release.tag_name?.replace(/^launcher-v/u, "");
       if (!version || release.draft || release.prerelease || !isNewerVersion(version, current_version)) return { status: "up-to-date", current_version };
@@ -861,6 +923,7 @@ export class LauncherBackend {
         body: release.body ?? "",
         release_url: release.html_url ?? "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest",
         ...(asset?.browser_download_url ? { download_url: asset.browser_download_url } : {}),
+        ...(asset?.digest ? { sha256: asset.digest } : {}),
       } satisfies LauncherUpdateState;
       this.emit("launcher-update", state);
       return state;
@@ -869,9 +932,52 @@ export class LauncherBackend {
     }
   }
 
-  private async installLauncherUpdate(): Promise<LauncherUpdateState> {
+  private installLauncherUpdate(): Promise<LauncherUpdateState> {
+    if (this.launcherUpdateRequest) return this.launcherUpdateRequest;
+    if (this.launcherUpdateResult) return Promise.resolve(this.launcherUpdateResult);
+    const request = this.installLauncherUpdateCore();
+    this.launcherUpdateRequest = request.finally(() => {
+      this.launcherUpdateRequest = null;
+    });
+    return this.launcherUpdateRequest;
+  }
+
+  private async installLauncherUpdateCore(): Promise<LauncherUpdateState> {
     const state = await this.checkLauncherUpdate();
     if (state.status === "available") {
+      if (process.platform === "win32" && state.download_url && isTrustedLauncherDownloadUrl(state.download_url)) {
+        const updateDirectory = await fs.mkdtemp(path.join(app.getPath("temp"), "industrialis-launcher-update-"));
+        const installer = path.join(updateDirectory, "IndustrialisLauncherSetup.exe");
+        try {
+          await downloadLauncherInstaller({
+            url: state.download_url,
+            destination: installer,
+            expectedSha256: state.sha256,
+            onProgress: ({ progress }) => {
+              const downloading = { ...state, status: "downloading", progress } satisfies LauncherUpdateState;
+              this.emit("launcher-update", downloading);
+            },
+          });
+
+          const child = spawnChildProcess(installer, [], { detached: true, stdio: "ignore", windowsHide: true });
+          await new Promise<void>((resolve, reject) => {
+            child.once("spawn", resolve);
+            child.once("error", reject);
+          });
+          child.unref();
+          const installing = { ...state, status: "installing", progress: 1 } satisfies LauncherUpdateState;
+          this.launcherUpdateResult = installing;
+          this.emit("launcher-update", installing);
+          setTimeout(() => {
+            void this.waitForInstanceOperations().then(() => app.quit());
+          }, 300);
+          return installing;
+        } catch (error) {
+          await fs.rm(updateDirectory, { recursive: true, force: true }).catch(() => undefined);
+          throw error;
+        }
+      }
+
       const releaseUrl = state.release_url ?? "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest";
       await shell.openExternal(releaseUrl);
       const manual = { ...state, status: "manual" } satisfies LauncherUpdateState;
@@ -889,7 +995,9 @@ export class LauncherBackend {
   }
   async dispose(): Promise<void> {
     /* Detached game processes intentionally remain alive when Electron exits. */
+    this.disposing = true;
     await this.runningProcessReady;
+    await this.waitForInstanceOperations();
     await this.persistRunningProcesses();
   }
 }
