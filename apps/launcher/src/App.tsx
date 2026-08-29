@@ -241,9 +241,7 @@ export default function App() {
     id: string;
     name: string;
   } | null>(null);
-  const installLauncherUpdate = useCallback(() => {
-    void session.installLauncherUpdate();
-  }, [session]);
+  const installLauncherUpdate = useCallback(() => session.installLauncherUpdate(), [session]);
 
   const retryLauncherUpdate = useCallback(() => {
     void session.retryLauncherUpdate();

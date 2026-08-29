@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawn as spawnChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { app, BrowserWindow, dialog, shell } from "electron";
 import { accountToInfo, createOfflineAccount, ensureFreshToken, handleOauthCallback, loadAccounts, startMicrosoftLogin } from "./auth";
@@ -120,6 +121,7 @@ interface LaunchArgs {
 
 interface LaunchState {
   running: Map<string, RunningProcess>;
+  installInProgress: Set<string>;
   updateInProgress: Set<string>;
   reinstallInProgress: Set<string>;
   copyInProgress: Set<string>;
@@ -167,6 +169,7 @@ function parseConsoleLog(contents: string, full: boolean): LaunchLogLine[] {
 export class LauncherBackend {
   private readonly state: LaunchState = {
     running: new Map(),
+    installInProgress: new Set(),
     updateInProgress: new Set(),
     reinstallInProgress: new Set(),
     copyInProgress: new Set(),
@@ -177,6 +180,10 @@ export class LauncherBackend {
   private runningProcessPersistence: Promise<void> = Promise.resolve();
   private runningProcessEventsPublished = false;
   private readonly restoredRunningInstanceIds = new Set<string>();
+  private readonly instanceOperationWaiters = new Set<() => void>();
+  private launcherUpdateRequest: Promise<LauncherUpdateState> | null = null;
+  private launcherUpdateResult: LauncherUpdateState | null = null;
+  private disposing = false;
 
   constructor(private readonly host: BackendHost) {
     this.runningProcessReady = this.restoreRunningProcesses();
@@ -189,6 +196,28 @@ export class LauncherBackend {
 
   private emitProgress(payload: DownloadProgress): void {
     this.emit("dl-progress", payload);
+  }
+
+  private hasActiveInstanceOperations(): boolean {
+    return (
+      this.state.installInProgress.size > 0 ||
+      this.state.updateInProgress.size > 0 ||
+      this.state.reinstallInProgress.size > 0 ||
+      this.state.copyInProgress.size > 0 ||
+      this.state.deleteCancel.size > 0
+    );
+  }
+
+  private waitForInstanceOperations(): Promise<void> {
+    if (!this.hasActiveInstanceOperations()) return Promise.resolve();
+    return new Promise((resolve) => this.instanceOperationWaiters.add(resolve));
+  }
+
+  private notifyInstanceOperationWaiters(): void {
+    if (this.hasActiveInstanceOperations()) return;
+    const waiters = [...this.instanceOperationWaiters];
+    this.instanceOperationWaiters.clear();
+    for (const resolve of waiters) resolve();
   }
 
   private emitLog(id: string, stream: string, line: string): void {
@@ -303,6 +332,7 @@ export class LauncherBackend {
 
   async invoke(command: string, rawArgs: unknown): Promise<unknown> {
     await this.runningProcessReady;
+    if (this.disposing) throw new Error("launcher is shutting down");
     const args = (rawArgs && typeof rawArgs === "object" ? rawArgs : {}) as LaunchArgs;
     switch (command) {
       case "get_versions":
@@ -443,6 +473,7 @@ export class LauncherBackend {
 
   private async deleteInstance(rawId: string): Promise<void> {
     const id = sanitizeName(rawId.trim());
+    if (this.state.deleteCancel.has(id)) throw new Error("delete already in progress for this instance");
     const cancel = { cancelled: false };
     this.state.deleteCancel.set(id, cancel);
     try {
@@ -459,6 +490,7 @@ export class LauncherBackend {
       this.emitProgress({ stage: "done", operation: "delete", pct: 1, id });
     } finally {
       this.state.deleteCancel.delete(id);
+      this.notifyInstanceOperationWaiters();
     }
   }
 
@@ -476,13 +508,15 @@ export class LauncherBackend {
     if (sourceId === newId) throw new Error("new instance id must differ from the source");
     if (this.state.running.has(sourceId)) throw new Error("cannot copy while instance is running");
     if (this.state.copyInProgress.has(sourceId)) throw new Error("copy already in progress for this instance");
-    const known = await this.knownInstanceIds();
-    if (!known.has(sourceId)) throw new Error("source instance not found");
-    if (known.has(newId)) throw new Error("an instance with that id already exists");
     this.state.copyInProgress.add(sourceId);
+    let ownsDestination = false;
     try {
+      const known = await this.knownInstanceIds();
+      if (!known.has(sourceId)) throw new Error("source instance not found");
+      if (known.has(newId)) throw new Error("an instance with that id already exists");
       const source = instanceDir(sourceId);
       const destination = instanceDir(newId);
+      ownsDestination = true;
       this.emitProgress({ stage: "copying", operation: "copy", pct: 0, id: newId, name: newName });
       await copyTree(source, destination);
       const settings = await loadInstanceSettings(newId);
@@ -494,10 +528,11 @@ export class LauncherBackend {
       if (group) await setInstanceGroup(newId, group, new Set([...known, newId]));
       this.emitProgress({ stage: "done", operation: "copy", pct: 1, id: newId, name: newName });
     } catch (error) {
-      await removeIfExists(instanceDir(newId));
+      if (ownsDestination) await removeIfExists(instanceDir(newId));
       throw error;
     } finally {
       this.state.copyInProgress.delete(sourceId);
+      this.notifyInstanceOperationWaiters();
     }
   }
 
@@ -523,35 +558,42 @@ export class LauncherBackend {
 
   private async downloadInstall(args: LaunchArgs): Promise<void> {
     const id = validateInstanceId(String(args.id));
-    const known = await this.knownInstanceIds();
-    if (known.has(id)) throw new Error("an instance with that id already exists");
     const instance = instanceDir(id);
     const packVersion = String(args.packVersion);
     const javaType = String(args.javaType ?? "java17+");
-    await fs.mkdir(instance, { recursive: true });
-    const staging = await downloadAndExtractToStaging(
-      (payload) => this.emitProgress({ ...payload, id, operation: payload.operation ?? "install" } as DownloadProgress),
-      packVersion,
-      javaType,
-      instance,
-      "install",
-      id,
-    );
-    await installStagingContents(staging, instance);
-    await removeIfExists(staging);
-    await flattenNestedPack(instance);
-    await prepareInstanceConfigs(instance, true);
-    const customIcon = await installDefaultInstanceIcon(instance);
-    const settings = {
-      ...defaultSettings(),
-      name: String(args.name ?? "").trim() || `GTNH ${packVersion}`,
-      pack_version: packVersion,
-      pack_java_type: javaType,
-      custom_icon: customIcon,
-    };
-    await this.saveAndRefreshSize(id, settings);
-    if (args.group) await setInstanceGroup(id, args.group, await this.knownInstanceIds());
-    this.emitProgress({ stage: "done", pct: 1, id, operation: "install" });
+    if (this.state.installInProgress.has(id)) throw new Error("install already in progress for this instance");
+    this.state.installInProgress.add(id);
+    try {
+      const known = await this.knownInstanceIds();
+      if (known.has(id)) throw new Error("an instance with that id already exists");
+      await fs.mkdir(instance, { recursive: true });
+      const staging = await downloadAndExtractToStaging(
+        (payload) => this.emitProgress({ ...payload, id, operation: payload.operation ?? "install" } as DownloadProgress),
+        packVersion,
+        javaType,
+        instance,
+        "install",
+        id,
+      );
+      await installStagingContents(staging, instance);
+      await removeIfExists(staging);
+      await flattenNestedPack(instance);
+      await prepareInstanceConfigs(instance, true);
+      const customIcon = await installDefaultInstanceIcon(instance);
+      const settings = {
+        ...defaultSettings(),
+        name: String(args.name ?? "").trim() || `GTNH ${packVersion}`,
+        pack_version: packVersion,
+        pack_java_type: javaType,
+        custom_icon: customIcon,
+      };
+      await this.saveAndRefreshSize(id, settings);
+      if (args.group) await setInstanceGroup(id, args.group, await this.knownInstanceIds());
+      this.emitProgress({ stage: "done", pct: 1, id, operation: "install" });
+    } finally {
+      this.state.installInProgress.delete(id);
+      this.notifyInstanceOperationWaiters();
+    }
   }
 
   private async previewUpdate(args: LaunchArgs): Promise<unknown> {
@@ -582,6 +624,7 @@ export class LauncherBackend {
       await this.reinstallCore(id, String(args.packVersion), String(args.javaType ?? "java17+"), args.keepModIdentities ?? [], "update-pack");
     } finally {
       this.state.updateInProgress.delete(id);
+      this.notifyInstanceOperationWaiters();
     }
   }
 
@@ -595,6 +638,7 @@ export class LauncherBackend {
       await this.reinstallCore(id, String(args.packVersion), String(args.javaType ?? "java17+"), [], "reinstall");
     } finally {
       this.state.reinstallInProgress.delete(id);
+      this.notifyInstanceOperationWaiters();
     }
   }
 
@@ -871,7 +915,17 @@ export class LauncherBackend {
     }
   }
 
-  private async installLauncherUpdate(): Promise<LauncherUpdateState> {
+  private installLauncherUpdate(): Promise<LauncherUpdateState> {
+    if (this.launcherUpdateRequest) return this.launcherUpdateRequest;
+    if (this.launcherUpdateResult) return Promise.resolve(this.launcherUpdateResult);
+    const request = this.installLauncherUpdateCore();
+    this.launcherUpdateRequest = request.finally(() => {
+      this.launcherUpdateRequest = null;
+    });
+    return this.launcherUpdateRequest;
+  }
+
+  private async installLauncherUpdateCore(): Promise<LauncherUpdateState> {
     const state = await this.checkLauncherUpdate();
     if (state.status === "available") {
       if (process.platform === "win32" && state.download_url && isTrustedLauncherDownloadUrl(state.download_url)) {
@@ -888,16 +942,18 @@ export class LauncherBackend {
             },
           });
 
-          const { spawn } = await import("node:child_process");
-          const child = spawn(installer, [], { detached: true, stdio: "ignore", windowsHide: true });
+          const child = spawnChildProcess(installer, [], { detached: true, stdio: "ignore", windowsHide: true });
           await new Promise<void>((resolve, reject) => {
             child.once("spawn", resolve);
             child.once("error", reject);
           });
           child.unref();
           const installing = { ...state, status: "installing", progress: 1 } satisfies LauncherUpdateState;
+          this.launcherUpdateResult = installing;
           this.emit("launcher-update", installing);
-          setTimeout(() => app.quit(), 300);
+          setTimeout(() => {
+            void this.waitForInstanceOperations().then(() => app.quit());
+          }, 300);
           return installing;
         } catch (error) {
           await fs.rm(updateDirectory, { recursive: true, force: true }).catch(() => undefined);
@@ -922,7 +978,9 @@ export class LauncherBackend {
   }
   async dispose(): Promise<void> {
     /* Detached game processes intentionally remain alive when Electron exits. */
+    this.disposing = true;
     await this.runningProcessReady;
+    await this.waitForInstanceOperations();
     await this.persistRunningProcesses();
   }
 }

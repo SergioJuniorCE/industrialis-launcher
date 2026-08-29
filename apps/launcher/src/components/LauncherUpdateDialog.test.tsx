@@ -66,4 +66,35 @@ describe("LauncherUpdateDialog", () => {
     await act(async () => installButton?.click());
     expect(onInstall).toHaveBeenCalledOnce();
   });
+
+  it("locks the install action until the first request settles", async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const onInstall = vi.fn(() => pending);
+
+    await act(async () => {
+      root.render(
+        <LauncherUpdateDialog
+          state={{ status: "available", current_version: "0.1.55", version: "0.1.56" }}
+          onInstall={onInstall}
+          onDismiss={() => undefined}
+          onRetry={() => undefined}
+        />,
+      );
+    });
+
+    const installButton = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Install update"));
+    expect(installButton).toBeDefined();
+    await act(async () => {
+      installButton?.click();
+      installButton?.click();
+    });
+    expect(onInstall).toHaveBeenCalledOnce();
+    expect(installButton?.disabled).toBe(true);
+
+    release();
+    await act(async () => pending);
+  });
 });
