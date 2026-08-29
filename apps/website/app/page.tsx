@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { Download, ExternalLink } from "lucide-react";
 import { DownloadSection } from "@/components/download-section";
 import { Features } from "@/components/features";
 import { LauncherPreview } from "@/components/launcher-preview";
@@ -6,7 +6,9 @@ import { ServerHosting } from "@/components/server-hosting";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Workflow } from "@/components/workflow";
-import { cn } from "@/lib/utils";
+
+const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
+const WINDOWS_DOWNLOAD_URL = "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest/download/IndustrialisLauncherSetup.exe";
 
 export default function HomePage() {
   return (
@@ -14,37 +16,25 @@ export default function HomePage() {
       <SiteHeader />
 
       <main>
-        <section className="mx-auto max-w-6xl px-6 pb-16 pt-16 sm:pt-24">
-          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-            <div>
-              <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-xs text-muted-foreground">
-                <span className="size-1.5 rounded-full bg-accent" />
-                GT New Horizons
-              </p>
-              <h1 className="text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.25rem]">
-                Launch long modpack sessions without the friction.
+        <section className="hero-section">
+          <div className="mx-auto max-w-7xl px-5 sm:px-8">
+            <div className="hero-copy mx-auto max-w-5xl text-center">
+              <p className="eyebrow">GT New Horizons launcher</p>
+              <h1 className="mt-5 text-balance text-4xl font-semibold leading-[0.98] tracking-[-0.065em] sm:text-6xl lg:text-[4.75rem]">
+                The control surface
+                <br /> <span className="lg:whitespace-nowrap">for long modpack sessions.</span>
               </h1>
-              <p className="mt-5 max-w-lg text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Industrialis is a desktop launcher for GTNH — install instances,
-                manage Java and memory, sign in with Microsoft, and watch your
-                game output in one place.
+              <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+                Install packs, tune Java and memory, then launch and inspect every session from one focused desktop workspace.
               </p>
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                <a
-                  href="#download"
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5",
-                    "text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-                  )}
-                >
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                <a href={WINDOWS_DOWNLOAD_URL} target="_blank" rel="noreferrer" className="button-primary">
+                  <Download className="size-4" />
                   Download launcher
-                  <ArrowRight className="size-4" />
                 </a>
-                <a
-                  href="#features"
-                  className="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  See features
+                <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="button-secondary">
+                  View source
+                  <ExternalLink className="size-3.5" />
                 </a>
               </div>
             </div>

@@ -1,55 +1,33 @@
 import { Download, ExternalLink } from "lucide-react";
-import { cn } from "@/lib/utils";
+
+const WINDOWS_DOWNLOAD_URL = "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest/download/IndustrialisLauncherSetup.exe";
 
 export function DownloadSection() {
   return (
-    <section id="download" className="border-t border-border/60 py-20">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="rounded-2xl border border-border bg-card p-8 sm:p-10">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-xl">
-              <p className="mb-2 font-mono text-xs uppercase tracking-widest text-accent">
-                Download
-              </p>
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Ready to install GTNH?
-              </h2>
-              <p className="mt-3 text-muted-foreground">
-                Windows builds ship from this repo. macOS and Linux support is on
-                the roadmap - the launcher is built with Electron, so ports are straightforward.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
-              <a
-                href="#download"
-                className={cn(
-                  "inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3",
-                  "text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-                )}
-              >
-                <Download className="size-4" />
-                Download for Windows
-              </a>
-              <a
-                href="https://gtnewhorizons.com/"
-                target="_blank"
-                rel="noreferrer"
-                className={cn(
-                  "inline-flex items-center justify-center gap-2 rounded-lg border border-border",
-                  "px-5 py-3 text-sm font-medium text-muted-foreground transition-colors",
-                  "hover:border-foreground/20 hover:text-foreground"
-                )}
-              >
-                About GT New Horizons
-                <ExternalLink className="size-3.5" />
-              </a>
-            </div>
+    <section id="download" className="download-section">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+        <div className="download-panel">
+          <div className="max-w-2xl">
+            <p className="eyebrow">Get started</p>
+            <h2 className="mt-5 text-4xl font-semibold leading-[1.02] tracking-[-0.05em] sm:text-6xl">Make the next boot boring.</h2>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              Download the Windows launcher, connect your account, and keep every GTNH instance in one place.
+            </p>
           </div>
 
-          <p className="mt-8 border-t border-border pt-6 font-mono text-xs text-muted-foreground">
-            Requires Java 17+ to run GTNH instances - Microsoft account with
-            Minecraft Java Edition for online play
+          <div className="mt-10 flex flex-wrap items-center gap-3">
+            <a href={WINDOWS_DOWNLOAD_URL} target="_blank" rel="noreferrer" className="button-primary">
+              <Download className="size-4" />
+              Download for Windows
+            </a>
+            <a href="https://gtnewhorizons.com/" target="_blank" rel="noreferrer" className="button-secondary">
+              About GT New Horizons
+              <ExternalLink className="size-3.5" />
+            </a>
+          </div>
+
+          <p className="mt-10 border-t border-border pt-5 font-mono text-[11px] leading-relaxed text-muted-foreground">
+            Requires Java 17 or newer for current GTNH instances. Online play also requires a Microsoft account with Minecraft Java Edition.
           </p>
         </div>
       </div>
