@@ -47,20 +47,10 @@ export function ProcessCard({
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              {proc.status === "running" && (
-                <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-              )}
+              {proc.status === "running" && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />}
               <span className="text-xs font-medium truncate">{proc.name}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {operationLabel(proc.operation)}
-              {proc.status === "running" && proc.stage !== "done" && ` · ${stageLabel(proc.stage)}`}
-              {proc.status === "running" && proc.stage === "downloading" && formatDownloadSpeed(proc.speedMbps) && (
-                ` · ${formatDownloadSpeed(proc.speedMbps)}`
-              )}
-              {proc.status === "done" && " · Complete"}
-              {proc.status === "failed" && " · Failed"}
-            </p>
+            <ProcessCardDescription proc={proc} />
           </div>
           {proc.logs.length > 0 && (
             <Badge variant="secondary" className="shrink-0 h-5 text-[10px]">
@@ -78,48 +68,13 @@ export function ProcessCard({
       </Button>
 
       {(canDismiss || (proc.status === "running" && proc.operation === "delete" && onCancelDelete)) && (
-        <div className="flex justify-end gap-0.5 px-2 pb-1.5 -mt-0.5">
-          {proc.status === "running" && proc.operation === "delete" && onCancelDelete && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs text-destructive hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCancelDelete(proc.id);
-              }}
-            >
-              <X className="size-3.5" />
-              Cancel
-            </Button>
-          )}
-          {canDismiss && onDismiss && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDismiss(proc.key);
-              }}
-            >
-              <X className="size-3.5" />
-              Dismiss
-            </Button>
-          )}
-        </div>
+        <ProcessCardActions proc={proc} onCancelDelete={onCancelDelete} canDismiss={canDismiss} onDismiss={onDismiss} />
       )}
     </div>
   );
 }
 
-function ProcessLogPanel({
-  proc,
-  onViewInstance,
-}: {
-  proc: BackgroundProcess;
-  onViewInstance?: (instanceId: string) => void;
-}) {
+function ProcessLogPanel({ proc, onViewInstance }: { proc: BackgroundProcess; onViewInstance?: (instanceId: string) => void }) {
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -132,20 +87,10 @@ function ProcessLogPanel({
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 px-3 py-2 border-b border-border space-y-1.5">
         <div className="flex items-center gap-2">
-          {proc.status === "running" && (
-            <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-          )}
+          {proc.status === "running" && <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />}
           <h2 className="font-medium truncate">{proc.name}</h2>
-          <Badge
-            variant={
-              proc.status === "failed" ? "destructive" : proc.status === "done" ? "success" : "secondary"
-            }
-          >
-            {proc.status === "running"
-              ? stageLabel(proc.stage)
-              : proc.status === "done"
-                ? "Complete"
-                : "Failed"}
+          <Badge variant={proc.status === "failed" ? "destructive" : proc.status === "done" ? "success" : "secondary"}>
+            {proc.status === "running" ? stageLabel(proc.stage) : proc.status === "done" ? "Complete" : "Failed"}
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -157,31 +102,19 @@ function ProcessLogPanel({
             <p className="text-xs text-muted-foreground">{formatDownloadProgress(proc)}</p>
           </div>
         )}
-        {proc.status === "done" &&
-          (proc.operation === "update-pack" || proc.operation === "reinstall") &&
-          onViewInstance && (
-          <Button
-            size="sm"
-            className="h-7"
-            onClick={() => onViewInstance(proc.id)}
-          >
+        {proc.status === "done" && (proc.operation === "update-pack" || proc.operation === "reinstall") && onViewInstance && (
+          <Button size="sm" className="h-7" onClick={() => onViewInstance(proc.id)}>
             View instance
           </Button>
         )}
       </div>
 
-      <div
-        ref={logRef}
-        className="flex-1 min-h-0 overflow-y-auto bg-black/40 font-mono text-[11px] px-3 py-2 space-y-0.5 leading-relaxed"
-      >
+      <div ref={logRef} className="flex-1 min-h-0 overflow-y-auto bg-black/40 font-mono text-[11px] px-3 py-2 space-y-0.5 leading-relaxed">
         {proc.logs.length === 0 ? (
           <p className="text-muted-foreground">No log output yet.</p>
         ) : (
           keyedByOccurrence(proc.logs, (line) => line).map(({ key, value: line }) => (
-            <div
-              key={key}
-              className={line.startsWith("Error:") ? "text-destructive" : "text-muted-foreground"}
-            >
+            <div key={key} className={line.startsWith("Error:") ? "text-destructive" : "text-muted-foreground"}>
               {line}
             </div>
           ))
@@ -216,19 +149,13 @@ export function ProcessesTab({
         <div className="shrink-0 px-3 py-2 border-b border-border">
           <h1 className="text-xs font-semibold">Background processes</h1>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            {running > 0
-              ? `${running} running · ${items.length} total`
-              : items.length > 0
-                ? `${items.length} recent`
-                : "No active or recent processes"}
+            {running > 0 ? `${running} running · ${items.length} total` : items.length > 0 ? `${items.length} recent` : "No active or recent processes"}
           </p>
         </div>
         <ScrollArea className="flex-1">
           <div className="border-b border-border">
             {items.length === 0 ? (
-              <p className="text-xs text-muted-foreground p-3">
-                Install a pack, update a pack, or delete an instance to see progress here.
-              </p>
+              <p className="text-xs text-muted-foreground p-3">Install a pack, update a pack, or delete an instance to see progress here.</p>
             ) : (
               items.map((proc) => (
                 <ProcessCard
@@ -250,12 +177,67 @@ export function ProcessesTab({
           <ProcessLogPanel proc={selected} onViewInstance={onViewInstance} />
         ) : (
           <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground p-4">
-            {items.length > 0
-              ? "Select a process to view its full log."
-              : "Process logs will appear here."}
+            {items.length > 0 ? "Select a process to view its full log." : "Process logs will appear here."}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function ProcessCardActions({
+  proc,
+  onCancelDelete,
+  canDismiss,
+  onDismiss,
+}: {
+  proc: BackgroundProcess;
+  onCancelDelete?: (id: string) => void;
+  canDismiss: boolean;
+  onDismiss?: (key: string) => void;
+}) {
+  return (
+    <div className="flex justify-end gap-0.5 px-2 pb-1.5 -mt-0.5">
+      {proc.status === "running" && proc.operation === "delete" && onCancelDelete && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs text-destructive hover:text-destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCancelDelete(proc.id);
+          }}
+        >
+          <X className="size-3.5" />
+          Cancel
+        </Button>
+      )}
+      {canDismiss && onDismiss && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismiss(proc.key);
+          }}
+        >
+          <X className="size-3.5" />
+          Dismiss
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function ProcessCardDescription({ proc }: { proc: BackgroundProcess }) {
+  return (
+    <p className="text-xs text-muted-foreground mt-0.5">
+      {operationLabel(proc.operation)}
+      {proc.status === "running" && proc.stage !== "done" && ` · ${stageLabel(proc.stage)}`}
+      {proc.status === "running" && proc.stage === "downloading" && formatDownloadSpeed(proc.speedMbps) && ` · ${formatDownloadSpeed(proc.speedMbps)}`}
+      {proc.status === "done" && " · Complete"}
+      {proc.status === "failed" && " · Failed"}
+    </p>
   );
 }

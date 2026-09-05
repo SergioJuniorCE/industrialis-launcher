@@ -1,3 +1,6 @@
+import type { LauncherUpdateState } from "./lib/launcher-update";
+import type { InstanceGroupsState } from "./stores/launcher-store";
+import type { LauncherSettingsData } from "./lib/launcher-settings";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { desktopPlatform, invoke, openUrl } from "./lib/desktop";
 import {
@@ -184,8 +187,7 @@ function formatUpdateProgress(proc: BackgroundProcess): string {
   return `${stageLabel(proc.stage)} · ${formatDownloadProgress(proc)}`;
 }
 
-// eslint-disable-next-line react-doctor/no-giant-component -- Desktop orchestration remains centralized while tab views are extracted incrementally.
-export default function App() {
+function useLauncherController() {
   const { settings: launcherSettings, loaded: launcherSettingsLoaded, updateSettings, saveSettingsNow } = useLauncherSettings();
   const defaultAccountId = resolveDefaultAccountId(launcherSettings);
   const { error, javaOptions, javaRefreshing, instanceLogs, launcherUpdate, session } = useLauncherSession();
@@ -522,429 +524,151 @@ export default function App() {
   const selectedInstanceRunning = selectedInstanceId ? runningInstanceIds.has(selectedInstanceId) : false;
   const selectedInstanceStarting = selectedInstanceId ? launching === selectedInstanceId : false;
 
+  return {
+    setTab,
+    setShowNewInstance,
+    tab,
+    openProcesses,
+    processes,
+    accounts,
+    defaultAccountId,
+    handleSetDefaultAccount,
+    handleDismissProcess,
+    handleCancelDelete,
+    instances,
+    handleLaunch,
+    handleKill,
+    handleOpenInstanceFolder,
+    handleDelete,
+    loadInstances,
+    setError,
+    handleToggleGroupCollapsed,
+    handleRenameGroup,
+    handleDeleteGroup,
+    handleReorderInstances,
+    sel,
+    detailTab,
+    setDetailTab,
+    isDeletingSelected,
+    isUpdatingSelected,
+    isReinstallingSelected,
+    selectedDeleteProcess,
+    selectedReinstallProcess,
+    selectedUpdateProcess,
+    sizesRefreshing,
+    gtnhVersions,
+    setUpdatePackInstanceId,
+    selectedInstanceId,
+    selectedInstanceActive,
+    instanceBusy,
+    setSelectedInstanceId,
+    setReinstallInstanceId,
+    groupsState,
+    launcherSettings,
+    javaRefreshing,
+    refreshJava,
+    handleSaveSettings,
+    instanceLogs,
+    handleClearConsole,
+    session,
+    selectedInstanceRunning,
+    selectedInstanceStarting,
+    setChangeGroupInstanceId,
+    setCopyInstanceId,
+    launching,
+    selectedProcessKey,
+    setSelectedProcessKey,
+    javaOptions,
+    handleSetDefaultJava,
+    updateSettings,
+    saveSettingsNow,
+    accountsLaunchRedirect,
+    setAccountsLaunchRedirect,
+    runningInstanceIds,
+    launcherUpdate,
+    retryLauncherUpdate,
+    setLauncherUpdateDialogOpen,
+    updatePackInstanceId,
+    startPackUpdate,
+    reinstallInstanceId,
+    startCleanReinstall,
+    showNewInstance,
+    registerProcess,
+    handleProcessFailed,
+    setLastUsedGroup,
+    lastUsedGroup,
+    copyInstanceId,
+    handleCopyInstance,
+    renameInstanceId,
+    setRenameInstanceId,
+    handleRenameInstance,
+    changeGroupInstanceId,
+    handleSetInstanceGroup,
+    launcherUpdateDialogOpen,
+    installLauncherUpdate,
+    deleteInstanceConfirm,
+    setDeleteInstanceConfirm,
+    confirmDeleteInstance,
+    notice,
+    setNotice,
+    error,
+  };
+}
+
+type LauncherController = ReturnType<typeof useLauncherController>;
+
+export default function App() {
+  const controller = useLauncherController();
+  const {
+    setTab,
+    setShowNewInstance,
+    tab,
+    openProcesses,
+    processes,
+    accounts,
+    defaultAccountId,
+    handleSetDefaultAccount,
+    handleDismissProcess,
+    handleCancelDelete,
+    instances,
+    setError,
+    sel,
+    setSelectedInstanceId,
+    launcherSettings,
+    javaRefreshing,
+    refreshJava,
+    launching,
+    selectedProcessKey,
+    setSelectedProcessKey,
+    javaOptions,
+    handleSetDefaultJava,
+    updateSettings,
+    saveSettingsNow,
+    accountsLaunchRedirect,
+    setAccountsLaunchRedirect,
+    runningInstanceIds,
+    launcherUpdate,
+    retryLauncherUpdate,
+    setLauncherUpdateDialogOpen,
+  } = controller;
   return (
     <div className={cn("app-shell h-screen flex flex-col overflow-hidden", desktopPlatform() === "darwin" && "app-shell-macos")}>
       {/* Toolbar */}
-      <header className="app-toolbar h-11 shrink-0 flex items-center px-3 gap-1.5">
-        <div className="flex items-center gap-2 pr-1.5">
-          <span className="brand-mark size-5 rounded-md" aria-hidden="true" />
-          <span className="toolbar-brand-name font-semibold text-sm tracking-tight">Industrialis</span>
-        </div>
-        <Button
-          variant="default"
-          size="sm"
-          className="h-7"
-          aria-label="Add instance"
-          title="Add instance"
-          onClick={() => {
-            setTab("instances");
-            setShowNewInstance(true);
-          }}
-        >
-          <Plus className="size-3.5" /> <span className="toolbar-label">Add</span>
-        </Button>
-        <div className="w-px h-5 bg-border/80 mx-1" />
-        <div className="primary-nav inline-flex h-8 items-center rounded-lg border border-border/70 bg-muted/70 p-0.5 gap-0.5 shadow-inner">
-          {PRIMARY_NAV_TABS.map(({ key, label, Icon }) => (
-            <Button
-              key={key}
-              variant={tab === key ? "secondary" : "ghost"}
-              size="sm"
-              className="primary-nav-button h-6 px-2"
-              data-active={tab === key}
-              aria-label={label}
-              title={label}
-              onClick={() => (key === "processes" ? openProcesses() : setTab(key))}
-            >
-              <Icon className="size-3.5" /> <span className="toolbar-label">{label}</span>
-              {key === "processes" && runningProcessCount(processes) > 0 && (
-                <Badge variant="secondary" className="h-4 min-w-4 justify-center px-1 text-[10px]">
-                  {runningProcessCount(processes)}
-                </Badge>
-              )}
-            </Button>
-          ))}
-        </div>
-        <div className="app-toolbar-actions ml-auto flex items-center gap-0.5">
-          <AccountSwitcher
-            accounts={accounts}
-            defaultAccountId={defaultAccountId}
-            onSelectDefaultAccount={handleSetDefaultAccount}
-            onManageAccounts={() => setTab("accounts")}
-          />
-          <ProcessesDropdown processes={processes} onDismiss={handleDismissProcess} onCancelDelete={handleCancelDelete} onOpenProcesses={openProcesses} />
-          <Button
-            variant={tab === "settings" ? "secondary" : "ghost"}
-            size="icon"
-            className="size-7"
-            data-active={tab === "settings"}
-            aria-label="Settings"
-            title="Settings"
-            onClick={() => setTab("settings")}
-          >
-            <Settings className="size-4" />
-          </Button>
-          <ThemeSwitcher />
-        </div>
-        <WindowControls />
-      </header>
+      <LauncherToolbar
+        setTab={setTab}
+        setShowNewInstance={setShowNewInstance}
+        tab={tab}
+        openProcesses={openProcesses}
+        processes={processes}
+        accounts={accounts}
+        defaultAccountId={defaultAccountId}
+        handleSetDefaultAccount={handleSetDefaultAccount}
+        handleDismissProcess={handleDismissProcess}
+        handleCancelDelete={handleCancelDelete}
+      />
 
       {tab === "instances" ? (
-        <div className="instance-workspace min-h-0 flex-1 flex overflow-hidden p-2 gap-2">
-          {/* Instance list */}
-          <div className="surface-panel workspace-panel workspace-panel-library min-h-0 flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-hidden flex flex-col rounded-lg border border-border/80 shadow-sm">
-            {instances.length === 0 ? (
-              <div className="empty-state m-2 flex-1 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
-                <div className="font-medium text-foreground">No instances installed</div>
-                <p className="mt-1 text-xs text-muted-foreground">Add a pack instance to start building your launcher library.</p>
-              </div>
-            ) : (
-              <InstanceGroupList
-                commands={{
-                  launch: handleLaunch,
-                  kill: handleKill,
-                  openFolder: handleOpenInstanceFolder,
-                  delete: handleDelete,
-                  cancelDelete: handleCancelDelete,
-                  iconChanged: loadInstances,
-                  iconError: (message) => setError(`Icon update failed: ${message}`),
-                  toggleGroupCollapsed: handleToggleGroupCollapsed,
-                  renameGroup: handleRenameGroup,
-                  deleteGroup: handleDeleteGroup,
-                  reorderInstances: handleReorderInstances,
-                }}
-              />
-            )}
-          </div>
-
-          {/* Details panel */}
-          <div className="surface-panel workspace-panel flex-1 flex flex-col overflow-hidden rounded-lg border border-border/80 shadow-sm">
-            {sel ? (
-              <>
-                <Tabs value={detailTab} onValueChange={setDetailTab} className="flex-1 flex flex-col overflow-hidden">
-                  <div className="detail-header shrink-0 px-4 py-3 flex flex-col gap-2 min-h-16">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <InstanceAvatar
-                        instanceId={sel.id}
-                        name={instanceDisplayName(sel)}
-                        iconPath={sel.icon_path}
-                        size="md"
-                        loading={isDeletingSelected || isUpdatingSelected || isReinstallingSelected}
-                        onIconChanged={loadInstances}
-                        onError={(message) => setError(`Icon update failed: ${message}`)}
-                        onOpenFolder={() => handleOpenInstanceFolder(sel.id)}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-base font-semibold leading-tight break-words">{instanceDisplayName(sel)}</div>
-                        <div className="mt-0.5 text-xs text-muted-foreground truncate leading-tight">
-                          {isDeletingSelected && selectedDeleteProcess ? (
-                            <>Deleting... {(selectedDeleteProcess.pct * 100).toFixed(0)}%</>
-                          ) : isReinstallingSelected && selectedReinstallProcess ? (
-                            <>{formatUpdateProgress(selectedReinstallProcess)}</>
-                          ) : isUpdatingSelected && selectedUpdateProcess ? (
-                            <>{formatUpdateProgress(selectedUpdateProcess)}</>
-                          ) : (
-                            <span className="inline-flex items-center gap-2 min-w-0">
-                              <span className="truncate">
-                                {instancePackVersion(sel)} / {formatInstanceSize(sel.size_bytes, sizesRefreshing)}
-                                {sel.group ? ` / ${sel.group}` : ""}
-                              </span>
-                              <PackVersionStatus
-                                currentVersion={instancePackVersion(sel)}
-                                versions={gtnhVersions}
-                                onUpdate={() => setUpdatePackInstanceId(selectedInstanceId!)}
-                                disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
-                                compact
-                              />
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0"
-                        title="Close instance details"
-                        aria-label="Close instance details"
-                        onClick={() => setSelectedInstanceId(null)}
-                      >
-                        <X />
-                      </Button>
-                    </div>
-                    <TabsList className="w-full min-w-0 justify-start overflow-hidden h-8 rounded-lg border border-border/70 bg-background/50">
-                      <TabsTrigger value="info" className="flex-1">
-                        <Info className="size-3 mr-0.5" />
-                        Info
-                      </TabsTrigger>
-                      <TabsTrigger value="files" className="flex-1">
-                        <Files className="size-3 mr-0.5" />
-                        Files
-                      </TabsTrigger>
-                      <TabsTrigger value="mods" className="flex-1">
-                        <Package className="size-3 mr-0.5" />
-                        Mods
-                      </TabsTrigger>
-                      <TabsTrigger value="settings" className="flex-1">
-                        <SlidersHorizontal className="size-3 mr-0.5" />
-                        Settings
-                      </TabsTrigger>
-                      <TabsTrigger value="logs" className="flex-1">
-                        <Terminal className="size-3 mr-0.5" />
-                        Logs
-                      </TabsTrigger>
-                    </TabsList>
-                  </div>
-
-                  <TabsContent value="info" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0 space-y-3">
-                    <div className="detail-row flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2">
-                      <PackVersionStatus
-                        currentVersion={instancePackVersion(sel)}
-                        versions={gtnhVersions}
-                        onUpdate={() => setUpdatePackInstanceId(selectedInstanceId!)}
-                        disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
-                      />
-                    </div>
-                    <div className="detail-row flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium">Clean reinstall</div>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                          Fresh pack install while keeping saves, JourneyMap, options, and launcher overlays.
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0"
-                        disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
-                        onClick={() => setReinstallInstanceId(selectedInstanceId!)}
-                      >
-                        <RefreshCw className="size-3.5" />
-                        Reinstall
-                      </Button>
-                    </div>
-                    <InfoGrid
-                      items={[
-                        { label: "Pack version", value: instancePackVersion(sel) },
-                        { label: "Instance ID", value: sel.id },
-                        { label: "Size", value: formatInstanceSize(sel.size_bytes, sizesRefreshing) },
-                        { label: "Group", value: sel.group || groupsState.ungrouped_name },
-                        {
-                          label: "Java",
-                          value: mergeInstanceSettings(sel.settings).override_java_location
-                            ? sel.settings.java_path || "Invalid instance override"
-                            : launcherSettings.default_java_path || "Auto-detect",
-                        },
-                        {
-                          label: "RAM",
-                          value: sel.settings.override_memory ? `${sel.settings.min_ram_mb}-${sel.settings.max_ram_mb} MB` : "Default (4096-6144 MB)",
-                        },
-                        ...(mergeInstanceSettings(sel.settings).show_game_time && (sel.settings.override_game_time || sel.settings.total_play_seconds > 0)
-                          ? [{ label: "Play time", value: formatPlayTime(sel.settings.total_play_seconds) }]
-                          : []),
-                        {
-                          label: "Account",
-                          value: (() => {
-                            const launchAccount = resolveLaunchAccount(accounts, defaultAccountId, sel.settings);
-                            if (launchAccount) {
-                              const isOverride = mergeInstanceSettings(sel.settings).override_account;
-                              const suffix = launchAccount.account_type === "offline" ? "offline" : "Microsoft";
-                              return isOverride
-                                ? `${accountDisplayName(launchAccount)} (${suffix}, instance override)`
-                                : `${accountDisplayName(launchAccount)} (${suffix}, default)`;
-                            }
-                            return "No default account - set one in Accounts";
-                          })(),
-                        },
-                      ]}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="files" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
-                    <InstanceMinecraftEditor instanceId={selectedInstanceId!} />
-                  </TabsContent>
-
-                  <TabsContent value="mods" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
-                    <CustomModsPanel instanceId={selectedInstanceId!} />
-                  </TabsContent>
-
-                  <TabsContent value="settings" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
-                    <InstanceSettingsPanel
-                      instanceId={selectedInstanceId!}
-                      packVersion={instancePackVersion(sel)}
-                      javaRefreshing={javaRefreshing}
-                      accounts={accounts}
-                      onOpenLauncherSettings={() => setTab("settings")}
-                      onRefreshJava={refreshJava}
-                      onSave={handleSaveSettings}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="logs" className="flex-1 overflow-hidden flex flex-col mt-0">
-                    <LogView
-                      log={instanceLogs[selectedInstanceId!] ?? []}
-                      onClear={() => handleClearConsole(selectedInstanceId!)}
-                      disableClear={selectedInstanceActive}
-                      onCopy={async () => {
-                        if (selectedInstanceActive) return instanceLogs[selectedInstanceId!] ?? [];
-                        try {
-                          return await session.getConsoleLog(selectedInstanceId!);
-                        } catch {
-                          return instanceLogs[selectedInstanceId!] ?? [];
-                        }
-                      }}
-                    />
-                  </TabsContent>
-                </Tabs>
-
-                {/* Action bar */}
-                <div className="detail-action-bar shrink-0 border-t border-border/80 bg-card/60 px-4 py-3 flex items-center gap-2">
-                  {isReinstallingSelected && selectedReinstallProcess ? (
-                    <>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex items-center gap-2 text-sm min-w-0">
-                          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                          <span className="truncate">{formatUpdateProgress(selectedReinstallProcess)}</span>
-                        </div>
-                        <Progress value={selectedReinstallProcess.pct * 100} className="h-1.5" />
-                      </div>
-                      <Button variant="outline" onClick={() => openProcesses(processKey("reinstall", selectedInstanceId!))}>
-                        <Activity className="size-3.5" />
-                        View log
-                      </Button>
-                    </>
-                  ) : isUpdatingSelected && selectedUpdateProcess ? (
-                    <>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex items-center gap-2 text-sm min-w-0">
-                          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                          <span className="truncate">{formatUpdateProgress(selectedUpdateProcess)}</span>
-                        </div>
-                        <Progress value={selectedUpdateProcess.pct * 100} className="h-1.5" />
-                      </div>
-                      <Button variant="outline" onClick={() => openProcesses(processKey("update-pack", selectedInstanceId!))}>
-                        <Activity className="size-3.5" />
-                        View log
-                      </Button>
-                    </>
-                  ) : isDeletingSelected && selectedDeleteProcess ? (
-                    <>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                          <span>Deleting... {(selectedDeleteProcess.pct * 100).toFixed(0)}%</span>
-                        </div>
-                        <Progress value={selectedDeleteProcess.pct * 100} className="h-1.5" />
-                      </div>
-                      <Button variant="outline" onClick={() => handleCancelDelete(selectedInstanceId!)}>
-                        <X className="size-3.5" />
-                        Cancel
-                      </Button>
-                    </>
-                  ) : selectedInstanceRunning || selectedInstanceStarting ? (
-                    <>
-                      <Button
-                        className="flex-1"
-                        variant={selectedInstanceRunning ? "destructive" : "default"}
-                        onClick={() => selectedInstanceRunning && handleKill(selectedInstanceId!)}
-                        disabled={selectedInstanceStarting}
-                      >
-                        {selectedInstanceStarting ? (
-                          <>
-                            <Loader2 className="animate-spin" /> Launching...
-                          </>
-                        ) : (
-                          <>
-                            <Square className="fill-current" /> Stop
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title="Update pack"
-                        disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
-                        onClick={() => setUpdatePackInstanceId(selectedInstanceId)}
-                      >
-                        <ArrowUpCircle />
-                      </Button>
-                      <Button variant="outline" size="icon" title="Change instance group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
-                        <FolderInput />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title="Copy instance"
-                        disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
-                        onClick={() => setCopyInstanceId(selectedInstanceId)}
-                      >
-                        <Copy />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title="Delete instance"
-                        disabled={instanceBusy(selectedInstanceId!)}
-                        onClick={() => handleDelete(selectedInstanceId!)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        className="flex-1"
-                        onClick={() => handleLaunch(selectedInstanceId!)}
-                        disabled={launching !== null || instanceBusy(selectedInstanceId!)}
-                      >
-                        <Play /> {launching ? "Busy" : "Launch"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title="Update pack"
-                        disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
-                        onClick={() => setUpdatePackInstanceId(selectedInstanceId)}
-                      >
-                        <ArrowUpCircle />
-                      </Button>
-                      <Button variant="outline" size="icon" title="Change instance group" onClick={() => setChangeGroupInstanceId(selectedInstanceId)}>
-                        <FolderInput />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title="Copy instance"
-                        disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
-                        onClick={() => setCopyInstanceId(selectedInstanceId)}
-                      >
-                        <Copy />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title="Delete instance"
-                        disabled={instanceBusy(selectedInstanceId!)}
-                        onClick={() => handleDelete(selectedInstanceId!)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center p-6">
-                <div className="empty-state max-w-sm rounded-lg border border-dashed border-border/80 bg-muted/30 p-6 text-center">
-                  <div className="mx-auto mb-3 instance-avatar size-11 rounded-lg flex items-center justify-center">
-                    <Boxes className="size-5 text-muted-foreground" />
-                  </div>
-                  <div className="font-medium">Select an instance</div>
-                  <p className="mt-1 text-xs text-muted-foreground">Pick a pack from the library to view files, mods, settings, and launch logs.</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <InstanceWorkspace controller={controller} />
       ) : tab === "processes" ? (
         <ProcessesTab
           processes={processes}
@@ -1001,164 +725,18 @@ export default function App() {
       )}
 
       {/* Status bar */}
-      <footer className="h-6 shrink-0 border-t border-border/80 flex items-center px-3 gap-3 text-[11px] text-muted-foreground bg-card/80">
-        <span>
-          {instances.length} instance{instances.length === 1 ? "" : "s"}
-        </span>
-        {sel && <span className="truncate">{instanceDisplayName(sel)}</span>}
-        {launching && <span>Launching {launching}…</span>}
-        {runningInstanceIds.size > 0 && <span>Running {Array.from(runningInstanceIds).join(", ")}</span>}
-        {runningProcessCount(processes) > 0 && (
-          <span>
-            {runningProcessCount(processes)} background process{runningProcessCount(processes) === 1 ? "" : "es"}
-          </span>
-        )}
-        <LauncherUpdateStatus state={launcherUpdate} onCheck={retryLauncherUpdate} onOpen={() => setLauncherUpdateDialogOpen(true)} />
-      </footer>
-
-      {updatePackInstanceId &&
-        (() => {
-          const inst = instances.find((i) => i.id === updatePackInstanceId);
-          if (!inst) return null;
-          return (
-            <UpdatePackDialog
-              instanceId={updatePackInstanceId}
-              instanceName={instanceDisplayName(inst)}
-              currentPackVersion={instancePackVersion(inst)}
-              defaultJavaType={inst.settings.pack_java_type || "java17+"}
-              versions={gtnhVersions}
-              onClose={() => setUpdatePackInstanceId(null)}
-              onUpdate={(packVersion, javaType, keepModIdentities) => {
-                startPackUpdate(updatePackInstanceId, instanceDisplayName(inst), packVersion, javaType, keepModIdentities);
-              }}
-            />
-          );
-        })()}
-
-      {reinstallInstanceId &&
-        (() => {
-          const inst = instances.find((i) => i.id === reinstallInstanceId);
-          if (!inst) return null;
-          return (
-            <ReinstallInstanceDialog
-              instanceName={instanceDisplayName(inst)}
-              currentPackVersion={instancePackVersion(inst)}
-              defaultJavaType={inst.settings.pack_java_type || "java17+"}
-              versions={gtnhVersions}
-              onClose={() => setReinstallInstanceId(null)}
-              onReinstall={(packVersion, javaType) => {
-                startCleanReinstall(reinstallInstanceId, instanceDisplayName(inst), packVersion, javaType);
-              }}
-            />
-          );
-        })()}
-
-      {showNewInstance && (
-        <NewInstanceDialog
-          onClose={() => setShowNewInstance(false)}
-          onInstall={(id, packVersion, javaType, group, name) => {
-            setError(null);
-            setShowNewInstance(false);
-            registerProcess("install", id, name || `GTNH ${packVersion}`);
-            void invoke("download_install", {
-              id,
-              packVersion,
-              javaType,
-              group: group || null,
-              name: name || null,
-            }).catch((e) => handleProcessFailed("install", id, e));
-            if (group) setLastUsedGroup(group);
-          }}
-          existingInstanceIds={new Set(instances.map((i) => i.id))}
-          existingGroups={groupsState.groups}
-          initialGroup={lastUsedGroup}
-          versions={gtnhVersions}
-        />
-      )}
-
-      {copyInstanceId &&
-        (() => {
-          const source = instances.find((i) => i.id === copyInstanceId);
-          if (!source) return null;
-          return (
-            <CopyInstanceDialog
-              source={source}
-              existingInstanceIds={new Set(instances.map((i) => i.id))}
-              onClose={() => setCopyInstanceId(null)}
-              onCopy={(newId, newName) => handleCopyInstance(copyInstanceId, newId, newName)}
-            />
-          );
-        })()}
-
-      {renameInstanceId &&
-        (() => {
-          const inst = instances.find((i) => i.id === renameInstanceId);
-          if (!inst) return null;
-          return (
-            <RenameInstanceDialog
-              instance={inst}
-              onClose={() => setRenameInstanceId(null)}
-              onSave={(newName) => handleRenameInstance(renameInstanceId, newName)}
-            />
-          );
-        })()}
-
-      {changeGroupInstanceId && (
-        <ChangeGroupDialog
-          instanceName={
-            instances.find((i) => i.id === changeGroupInstanceId)
-              ? instanceDisplayName(instances.find((i) => i.id === changeGroupInstanceId)!)
-              : changeGroupInstanceId
-          }
-          currentGroup={instances.find((i) => i.id === changeGroupInstanceId)?.group ?? ""}
-          existingGroups={groupsState.groups}
-          ungroupedName={groupsState.ungrouped_name}
-          onClose={() => setChangeGroupInstanceId(null)}
-          onSave={(group) => {
-            handleSetInstanceGroup(changeGroupInstanceId, group);
-            setChangeGroupInstanceId(null);
-          }}
-        />
-      )}
-
-      <LauncherUpdateDialog
-        state={launcherUpdate}
-        open={launcherUpdateDialogOpen}
-        onInstall={installLauncherUpdate}
-        onDismiss={() => setLauncherUpdateDialogOpen(false)}
-        onRetry={retryLauncherUpdate}
+      <LauncherFooter
+        instances={instances}
+        sel={sel}
+        launching={launching}
+        runningInstanceIds={runningInstanceIds}
+        processes={processes}
+        launcherUpdate={launcherUpdate}
+        retryLauncherUpdate={retryLauncherUpdate}
+        setLauncherUpdateDialogOpen={setLauncherUpdateDialogOpen}
       />
 
-      <ConfirmDialog
-        open={deleteInstanceConfirm !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteInstanceConfirm(null);
-        }}
-        title="Delete instance?"
-        description={deleteInstanceConfirm ? `Delete "${deleteInstanceConfirm.name}"? This removes all instance files and cannot be undone.` : ""}
-        confirmLabel="Delete"
-        destructive
-        onConfirm={confirmDeleteInstance}
-      />
-
-      {notice && (
-        <div className="fixed bottom-10 right-4 z-50 max-w-sm rounded bg-secondary p-3 text-secondary-foreground shadow-lg">
-          <p className="text-sm">{notice}</p>
-          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setNotice(null)}>
-            Dismiss
-          </Button>
-        </div>
-      )}
-
-      {/* Error toast */}
-      {error && (
-        <div className="fixed bottom-10 right-4 bg-destructive text-destructive-foreground p-3 rounded shadow-lg max-w-sm z-50">
-          <p className="text-sm">{error}</p>
-          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setError(null)}>
-            Dismiss
-          </Button>
-        </div>
-      )}
+      <LauncherDialogs controller={controller} />
     </div>
   );
 }
@@ -2056,5 +1634,861 @@ function SettingsTab({
         </TabsContent>
       </div>
     </Tabs>
+  );
+}
+
+function InstanceInfoTab({
+  sel,
+  gtnhVersions,
+  setUpdatePackInstanceId,
+  selectedInstanceId,
+  selectedInstanceActive,
+  instanceBusy,
+  setReinstallInstanceId,
+  sizesRefreshing,
+  groupsState,
+  launcherSettings,
+  accounts,
+  defaultAccountId,
+}: {
+  sel: InstanceInfo;
+  gtnhVersions: Record<string, GtnhVersion> | null;
+  setUpdatePackInstanceId: (update: React.SetStateAction<string | null>) => void;
+  selectedInstanceId: string | null;
+  selectedInstanceActive: boolean;
+  instanceBusy: (id: string) => boolean;
+  setReinstallInstanceId: (update: React.SetStateAction<string | null>) => void;
+  sizesRefreshing: boolean;
+  groupsState: InstanceGroupsState;
+  launcherSettings: LauncherSettingsData;
+  accounts: LauncherAccount[];
+  defaultAccountId: string | null;
+}) {
+  return (
+    <TabsContent value="info" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0 space-y-3">
+      <div className="detail-row flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2">
+        <PackVersionStatus
+          currentVersion={instancePackVersion(sel)}
+          versions={gtnhVersions}
+          onUpdate={() => setUpdatePackInstanceId(selectedInstanceId!)}
+          disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
+        />
+      </div>
+      <div className="detail-row flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/45 px-3 py-2">
+        <div className="min-w-0">
+          <div className="text-sm font-medium">Clean reinstall</div>
+          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+            Fresh pack install while keeping saves, JourneyMap, options, and launcher overlays.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
+          onClick={() => setReinstallInstanceId(selectedInstanceId!)}
+        >
+          <RefreshCw className="size-3.5" />
+          Reinstall
+        </Button>
+      </div>
+      <InfoGrid
+        items={[
+          { label: "Pack version", value: instancePackVersion(sel) },
+          { label: "Instance ID", value: sel.id },
+          { label: "Size", value: formatInstanceSize(sel.size_bytes, sizesRefreshing) },
+          { label: "Group", value: sel.group || groupsState.ungrouped_name },
+          {
+            label: "Java",
+            value: mergeInstanceSettings(sel.settings).override_java_location
+              ? sel.settings.java_path || "Invalid instance override"
+              : launcherSettings.default_java_path || "Auto-detect",
+          },
+          {
+            label: "RAM",
+            value: sel.settings.override_memory ? `${sel.settings.min_ram_mb}-${sel.settings.max_ram_mb} MB` : "Default (4096-6144 MB)",
+          },
+          ...(mergeInstanceSettings(sel.settings).show_game_time && (sel.settings.override_game_time || sel.settings.total_play_seconds > 0)
+            ? [{ label: "Play time", value: formatPlayTime(sel.settings.total_play_seconds) }]
+            : []),
+          {
+            label: "Account",
+            value: (() => {
+              const launchAccount = resolveLaunchAccount(accounts, defaultAccountId, sel.settings);
+              if (launchAccount) {
+                const isOverride = mergeInstanceSettings(sel.settings).override_account;
+                const suffix = launchAccount.account_type === "offline" ? "offline" : "Microsoft";
+                return isOverride
+                  ? `${accountDisplayName(launchAccount)} (${suffix}, instance override)`
+                  : `${accountDisplayName(launchAccount)} (${suffix}, default)`;
+              }
+              return "No default account - set one in Accounts";
+            })(),
+          },
+        ]}
+      />
+    </TabsContent>
+  );
+}
+
+function InstanceDetailActions({
+  selectedReinstallProcess,
+  openProcesses,
+  selectedInstanceId,
+  selectedUpdateProcess,
+  selectedDeleteProcess,
+  handleCancelDelete,
+  selectedInstanceRunning,
+  selectedInstanceStarting,
+  handleKill,
+  selectedInstanceActive,
+  instanceBusy,
+  setUpdatePackInstanceId,
+  setChangeGroupInstanceId,
+  setCopyInstanceId,
+  handleDelete,
+  handleLaunch,
+  launching,
+}: {
+  selectedReinstallProcess: BackgroundProcess | undefined;
+  openProcesses: (key?: string) => void;
+  selectedInstanceId: string | null;
+  selectedUpdateProcess: BackgroundProcess | undefined;
+  selectedDeleteProcess: BackgroundProcess | undefined;
+  handleCancelDelete: (id: string) => void;
+  selectedInstanceRunning: boolean;
+  selectedInstanceStarting: boolean;
+  handleKill: (id: string) => Promise<void>;
+  selectedInstanceActive: boolean;
+  instanceBusy: (id: string) => boolean;
+  setUpdatePackInstanceId: (update: React.SetStateAction<string | null>) => void;
+  setChangeGroupInstanceId: (update: React.SetStateAction<string | null>) => void;
+  setCopyInstanceId: (update: React.SetStateAction<string | null>) => void;
+  handleDelete: (id: string) => void;
+  handleLaunch: (id: string) => Promise<void>;
+  launching: string | null;
+}) {
+  const operation = [selectedReinstallProcess, selectedUpdateProcess, selectedDeleteProcess].find((proc) => proc?.status === "running");
+  if (operation) return <InstanceOperationActions proc={operation} openProcesses={openProcesses} onCancelDelete={handleCancelDelete} />;
+  const id = selectedInstanceId!;
+  const busy = instanceBusy(id);
+  return (
+    <div className="detail-action-bar shrink-0 border-t border-border/80 bg-card/60 px-4 py-3 flex items-center gap-2">
+      <InstanceLaunchAction
+        id={id}
+        running={selectedInstanceRunning}
+        starting={selectedInstanceStarting}
+        launching={launching}
+        busy={busy}
+        onLaunch={handleLaunch}
+        onKill={handleKill}
+      />
+      <Button variant="outline" size="icon" title="Update pack" disabled={selectedInstanceActive || busy} onClick={() => setUpdatePackInstanceId(id)}>
+        <ArrowUpCircle />
+      </Button>
+      <Button variant="outline" size="icon" title="Change instance group" onClick={() => setChangeGroupInstanceId(id)}>
+        <FolderInput />
+      </Button>
+      <Button variant="outline" size="icon" title="Copy instance" disabled={selectedInstanceActive || busy} onClick={() => setCopyInstanceId(id)}>
+        <Copy />
+      </Button>
+      <Button variant="outline" size="icon" title="Delete instance" disabled={busy} onClick={() => handleDelete(id)}>
+        <Trash2 />
+      </Button>
+    </div>
+  );
+}
+
+function InstanceOperationActions({
+  proc,
+  openProcesses,
+  onCancelDelete,
+}: {
+  proc: BackgroundProcess;
+  openProcesses: (key: string) => void;
+  onCancelDelete: (id: string) => void;
+}) {
+  const deleting = proc.operation === "delete";
+  return (
+    <div className="detail-action-bar shrink-0 border-t border-border/80 bg-card/60 px-4 py-3 flex items-center gap-2">
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center gap-2 text-sm min-w-0">
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          <span className="truncate">{deleting ? `Deleting... ${(proc.pct * 100).toFixed(0)}%` : formatUpdateProgress(proc)}</span>
+        </div>
+        <Progress value={proc.pct * 100} className="h-1.5" />
+      </div>
+      {deleting ? (
+        <Button variant="outline" onClick={() => onCancelDelete(proc.id)}>
+          <X className="size-3.5" />
+          Cancel
+        </Button>
+      ) : (
+        <Button variant="outline" onClick={() => openProcesses(proc.key)}>
+          <Activity className="size-3.5" />
+          View log
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function InstanceLaunchAction({
+  id,
+  running,
+  starting,
+  launching,
+  busy,
+  onLaunch,
+  onKill,
+}: {
+  id: string;
+  running: boolean;
+  starting: boolean;
+  launching: string | null;
+  busy: boolean;
+  onLaunch: (id: string) => Promise<void>;
+  onKill: (id: string) => Promise<void>;
+}) {
+  if (starting)
+    return (
+      <Button className="flex-1" variant={running ? "destructive" : "default"} disabled>
+        <Loader2 className="animate-spin" />
+        Launching...
+      </Button>
+    );
+  if (running)
+    return (
+      <Button className="flex-1" variant="destructive" onClick={() => onKill(id)}>
+        <Square className="fill-current" />
+        Stop
+      </Button>
+    );
+  return (
+    <Button className="flex-1" onClick={() => onLaunch(id)} disabled={launching !== null || busy}>
+      <Play />
+      {launching ? "Busy" : "Launch"}
+    </Button>
+  );
+}
+
+function LauncherToolbar({
+  setTab,
+  setShowNewInstance,
+  tab,
+  openProcesses,
+  processes,
+  accounts,
+  defaultAccountId,
+  handleSetDefaultAccount,
+  handleDismissProcess,
+  handleCancelDelete,
+}: {
+  setTab: (update: React.SetStateAction<string>) => void;
+  setShowNewInstance: (update: React.SetStateAction<boolean>) => void;
+  tab: string;
+  openProcesses: (key?: string) => void;
+  processes: Map<string, BackgroundProcess>;
+  accounts: LauncherAccount[];
+  defaultAccountId: string | null;
+  handleSetDefaultAccount: (id: string | null) => void;
+  handleDismissProcess: (key: string) => void;
+  handleCancelDelete: (id: string) => void;
+}) {
+  return (
+    <header className="app-toolbar h-11 shrink-0 flex items-center px-3 gap-1.5">
+      <div className="flex items-center gap-2 pr-1.5">
+        <span className="brand-mark size-5 rounded-md" aria-hidden="true" />
+        <span className="toolbar-brand-name font-semibold text-sm tracking-tight">Industrialis</span>
+      </div>
+      <Button
+        variant="default"
+        size="sm"
+        className="h-7"
+        aria-label="Add instance"
+        title="Add instance"
+        onClick={() => {
+          setTab("instances");
+          setShowNewInstance(true);
+        }}
+      >
+        <Plus className="size-3.5" /> <span className="toolbar-label">Add</span>
+      </Button>
+      <div className="w-px h-5 bg-border/80 mx-1" />
+      <div className="primary-nav inline-flex h-8 items-center rounded-lg border border-border/70 bg-muted/70 p-0.5 gap-0.5 shadow-inner">
+        {PRIMARY_NAV_TABS.map(({ key, label, Icon }) => (
+          <Button
+            key={key}
+            variant={tab === key ? "secondary" : "ghost"}
+            size="sm"
+            className="primary-nav-button h-6 px-2"
+            data-active={tab === key}
+            aria-label={label}
+            title={label}
+            onClick={() => (key === "processes" ? openProcesses() : setTab(key))}
+          >
+            <Icon className="size-3.5" /> <span className="toolbar-label">{label}</span>
+            {key === "processes" && runningProcessCount(processes) > 0 && (
+              <Badge variant="secondary" className="h-4 min-w-4 justify-center px-1 text-[10px]">
+                {runningProcessCount(processes)}
+              </Badge>
+            )}
+          </Button>
+        ))}
+      </div>
+      <div className="app-toolbar-actions ml-auto flex items-center gap-0.5">
+        <AccountSwitcher
+          accounts={accounts}
+          defaultAccountId={defaultAccountId}
+          onSelectDefaultAccount={handleSetDefaultAccount}
+          onManageAccounts={() => setTab("accounts")}
+        />
+        <ProcessesDropdown processes={processes} onDismiss={handleDismissProcess} onCancelDelete={handleCancelDelete} onOpenProcesses={openProcesses} />
+        <Button
+          variant={tab === "settings" ? "secondary" : "ghost"}
+          size="icon"
+          className="size-7"
+          data-active={tab === "settings"}
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => setTab("settings")}
+        >
+          <Settings className="size-4" />
+        </Button>
+        <ThemeSwitcher />
+      </div>
+      <WindowControls />
+    </header>
+  );
+}
+
+function LauncherFooter({
+  instances,
+  sel,
+  launching,
+  runningInstanceIds,
+  processes,
+  launcherUpdate,
+  retryLauncherUpdate,
+  setLauncherUpdateDialogOpen,
+}: {
+  instances: InstanceInfo[];
+  sel: InstanceInfo | null;
+  launching: string | null;
+  runningInstanceIds: Set<string>;
+  processes: Map<string, BackgroundProcess>;
+  launcherUpdate: LauncherUpdateState;
+  retryLauncherUpdate: () => void;
+  setLauncherUpdateDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  return (
+    <footer className="h-6 shrink-0 border-t border-border/80 flex items-center px-3 gap-3 text-[11px] text-muted-foreground bg-card/80">
+      <span>
+        {instances.length} instance{instances.length === 1 ? "" : "s"}
+      </span>
+      {sel && <span className="truncate">{instanceDisplayName(sel)}</span>}
+      {launching && <span>Launching {launching}…</span>}
+      {runningInstanceIds.size > 0 && <span>Running {Array.from(runningInstanceIds).join(", ")}</span>}
+      {runningProcessCount(processes) > 0 && (
+        <span>
+          {runningProcessCount(processes)} background process{runningProcessCount(processes) === 1 ? "" : "es"}
+        </span>
+      )}
+      <LauncherUpdateStatus state={launcherUpdate} onCheck={retryLauncherUpdate} onOpen={() => setLauncherUpdateDialogOpen(true)} />
+    </footer>
+  );
+}
+
+function InstanceDetailHeader({
+  sel,
+  isDeletingSelected,
+  isUpdatingSelected,
+  isReinstallingSelected,
+  loadInstances,
+  setError,
+  handleOpenInstanceFolder,
+  selectedDeleteProcess,
+  selectedReinstallProcess,
+  selectedUpdateProcess,
+  sizesRefreshing,
+  gtnhVersions,
+  setUpdatePackInstanceId,
+  selectedInstanceId,
+  selectedInstanceActive,
+  instanceBusy,
+  setSelectedInstanceId,
+}: {
+  sel: InstanceInfo;
+  isDeletingSelected: boolean;
+  isUpdatingSelected: boolean;
+  isReinstallingSelected: boolean;
+  loadInstances: () => Promise<void>;
+  setError: (message: string | null) => void;
+  handleOpenInstanceFolder: (id: string) => Promise<void>;
+  selectedDeleteProcess: BackgroundProcess | undefined;
+  selectedReinstallProcess: BackgroundProcess | undefined;
+  selectedUpdateProcess: BackgroundProcess | undefined;
+  sizesRefreshing: boolean;
+  gtnhVersions: Record<string, GtnhVersion> | null;
+  setUpdatePackInstanceId: (update: React.SetStateAction<string | null>) => void;
+  selectedInstanceId: string | null;
+  selectedInstanceActive: boolean;
+  instanceBusy: (id: string) => boolean;
+  setSelectedInstanceId: (update: React.SetStateAction<string | null>) => void;
+}) {
+  return (
+    <div className="detail-header shrink-0 px-4 py-3 flex flex-col gap-2 min-h-16">
+      <div className="flex items-center gap-3 min-w-0">
+        <InstanceAvatar
+          instanceId={sel.id}
+          name={instanceDisplayName(sel)}
+          iconPath={sel.icon_path}
+          size="md"
+          loading={isDeletingSelected || isUpdatingSelected || isReinstallingSelected}
+          onIconChanged={loadInstances}
+          onError={(message) => setError(`Icon update failed: ${message}`)}
+          onOpenFolder={() => handleOpenInstanceFolder(sel.id)}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-semibold leading-tight break-words">{instanceDisplayName(sel)}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground truncate leading-tight">
+            {isDeletingSelected && selectedDeleteProcess ? (
+              <>Deleting... {(selectedDeleteProcess.pct * 100).toFixed(0)}%</>
+            ) : isReinstallingSelected && selectedReinstallProcess ? (
+              <>{formatUpdateProgress(selectedReinstallProcess)}</>
+            ) : isUpdatingSelected && selectedUpdateProcess ? (
+              <>{formatUpdateProgress(selectedUpdateProcess)}</>
+            ) : (
+              <span className="inline-flex items-center gap-2 min-w-0">
+                <span className="truncate">
+                  {instancePackVersion(sel)} / {formatInstanceSize(sel.size_bytes, sizesRefreshing)}
+                  {sel.group ? ` / ${sel.group}` : ""}
+                </span>
+                <PackVersionStatus
+                  currentVersion={instancePackVersion(sel)}
+                  versions={gtnhVersions}
+                  onUpdate={() => setUpdatePackInstanceId(selectedInstanceId!)}
+                  disabled={selectedInstanceActive || instanceBusy(selectedInstanceId!)}
+                  compact
+                />
+              </span>
+            )}
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0"
+          title="Close instance details"
+          aria-label="Close instance details"
+          onClick={() => setSelectedInstanceId(null)}
+        >
+          <X />
+        </Button>
+      </div>
+      <TabsList className="w-full min-w-0 justify-start overflow-hidden h-8 rounded-lg border border-border/70 bg-background/50">
+        <TabsTrigger value="info" className="flex-1">
+          <Info className="size-3 mr-0.5" />
+          Info
+        </TabsTrigger>
+        <TabsTrigger value="files" className="flex-1">
+          <Files className="size-3 mr-0.5" />
+          Files
+        </TabsTrigger>
+        <TabsTrigger value="mods" className="flex-1">
+          <Package className="size-3 mr-0.5" />
+          Mods
+        </TabsTrigger>
+        <TabsTrigger value="settings" className="flex-1">
+          <SlidersHorizontal className="size-3 mr-0.5" />
+          Settings
+        </TabsTrigger>
+        <TabsTrigger value="logs" className="flex-1">
+          <Terminal className="size-3 mr-0.5" />
+          Logs
+        </TabsTrigger>
+      </TabsList>
+    </div>
+  );
+}
+
+function LauncherDialogs({ controller }: { controller: LauncherController }) {
+  const {
+    updatePackInstanceId,
+    instances,
+    gtnhVersions,
+    setUpdatePackInstanceId,
+    startPackUpdate,
+    reinstallInstanceId,
+    setReinstallInstanceId,
+    startCleanReinstall,
+    showNewInstance,
+    setShowNewInstance,
+    setError,
+    registerProcess,
+    handleProcessFailed,
+    setLastUsedGroup,
+    groupsState,
+    lastUsedGroup,
+    copyInstanceId,
+    setCopyInstanceId,
+    handleCopyInstance,
+    renameInstanceId,
+    setRenameInstanceId,
+    handleRenameInstance,
+    changeGroupInstanceId,
+    setChangeGroupInstanceId,
+    handleSetInstanceGroup,
+    launcherUpdate,
+    launcherUpdateDialogOpen,
+    installLauncherUpdate,
+    setLauncherUpdateDialogOpen,
+    retryLauncherUpdate,
+    deleteInstanceConfirm,
+    setDeleteInstanceConfirm,
+    confirmDeleteInstance,
+    notice,
+    setNotice,
+    error,
+  } = controller;
+
+  return (
+    <>
+      {updatePackInstanceId &&
+        (() => {
+          const inst = instances.find((i) => i.id === updatePackInstanceId);
+          if (!inst) return null;
+          return (
+            <UpdatePackDialog
+              instanceId={updatePackInstanceId}
+              instanceName={instanceDisplayName(inst)}
+              currentPackVersion={instancePackVersion(inst)}
+              defaultJavaType={inst.settings.pack_java_type || "java17+"}
+              versions={gtnhVersions}
+              onClose={() => setUpdatePackInstanceId(null)}
+              onUpdate={(packVersion, javaType, keepModIdentities) => {
+                startPackUpdate(updatePackInstanceId, instanceDisplayName(inst), packVersion, javaType, keepModIdentities);
+              }}
+            />
+          );
+        })()}
+
+      {reinstallInstanceId &&
+        (() => {
+          const inst = instances.find((i) => i.id === reinstallInstanceId);
+          if (!inst) return null;
+          return (
+            <ReinstallInstanceDialog
+              instanceName={instanceDisplayName(inst)}
+              currentPackVersion={instancePackVersion(inst)}
+              defaultJavaType={inst.settings.pack_java_type || "java17+"}
+              versions={gtnhVersions}
+              onClose={() => setReinstallInstanceId(null)}
+              onReinstall={(packVersion, javaType) => {
+                startCleanReinstall(reinstallInstanceId, instanceDisplayName(inst), packVersion, javaType);
+              }}
+            />
+          );
+        })()}
+
+      {showNewInstance && (
+        <NewInstanceDialog
+          onClose={() => setShowNewInstance(false)}
+          onInstall={(id, packVersion, javaType, group, name) => {
+            setError(null);
+            setShowNewInstance(false);
+            registerProcess("install", id, name || `GTNH ${packVersion}`);
+            void invoke("download_install", {
+              id,
+              packVersion,
+              javaType,
+              group: group || null,
+              name: name || null,
+            }).catch((e) => handleProcessFailed("install", id, e));
+            if (group) setLastUsedGroup(group);
+          }}
+          existingInstanceIds={new Set(instances.map((i) => i.id))}
+          existingGroups={groupsState.groups}
+          initialGroup={lastUsedGroup}
+          versions={gtnhVersions}
+        />
+      )}
+
+      {copyInstanceId &&
+        (() => {
+          const source = instances.find((i) => i.id === copyInstanceId);
+          if (!source) return null;
+          return (
+            <CopyInstanceDialog
+              source={source}
+              existingInstanceIds={new Set(instances.map((i) => i.id))}
+              onClose={() => setCopyInstanceId(null)}
+              onCopy={(newId, newName) => handleCopyInstance(copyInstanceId, newId, newName)}
+            />
+          );
+        })()}
+
+      {renameInstanceId &&
+        (() => {
+          const inst = instances.find((i) => i.id === renameInstanceId);
+          if (!inst) return null;
+          return (
+            <RenameInstanceDialog
+              instance={inst}
+              onClose={() => setRenameInstanceId(null)}
+              onSave={(newName) => handleRenameInstance(renameInstanceId, newName)}
+            />
+          );
+        })()}
+
+      {changeGroupInstanceId && (
+        <ChangeGroupDialog
+          instanceName={
+            instances.find((i) => i.id === changeGroupInstanceId)
+              ? instanceDisplayName(instances.find((i) => i.id === changeGroupInstanceId)!)
+              : changeGroupInstanceId
+          }
+          currentGroup={instances.find((i) => i.id === changeGroupInstanceId)?.group ?? ""}
+          existingGroups={groupsState.groups}
+          ungroupedName={groupsState.ungrouped_name}
+          onClose={() => setChangeGroupInstanceId(null)}
+          onSave={(group) => {
+            handleSetInstanceGroup(changeGroupInstanceId, group);
+            setChangeGroupInstanceId(null);
+          }}
+        />
+      )}
+
+      <LauncherUpdateDialog
+        state={launcherUpdate}
+        open={launcherUpdateDialogOpen}
+        onInstall={installLauncherUpdate}
+        onDismiss={() => setLauncherUpdateDialogOpen(false)}
+        onRetry={retryLauncherUpdate}
+      />
+
+      <ConfirmDialog
+        open={deleteInstanceConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteInstanceConfirm(null);
+        }}
+        title="Delete instance?"
+        description={deleteInstanceConfirm ? `Delete "${deleteInstanceConfirm.name}"? This removes all instance files and cannot be undone.` : ""}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={confirmDeleteInstance}
+      />
+
+      {notice && (
+        <div className="fixed bottom-10 right-4 z-50 max-w-sm rounded bg-secondary p-3 text-secondary-foreground shadow-lg">
+          <p className="text-sm">{notice}</p>
+          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setNotice(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {/* Error toast */}
+      {error && (
+        <div className="fixed bottom-10 right-4 bg-destructive text-destructive-foreground p-3 rounded shadow-lg max-w-sm z-50">
+          <p className="text-sm">{error}</p>
+          <Button size="sm" variant="ghost" className="mt-1" onClick={() => setError(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function InstanceWorkspace({ controller }: { controller: LauncherController }) {
+  const {
+    instances,
+    handleLaunch,
+    handleKill,
+    handleOpenInstanceFolder,
+    handleDelete,
+    handleCancelDelete,
+    loadInstances,
+    setError,
+    handleToggleGroupCollapsed,
+    handleRenameGroup,
+    handleDeleteGroup,
+    handleReorderInstances,
+    sel,
+    detailTab,
+    setDetailTab,
+    isDeletingSelected,
+    isUpdatingSelected,
+    isReinstallingSelected,
+    selectedDeleteProcess,
+    selectedReinstallProcess,
+    selectedUpdateProcess,
+    sizesRefreshing,
+    gtnhVersions,
+    setUpdatePackInstanceId,
+    selectedInstanceId,
+    selectedInstanceActive,
+    instanceBusy,
+    setSelectedInstanceId,
+    setReinstallInstanceId,
+    groupsState,
+    launcherSettings,
+    accounts,
+    defaultAccountId,
+    javaRefreshing,
+    setTab,
+    refreshJava,
+    handleSaveSettings,
+    instanceLogs,
+    handleClearConsole,
+    session,
+    openProcesses,
+    selectedInstanceRunning,
+    selectedInstanceStarting,
+    setChangeGroupInstanceId,
+    setCopyInstanceId,
+    launching,
+  } = controller;
+
+  return (
+    <div className="instance-workspace min-h-0 flex-1 flex overflow-hidden p-2 gap-2">
+      {/* Instance list */}
+      <div className="surface-panel workspace-panel workspace-panel-library min-h-0 flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-hidden flex flex-col rounded-lg border border-border/80 shadow-sm">
+        {instances.length === 0 ? (
+          <div className="empty-state m-2 flex-1 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
+            <div className="font-medium text-foreground">No instances installed</div>
+            <p className="mt-1 text-xs text-muted-foreground">Add a pack instance to start building your launcher library.</p>
+          </div>
+        ) : (
+          <InstanceGroupList
+            commands={{
+              launch: handleLaunch,
+              kill: handleKill,
+              openFolder: handleOpenInstanceFolder,
+              delete: handleDelete,
+              cancelDelete: handleCancelDelete,
+              iconChanged: loadInstances,
+              iconError: (message) => setError(`Icon update failed: ${message}`),
+              toggleGroupCollapsed: handleToggleGroupCollapsed,
+              renameGroup: handleRenameGroup,
+              deleteGroup: handleDeleteGroup,
+              reorderInstances: handleReorderInstances,
+            }}
+          />
+        )}
+      </div>
+
+      {/* Details panel */}
+      <div className="surface-panel workspace-panel flex-1 flex flex-col overflow-hidden rounded-lg border border-border/80 shadow-sm">
+        {sel ? (
+          <>
+            <Tabs value={detailTab} onValueChange={setDetailTab} className="flex-1 flex flex-col overflow-hidden">
+              <InstanceDetailHeader
+                sel={sel}
+                isDeletingSelected={isDeletingSelected}
+                isUpdatingSelected={isUpdatingSelected}
+                isReinstallingSelected={isReinstallingSelected}
+                loadInstances={loadInstances}
+                setError={setError}
+                handleOpenInstanceFolder={handleOpenInstanceFolder}
+                selectedDeleteProcess={selectedDeleteProcess}
+                selectedReinstallProcess={selectedReinstallProcess}
+                selectedUpdateProcess={selectedUpdateProcess}
+                sizesRefreshing={sizesRefreshing}
+                gtnhVersions={gtnhVersions}
+                setUpdatePackInstanceId={setUpdatePackInstanceId}
+                selectedInstanceId={selectedInstanceId}
+                selectedInstanceActive={selectedInstanceActive}
+                instanceBusy={instanceBusy}
+                setSelectedInstanceId={setSelectedInstanceId}
+              />
+
+              <InstanceInfoTab
+                sel={sel}
+                gtnhVersions={gtnhVersions}
+                setUpdatePackInstanceId={setUpdatePackInstanceId}
+                selectedInstanceId={selectedInstanceId}
+                selectedInstanceActive={selectedInstanceActive}
+                instanceBusy={instanceBusy}
+                setReinstallInstanceId={setReinstallInstanceId}
+                sizesRefreshing={sizesRefreshing}
+                groupsState={groupsState}
+                launcherSettings={launcherSettings}
+                accounts={accounts}
+                defaultAccountId={defaultAccountId}
+              />
+
+              <TabsContent value="files" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
+                <InstanceMinecraftEditor instanceId={selectedInstanceId!} />
+              </TabsContent>
+
+              <TabsContent value="mods" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
+                <CustomModsPanel instanceId={selectedInstanceId!} />
+              </TabsContent>
+
+              <TabsContent value="settings" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
+                <InstanceSettingsPanel
+                  instanceId={selectedInstanceId!}
+                  packVersion={instancePackVersion(sel)}
+                  javaRefreshing={javaRefreshing}
+                  accounts={accounts}
+                  onOpenLauncherSettings={() => setTab("settings")}
+                  onRefreshJava={refreshJava}
+                  onSave={handleSaveSettings}
+                />
+              </TabsContent>
+
+              <TabsContent value="logs" className="flex-1 overflow-hidden flex flex-col mt-0">
+                <LogView
+                  log={instanceLogs[selectedInstanceId!] ?? []}
+                  onClear={() => handleClearConsole(selectedInstanceId!)}
+                  disableClear={selectedInstanceActive}
+                  onCopy={async () => {
+                    if (selectedInstanceActive) return instanceLogs[selectedInstanceId!] ?? [];
+                    try {
+                      return await session.getConsoleLog(selectedInstanceId!);
+                    } catch {
+                      return instanceLogs[selectedInstanceId!] ?? [];
+                    }
+                  }}
+                />
+              </TabsContent>
+            </Tabs>
+
+            {/* Action bar */}
+            <InstanceDetailActions
+              selectedReinstallProcess={selectedReinstallProcess}
+              openProcesses={openProcesses}
+              selectedInstanceId={selectedInstanceId}
+              selectedUpdateProcess={selectedUpdateProcess}
+              selectedDeleteProcess={selectedDeleteProcess}
+              handleCancelDelete={handleCancelDelete}
+              selectedInstanceRunning={selectedInstanceRunning}
+              selectedInstanceStarting={selectedInstanceStarting}
+              handleKill={handleKill}
+              selectedInstanceActive={selectedInstanceActive}
+              instanceBusy={instanceBusy}
+              setUpdatePackInstanceId={setUpdatePackInstanceId}
+              setChangeGroupInstanceId={setChangeGroupInstanceId}
+              setCopyInstanceId={setCopyInstanceId}
+              handleDelete={handleDelete}
+              handleLaunch={handleLaunch}
+              launching={launching}
+            />
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="empty-state max-w-sm rounded-lg border border-dashed border-border/80 bg-muted/30 p-6 text-center">
+              <div className="mx-auto mb-3 instance-avatar size-11 rounded-lg flex items-center justify-center">
+                <Boxes className="size-5 text-muted-foreground" />
+              </div>
+              <div className="font-medium">Select an instance</div>
+              <p className="mt-1 text-xs text-muted-foreground">Pick a pack from the library to view files, mods, settings, and launch logs.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

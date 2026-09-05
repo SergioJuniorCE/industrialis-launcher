@@ -67,10 +67,7 @@ const INITIAL_PREVIEW_PROGRESS: PreviewProgressState = {
   pct: 0,
 };
 
-function previewProgressReducer(
-  state: PreviewProgressState,
-  action: PreviewProgressAction,
-): PreviewProgressState {
+function previewProgressReducer(state: PreviewProgressState, action: PreviewProgressAction): PreviewProgressState {
   if (action.type === "start") {
     return {
       ...INITIAL_PREVIEW_PROGRESS,
@@ -98,11 +95,7 @@ function previewProgressReducer(
       totalMb: event.total_mb,
     };
   }
-  const pct = event.stage === "extracting"
-    ? 0.6 + event.pct * 0.25
-    : event.stage === "preview"
-      ? Math.max(0.85, event.pct)
-      : state.pct;
+  const pct = event.stage === "extracting" ? 0.6 + event.pct * 0.25 : event.stage === "preview" ? Math.max(0.85, event.pct) : state.pct;
   return {
     ...state,
     logs,
@@ -129,20 +122,13 @@ export function UpdatePackDialog({
   defaultJavaType: string;
   versions: Record<string, GtnhVersion> | null;
   onClose: () => void;
-  onUpdate: (
-    packVersion: string,
-    javaType: string,
-    keepModIdentities: string[],
-  ) => void;
+  onUpdate: (packVersion: string, javaType: string, keepModIdentities: string[]) => void;
 }) {
   const [step, setStep] = useState<Step>("version");
   const [targetVersion, setTargetVersion] = useState<string | null>(null);
   const [javaType, setJavaType] = useState(defaultJavaType || "java17+");
   const [preview, setPreview] = useState<UpdateModPreview | null>(null);
-  const [previewProgress, dispatchPreviewProgress] = useReducer(
-    previewProgressReducer,
-    INITIAL_PREVIEW_PROGRESS,
-  );
+  const [previewProgress, dispatchPreviewProgress] = useReducer(previewProgressReducer, INITIAL_PREVIEW_PROGRESS);
   const {
     loading: previewLoading,
     error: previewError,
@@ -159,9 +145,7 @@ export function UpdatePackDialog({
 
   const dialogLocked = previewLoading || handoff;
 
-  const sorted = versions
-    ? Object.entries(versions).sort(([a], [b]) => compareVersionsByReleaseDate(a, b, versions))
-    : [];
+  const sorted = versions ? Object.entries(versions).sort(([a], [b]) => compareVersionsByReleaseDate(a, b, versions)) : [];
 
   const requestClose = () => {
     if (dialogLocked) return;
@@ -175,7 +159,9 @@ export function UpdatePackDialog({
       if (p.operation !== "preview" || p.id !== instanceId) return;
       dispatchPreviewProgress({ type: "progress", event: p });
     });
-    return () => { unlisten.then((f) => f()); };
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, [previewLoading, instanceId]);
 
   useEffect(() => {
@@ -204,15 +190,16 @@ export function UpdatePackDialog({
     }
   })();
 
-  const previewProgressLabel = previewStage === "downloading"
-    ? formatDownloadProgress({
-        stage: "downloading",
-        pct: previewPct / 0.6,
-        speedMbps: previewSpeedMbps,
-        downloadedMb: previewDownloadedMb,
-        totalMb: previewTotalMb,
-      })
-    : `${(previewPct * 100).toFixed(0)}%`;
+  const previewProgressLabel =
+    previewStage === "downloading"
+      ? formatDownloadProgress({
+          stage: "downloading",
+          pct: previewPct / 0.6,
+          speedMbps: previewSpeedMbps,
+          downloadedMb: previewDownloadedMb,
+          totalMb: previewTotalMb,
+        })
+      : `${(previewPct * 100).toFixed(0)}%`;
 
   const loadPreview = async (packVersion: string) => {
     dispatchPreviewProgress({ type: "start", packVersion });
@@ -256,136 +243,211 @@ export function UpdatePackDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) requestClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) requestClose();
+      }}
+    >
       <DialogContent className="flex max-h-[85vh] max-w-lg flex-col overflow-hidden p-0">
-      <Card className="flex max-h-[85vh] flex-col overflow-hidden border-0 shadow-none">
-        <CardHeader className="shrink-0 pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle>Update Pack</CardTitle>
-            <Button variant="ghost" size="sm" onClick={requestClose} disabled={dialogLocked}>
-              ✕
-            </Button>
-          </div>
-          <CardDescription>
-            {instanceName} · {currentPackVersion}
-            {targetVersion ? ` → ${targetVersion}` : ""}
-          </CardDescription>
-        </CardHeader>
+        <Card className="flex max-h-[85vh] flex-col overflow-hidden border-0 shadow-none">
+          <CardHeader className="shrink-0 pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle>Update Pack</CardTitle>
+              <Button variant="ghost" size="sm" onClick={requestClose} disabled={dialogLocked}>
+                ✕
+              </Button>
+            </div>
+            <CardDescription>
+              {instanceName} · {currentPackVersion}
+              {targetVersion ? ` → ${targetVersion}` : ""}
+            </CardDescription>
+          </CardHeader>
 
-        <CardContent className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden pb-6">
-          {dialogLocked && (
-            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-muted-foreground">
-              {handoff ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Starting background update…
-                </span>
-              ) : (
-                "Analyzing the target pack. Keep this dialog open until analysis finishes."
+          <PackUpdateSteps
+            dialogLocked={dialogLocked}
+            handoff={handoff}
+            step={step}
+            javaType={javaType}
+            setJavaType={setJavaType}
+            versions={versions}
+            sorted={sorted}
+            targetVersion={targetVersion}
+            setTargetVersion={setTargetVersion}
+            previewLoading={previewLoading}
+            currentPackVersion={currentPackVersion}
+            previewStageLabel={previewStageLabel}
+            previewProgressLabel={previewProgressLabel}
+            previewPct={previewPct}
+            previewLogs={previewLogs}
+            previewLogRef={previewLogRef}
+            previewError={previewError}
+            goNextFromVersion={goNextFromVersion}
+            preview={preview}
+            keepMods={keepMods}
+            setKeepMods={setKeepMods}
+            setStep={setStep}
+            startUpdate={startUpdate}
+          />
+        </Card>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PackUpdateSteps({
+  dialogLocked,
+  handoff,
+  step,
+  javaType,
+  setJavaType,
+  versions,
+  sorted,
+  targetVersion,
+  setTargetVersion,
+  previewLoading,
+  currentPackVersion,
+  previewStageLabel,
+  previewProgressLabel,
+  previewPct,
+  previewLogs,
+  previewLogRef,
+  previewError,
+  goNextFromVersion,
+  preview,
+  keepMods,
+  setKeepMods,
+  setStep,
+  startUpdate,
+}: {
+  dialogLocked: boolean;
+  handoff: boolean;
+  step: Step;
+  javaType: string;
+  setJavaType: React.Dispatch<React.SetStateAction<string>>;
+  versions: Record<string, GtnhVersion> | null;
+  sorted: [string, GtnhVersion][];
+  targetVersion: string | null;
+  setTargetVersion: React.Dispatch<React.SetStateAction<string | null>>;
+  previewLoading: boolean;
+  currentPackVersion: string;
+  previewStageLabel: string;
+  previewProgressLabel: string;
+  previewPct: number;
+  previewLogs: string[];
+  previewLogRef: React.RefObject<HTMLDivElement | null>;
+  previewError: string | null;
+  goNextFromVersion: () => void;
+  preview: UpdateModPreview | null;
+  keepMods: Record<string, boolean>;
+  setKeepMods: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  setStep: React.Dispatch<React.SetStateAction<Step>>;
+  startUpdate: () => void;
+}) {
+  return (
+    <CardContent className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden pb-6">
+      {dialogLocked && (
+        <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-muted-foreground">
+          {handoff ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="size-3.5 animate-spin" />
+              Starting background update…
+            </span>
+          ) : (
+            "Analyzing the target pack. Keep this dialog open until analysis finishes."
+          )}
+        </div>
+      )}
+
+      {step === "version" && (
+        <>
+          <Select value={javaType} onChange={(e) => setJavaType(e.target.value)}>
+            <option value="java17+">Java 17+</option>
+            <option value="java8">Java 8</option>
+          </Select>
+          <ScrollArea className="flex-1 min-h-0 rounded-md border border-border">
+            <div className="space-y-2 p-2">
+              {!versions && <p className="text-sm text-muted-foreground p-2">Loading versions…</p>}
+              {sorted.map(([key, v]) => (
+                <Button
+                  key={key}
+                  type="button"
+                  variant={targetVersion === key ? "secondary" : "outline"}
+                  className="h-auto w-full justify-between p-3 text-left font-normal"
+                  onClick={() => setTargetVersion(key)}
+                  disabled={previewLoading}
+                >
+                  <div>
+                    <div className="font-medium">{key}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {v.releaseDate} · Max Java {v.maxJavaVersion}
+                    </div>
+                  </div>
+                  {key === currentPackVersion && <Badge variant="secondary">Current</Badge>}
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
+          {previewLoading && (
+            <div className="space-y-2 shrink-0">
+              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span className="truncate">{previewStageLabel}</span>
+                <span className="shrink-0">{previewProgressLabel}</span>
+              </div>
+              <Progress value={previewPct * 100} />
+              {previewLogs.length > 0 && (
+                <div ref={previewLogRef} className="max-h-32 overflow-y-auto rounded-md border border-border bg-black/50 p-2 font-mono text-xs space-y-0.5">
+                  {keyedByOccurrence(previewLogs, (line) => line).map(({ key, value: line }) => (
+                    <div key={key} className="text-muted-foreground">
+                      {line}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
+          {previewError && <p className="text-sm text-destructive">{previewError}</p>}
+          <Button className="w-full" disabled={!targetVersion || previewLoading} onClick={goNextFromVersion}>
+            {previewLoading ? "Analyzing mods…" : "Next"}
+          </Button>
+        </>
+      )}
 
-          {step === "version" && (
-            <>
-              <Select value={javaType} onChange={(e) => setJavaType(e.target.value)}>
-                <option value="java17+">Java 17+</option>
-                <option value="java8">Java 8</option>
-              </Select>
-              <ScrollArea className="flex-1 min-h-0 rounded-md border border-border">
-                <div className="space-y-2 p-2">
-                  {!versions && <p className="text-sm text-muted-foreground p-2">Loading versions…</p>}
-                  {sorted.map(([key, v]) => (
-                    <Button
-                      key={key}
-                      type="button"
-                      variant={targetVersion === key ? "secondary" : "outline"}
-                      className="h-auto w-full justify-between p-3 text-left font-normal"
-                      onClick={() => setTargetVersion(key)}
-                      disabled={previewLoading}
-                    >
-                      <div>
-                        <div className="font-medium">{key}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {v.releaseDate} · Max Java {v.maxJavaVersion}
-                        </div>
-                      </div>
-                      {key === currentPackVersion && <Badge variant="secondary">Current</Badge>}
-                    </Button>
-                  ))}
-                </div>
-              </ScrollArea>
-              {previewLoading && (
-                <div className="space-y-2 shrink-0">
-                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span className="truncate">{previewStageLabel}</span>
-                    <span className="shrink-0">{previewProgressLabel}</span>
-                  </div>
-                  <Progress value={previewPct * 100} />
-                  {previewLogs.length > 0 && (
-                    <div
-                      ref={previewLogRef}
-                      className="max-h-32 overflow-y-auto rounded-md border border-border bg-black/50 p-2 font-mono text-xs space-y-0.5"
-                    >
-                      {keyedByOccurrence(previewLogs, (line) => line).map(({ key, value: line }) => (
-                        <div key={key} className="text-muted-foreground">{line}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              {previewError && <p className="text-sm text-destructive">{previewError}</p>}
-              <Button
-                className="w-full"
-                disabled={!targetVersion || previewLoading}
-                onClick={goNextFromVersion}
-              >
-                {previewLoading ? "Analyzing mods…" : "Next"}
-              </Button>
-            </>
-          )}
-
-          {step === "mods" && preview && (
-            <>
-              <p className="text-sm text-muted-foreground">
-                These are custom mods you added in the Mods tab. Uncheck any you want removed before updating.
-                The fresh pack install replaces all pack mods ({preview.updated_pack_mods_count} updated,{" "}
-                {preview.new_pack_mods_count} new from pack).
-              </p>
-              <ScrollArea className="flex-1 min-h-0 rounded-md border border-border">
-                <div className="p-2 space-y-2">
-                  {preview.custom_mods.map((mod) => (
-                    <Checkbox
-                      key={mod.identity}
-                      checked={keepMods[mod.identity] ?? true}
-                      onChange={(e) =>
-                        setKeepMods((prev) => ({ ...prev, [mod.identity]: e.target.checked }))
-                      }
-                      label={
-                        <span>
-                          <span className="font-medium">{mod.filename}</span>
-                          <span className="block text-xs text-muted-foreground font-mono">
-                            {mod.identity} · {formatBytes(mod.size_bytes)}
-                          </span>
-                        </span>
-                      }
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setStep("version")}>
-                  Back
-                </Button>
-                <Button className="flex-1" onClick={startUpdate}>
-                  Update in background
-                </Button>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-      </DialogContent>
-    </Dialog>
+      {step === "mods" && preview && (
+        <>
+          <p className="text-sm text-muted-foreground">
+            These are custom mods you added in the Mods tab. Uncheck any you want removed before updating. The fresh pack install replaces all pack mods (
+            {preview.updated_pack_mods_count} updated, {preview.new_pack_mods_count} new from pack).
+          </p>
+          <ScrollArea className="flex-1 min-h-0 rounded-md border border-border">
+            <div className="p-2 space-y-2">
+              {preview.custom_mods.map((mod) => (
+                <Checkbox
+                  key={mod.identity}
+                  checked={keepMods[mod.identity] ?? true}
+                  onChange={(e) => setKeepMods((prev) => ({ ...prev, [mod.identity]: e.target.checked }))}
+                  label={
+                    <span>
+                      <span className="font-medium">{mod.filename}</span>
+                      <span className="block text-xs text-muted-foreground font-mono">
+                        {mod.identity} · {formatBytes(mod.size_bytes)}
+                      </span>
+                    </span>
+                  }
+                />
+              ))}
+            </div>
+          </ScrollArea>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setStep("version")}>
+              Back
+            </Button>
+            <Button className="flex-1" onClick={startUpdate}>
+              Update in background
+            </Button>
+          </div>
+        </>
+      )}
+    </CardContent>
   );
 }

@@ -116,50 +116,13 @@ export function JavaInstallationPicker({
             <SortHeader label="Path" sortKey="path" sort={sort} onSort={changeSort} />
           </div>
 
-          <ScrollArea className="h-64" role="radiogroup" aria-label="Detected Java installations">
-            {filteredInstallations.length > 0 ? (
-              <div className="p-1.5">
-                {filteredInstallations.map((java) => {
-                  const selected = sameJavaPath(java.path, selectedPath);
-                  return (
-                    <button
-                      key={java.path}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      className={cn(
-                        "grid w-full grid-cols-[7.5rem_7.5rem_minmax(0,1fr)] items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                        selected ? "bg-primary/15" : "hover:bg-muted/70",
-                      )}
-                      onClick={() => onSelect(java.path)}
-                    >
-                      <span className="flex min-w-0 items-center gap-2 font-medium">
-                        <Check className={cn("size-3.5 shrink-0 text-primary", selected ? "opacity-100" : "opacity-0")} aria-hidden="true" />
-                        <span className="truncate">{java.version}</span>
-                      </span>
-                      <span className="truncate">{java.architecture}</span>
-                      <span className="truncate font-mono text-xs text-muted-foreground" title={`${java.vendor} - ${java.path}`}>
-                        {java.path}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex h-full min-h-40 flex-col items-center justify-center gap-1 px-6 text-center">
-                <p className="text-sm font-medium">
-                  {refreshing ? "Scanning for Java installations" : installations.length === 0 ? "No Java installations found" : "No matching installations"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {refreshing
-                    ? "Detected runtimes will appear here."
-                    : installations.length === 0
-                      ? "Refresh detection or browse to a Java executable manually."
-                      : "Try a version number, architecture, vendor, or part of the path."}
-                </p>
-              </div>
-            )}
-          </ScrollArea>
+          <JavaInstallationList
+            filteredInstallations={filteredInstallations}
+            selectedPath={selectedPath}
+            onSelect={onSelect}
+            refreshing={refreshing}
+            installations={installations}
+          />
         </div>
       </section>
     </div>
@@ -185,5 +148,66 @@ function SortHeader({ label, sortKey, sort, onSort }: { label: string; sortKey: 
         <span className="sr-only">Sort {active && sort.direction === "asc" ? "descending" : "ascending"}</span>
       </button>
     </div>
+  );
+}
+
+function JavaInstallationList({
+  filteredInstallations,
+  selectedPath,
+  onSelect,
+  refreshing,
+  installations,
+}: {
+  filteredInstallations: JavaInfo[];
+  selectedPath: string | null;
+  onSelect: (path: string | null) => void;
+  refreshing: boolean;
+  installations: JavaInfo[];
+}) {
+  return (
+    <ScrollArea className="h-64" role="radiogroup" aria-label="Detected Java installations">
+      {filteredInstallations.length > 0 ? (
+        <div className="p-1.5">
+          {filteredInstallations.map((java) => {
+            const selected = sameJavaPath(java.path, selectedPath);
+            return (
+              <button
+                key={java.path}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={cn(
+                  "grid w-full grid-cols-[7.5rem_7.5rem_minmax(0,1fr)] items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  selected ? "bg-primary/15" : "hover:bg-muted/70",
+                )}
+                onClick={() => onSelect(java.path)}
+              >
+                <span className="flex min-w-0 items-center gap-2 font-medium">
+                  <Check className={cn("size-3.5 shrink-0 text-primary", selected ? "opacity-100" : "opacity-0")} aria-hidden="true" />
+                  <span className="truncate">{java.version}</span>
+                </span>
+                <span className="truncate">{java.architecture}</span>
+                <span className="truncate font-mono text-xs text-muted-foreground" title={`${java.vendor} - ${java.path}`}>
+                  {java.path}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex h-full min-h-40 flex-col items-center justify-center gap-1 px-6 text-center">
+          <p className="text-sm font-medium">
+            {refreshing ? "Scanning for Java installations" : installations.length === 0 ? "No Java installations found" : "No matching installations"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {refreshing
+              ? "Detected runtimes will appear here."
+              : installations.length === 0
+                ? "Refresh detection or browse to a Java executable manually."
+                : "Try a version number, architecture, vendor, or part of the path."}
+          </p>
+        </div>
+      )}
+    </ScrollArea>
   );
 }
