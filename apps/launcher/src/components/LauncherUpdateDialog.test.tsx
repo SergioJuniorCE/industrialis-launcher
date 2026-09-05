@@ -45,6 +45,35 @@ afterEach(() => {
 });
 
 describe("LauncherUpdateDialog", () => {
+  it.each([
+    ["failed", "Retry", false, "retry"],
+    ["deferred", "Try again", false, "install"],
+    ["manual", "Open release page", false, "install"],
+    ["downloading", "Downloading 25%", true, "none"],
+    ["installing", "Restarting…", true, "none"],
+  ] as const)("preserves actions for the %s state", async (status, label, disabled, action) => {
+    const onInstall = vi.fn();
+    const onRetry = vi.fn();
+    await act(async () => {
+      root.render(
+        <LauncherUpdateDialog
+          state={{ status, current_version: "0.1.55", version: "0.1.56", progress: 0.25 }}
+          onInstall={onInstall}
+          onRetry={onRetry}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+    const button = [...document.body.querySelectorAll("button")].find((entry) => entry.textContent?.includes(label));
+    expect(button).toBeDefined();
+    expect(button?.disabled).toBe(disabled);
+    await act(async () => button?.click());
+    expect(onRetry).toHaveBeenCalledTimes(action === "retry" ? 1 : 0);
+    expect(onInstall).toHaveBeenCalledTimes(action === "install" ? 1 : 0);
+    const dismiss = [...document.body.querySelectorAll("button")].find((entry) => entry.textContent === "Later");
+    expect(dismiss?.disabled).toBe(disabled);
+  });
+
   it("offers to install an available launcher release inside the app", async () => {
     const onInstall = vi.fn();
 

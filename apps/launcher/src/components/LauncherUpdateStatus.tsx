@@ -5,6 +5,29 @@ import { cn } from "../lib/utils";
 const DIALOG_STATUSES = new Set<LauncherUpdateState["status"]>(["available", "downloading", "deferred", "manual", "installing", "failed"]);
 
 export function LauncherUpdateStatus({ state, onCheck, onOpen }: { state: LauncherUpdateState; onCheck: () => void; onOpen: () => void }) {
+  const { label, busy, disabled, Icon } = updateStatusPresentation(state);
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        "ml-auto inline-flex h-5 items-center gap-1.5 rounded px-1.5 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        disabled ? "cursor-default" : "hover:bg-primary/12 hover:text-foreground",
+        (state.status === "available" || state.status === "deferred" || state.status === "manual") && "text-primary",
+        state.status === "failed" && "text-destructive",
+      )}
+      onClick={DIALOG_STATUSES.has(state.status) ? onOpen : onCheck}
+      disabled={disabled}
+      aria-label={`${label}. Current version ${state.current_version || "unknown"}.`}
+      title={state.status === "up-to-date" ? `Launcher ${state.current_version}. Click to check again.` : label}
+    >
+      <Icon className={cn("size-3", busy && "animate-spin")} aria-hidden="true" />
+      <span aria-live="polite">{label}</span>
+    </button>
+  );
+}
+
+function updateStatusPresentation(state: LauncherUpdateState) {
   const progress = Math.round((state.progress ?? 0) * 100);
   const label =
     state.status === "available"
@@ -34,22 +57,5 @@ export function LauncherUpdateStatus({ state, onCheck, onOpen }: { state: Launch
           ? ArrowUpCircle
           : RefreshCw;
 
-  return (
-    <button
-      type="button"
-      className={cn(
-        "ml-auto inline-flex h-5 items-center gap-1.5 rounded px-1.5 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-        disabled ? "cursor-default" : "hover:bg-primary/12 hover:text-foreground",
-        (state.status === "available" || state.status === "deferred" || state.status === "manual") && "text-primary",
-        state.status === "failed" && "text-destructive",
-      )}
-      onClick={DIALOG_STATUSES.has(state.status) ? onOpen : onCheck}
-      disabled={disabled}
-      aria-label={`${label}. Current version ${state.current_version || "unknown"}.`}
-      title={state.status === "up-to-date" ? `Launcher ${state.current_version}. Click to check again.` : label}
-    >
-      <Icon className={cn("size-3", busy && "animate-spin")} aria-hidden="true" />
-      <span aria-live="polite">{label}</span>
-    </button>
-  );
+  return { label, busy, disabled, Icon };
 }
