@@ -4,6 +4,13 @@ import { createLauncherSession, type LauncherSessionDesktop } from "./launcher-s
 import type { LaunchLogLine } from "./launch-log";
 import { resetLauncherStore, useLauncherStore } from "../stores/launcher-store";
 
+vi.mock("./completion-sound", () => ({
+  playCompletionSound: vi.fn(),
+  prepareCompletionSound: vi.fn(),
+}));
+
+import { playCompletionSound, prepareCompletionSound } from "./completion-sound";
+
 const instance = {
   id: "alpha",
   installed: true,
@@ -95,6 +102,7 @@ function createHarness({
 describe("launcher session", () => {
   beforeEach(() => {
     resetLauncherStore();
+    vi.clearAllMocks();
   });
 
   it("hydrates shared launcher state and session state through one start operation", async () => {
@@ -149,6 +157,21 @@ describe("launcher session", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("primes and plays the completion sound for a copy exactly once", async () => {
+    const harness = createHarness();
+    await harness.session.start();
+    const key = harness.session.startProcess("copy", "copy-id", "Copied instance");
+
+    expect(prepareCompletionSound).toHaveBeenCalledTimes(1);
+
+    harness.emit("dl-progress", { id: "copy-id", operation: "copy", stage: "copying", pct: 0.42 });
+    harness.emit("dl-progress", { id: "copy-id", operation: "copy", stage: "done", pct: 1 });
+    harness.emit("dl-progress", { id: "copy-id", operation: "copy", stage: "done", pct: 1 });
+
+    expect(playCompletionSound).toHaveBeenCalledTimes(1);
+    expect(useLauncherStore.getState().processes.get(key)?.status).toBe("done");
   });
 
   it("coordinates launch and stop transitions behind the session interface", async () => {

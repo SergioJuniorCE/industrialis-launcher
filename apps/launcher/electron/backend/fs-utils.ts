@@ -131,7 +131,39 @@ export async function dirSize(target: string): Promise<number> {
   return total;
 }
 
-export async function copyTree(source: string, destination: string): Promise<void> {
+export interface CopyTreeProgress {
+  completedFiles: number;
+  totalFiles: number;
+  completedBytes: number;
+  totalBytes: number;
+}
+
+interface CopyTreeCountTask {
+  path: string;
+}
+
+async function countCopyableFiles(source: string): Promise<{ totalFiles: number; totalBytes: number }> {
+  let totalFiles = 0;
+  let totalBytes = 0;
+  await runConcurrent<CopyTreeCountTask>([{ path: source }], async (current, enqueue) => {
+    const stat = await fs.lstat(current.path);
+    if (stat.isSymbolicLink()) return;
+    if (stat.isDirectory()) {
+      const entries = await fs.readdir(current.path, { withFileTypes: true });
+      for (const entry of entries) enqueue({ path: path.join(current.path, entry.name) });
+      return;
+    }
+    totalFiles += 1;
+    totalBytes += stat.size;
+  });
+  return { totalFiles, totalBytes };
+}
+
+export async function copyTree(source: string, destination: string, onProgress?: (progress: CopyTreeProgress) => void): Promise<void> {
+  const totals = onProgress ? await countCopyableFiles(source) : { totalFiles: 0, totalBytes: 0 };
+  let completedFiles = 0;
+  let completedBytes = 0;
+
   await runConcurrent([{ source, destination }], async (current, enqueue) => {
     const stat = await fs.lstat(current.source);
     if (stat.isSymbolicLink()) return;
@@ -148,6 +180,14 @@ export async function copyTree(source: string, destination: string): Promise<voi
     }
     await fs.mkdir(path.dirname(current.destination), { recursive: true });
     await fs.copyFile(current.source, current.destination);
+    completedFiles += 1;
+    completedBytes += stat.size;
+    onProgress?.({
+      completedFiles,
+      totalFiles: totals.totalFiles,
+      completedBytes,
+      totalBytes: totals.totalBytes,
+    });
   });
 }
 

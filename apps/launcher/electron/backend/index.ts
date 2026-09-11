@@ -129,6 +129,7 @@ interface LaunchState {
 }
 
 const CONSOLE_LOG_TAIL_BYTES = MAX_PERSISTED_CONSOLE_LOG_BYTES;
+const COPY_PROGRESS_STEP = 0.01;
 
 async function readConsoleLogTail(filePath: string): Promise<string> {
   const file = await fs.open(filePath, "r").catch(() => null);
@@ -535,7 +536,15 @@ export class LauncherBackend {
       const destination = instanceDir(newId);
       ownsDestination = true;
       this.emitProgress({ stage: "copying", operation: "copy", pct: 0, id: newId, name: newName });
-      await copyTree(source, destination);
+      let lastProgress = 0;
+      await copyTree(source, destination, ({ completedFiles, totalFiles, completedBytes, totalBytes }) => {
+        const ratio = totalBytes > 0 ? completedBytes / totalBytes : totalFiles > 0 ? completedFiles / totalFiles : 0;
+        const pct = 0.05 + Math.min(1, ratio) * 0.85;
+        if (pct < 0.9 && pct - lastProgress < COPY_PROGRESS_STEP && completedFiles < totalFiles) return;
+        lastProgress = pct;
+        this.emitProgress({ stage: "copying", operation: "copy", pct, id: newId, name: newName });
+      });
+      this.emitProgress({ stage: "finalizing", operation: "copy", pct: 0.95, id: newId, name: newName, log_line: "Finalizing copied instance" });
       const settings = await loadInstanceSettings(newId);
       settings.name = newName;
       if (!(await this.resolveIconPath(newId, settings))) settings.custom_icon = await installDefaultInstanceIcon(destination);

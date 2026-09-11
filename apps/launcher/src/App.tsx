@@ -63,7 +63,7 @@ import { UpdatePackDialog } from "./components/UpdatePackDialog";
 import { ReinstallInstanceDialog } from "./components/ReinstallInstanceDialog";
 import { PackVersionStatus } from "./components/PackVersionStatus";
 import { InstanceAvatar } from "./components/InstanceAvatar";
-import { InstanceGridCard, type InstanceGridCardCommands } from "./components/InstanceGridCard";
+import { InstanceCopyPlaceholderCard, InstanceGridCard, type InstanceGridCardCommands } from "./components/InstanceGridCard";
 import { LauncherUpdateDialog } from "./components/LauncherUpdateDialog";
 import { LauncherUpdateStatus } from "./components/LauncherUpdateStatus";
 import { VirtualizedLogList } from "./components/VirtualizedLogList";
@@ -803,16 +803,36 @@ function buildGroupSections(instances: InstanceInfo[], groupNames: string[], ins
 
 function InstanceGroupList({ commands }: { commands: InstanceListCommands }) {
   const instances = useLauncherStore((state) => state.instances);
+  const processes = useLauncherStore((state) => state.processes);
   const groupsState = useLauncherStore((state) => state.groupsState);
+  const copyProcesses = useMemo(() => sortedProcesses(processes).filter((proc) => proc.operation === "copy" && proc.status === "running"), [processes]);
+  const copyingIds = useMemo(() => new Set(copyProcesses.map((proc) => proc.id)), [copyProcesses]);
+  const visibleInstances = useMemo(() => instances.filter((instance) => !copyingIds.has(instance.id)), [copyingIds, instances]);
   const sections = useMemo(
-    () => buildGroupSections(instances, groupsState.groups, groupsState.instance_order, groupsState.ungrouped_name),
-    [instances, groupsState.groups, groupsState.instance_order, groupsState.ungrouped_name],
+    () => buildGroupSections(visibleInstances, groupsState.groups, groupsState.instance_order, groupsState.ungrouped_name),
+    [groupsState.groups, groupsState.instance_order, groupsState.ungrouped_name, visibleInstances],
   );
 
-  if (sections.length === 0) return null;
+  if (sections.length === 0 && copyProcesses.length === 0) return null;
 
   return (
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+      {copyProcesses.length > 0 && (
+        <section className="space-y-1">
+          <div className="flex items-center gap-1.5 bg-card/90 px-1 py-1">
+            <Loader2 className="size-3.5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+            <h2 className="truncate text-[11px] font-semibold uppercase text-muted-foreground">Copies in progress</h2>
+            <Badge variant="secondary" className="h-5 shrink-0 rounded-md">
+              {copyProcesses.length}
+            </Badge>
+          </div>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,9rem))] justify-start gap-2 px-1 pb-1">
+            {copyProcesses.map((proc) => (
+              <InstanceCopyPlaceholderCard key={proc.key} proc={proc} />
+            ))}
+          </div>
+        </section>
+      )}
       {sections.map((section) => (
         <InstanceGroupSection key={section.id || "__ungrouped__"} section={section} commands={commands} />
       ))}
@@ -2150,7 +2170,20 @@ function LauncherDialogs({ controller }: { controller: LauncherController }) {
     notice,
     setNotice,
     error,
+    processes,
   } = controller;
+  const copyInProgressIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const proc of processes.values()) {
+      if (proc.operation === "copy" && proc.status === "running") ids.add(proc.id);
+    }
+    return ids;
+  }, [processes]);
+  const existingInstanceIds = useMemo(() => {
+    const ids = new Set(copyInProgressIds);
+    for (const instance of instances) ids.add(instance.id);
+    return ids;
+  }, [copyInProgressIds, instances]);
 
   return (
     <>
@@ -2221,7 +2254,7 @@ function LauncherDialogs({ controller }: { controller: LauncherController }) {
           return (
             <CopyInstanceDialog
               source={source}
-              existingInstanceIds={new Set(instances.map((i) => i.id))}
+              existingInstanceIds={existingInstanceIds}
               onClose={() => setCopyInstanceId(null)}
               onCopy={(newId, newName) => handleCopyInstance(copyInstanceId, newId, newName)}
             />
@@ -2349,13 +2382,16 @@ function InstanceWorkspace({ controller }: { controller: LauncherController }) {
     setChangeGroupInstanceId,
     setCopyInstanceId,
     launching,
+    processes,
   } = controller;
+
+  const hasCopyInProgress = [...processes.values()].some((proc) => proc.operation === "copy" && proc.status === "running");
 
   return (
     <div className="instance-workspace min-h-0 flex-1 flex overflow-hidden p-2 gap-2">
       {/* Instance list */}
       <div className="surface-panel workspace-panel workspace-panel-library min-h-0 flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-hidden flex flex-col rounded-lg border border-border/80 shadow-sm">
-        {instances.length === 0 ? (
+        {instances.length === 0 && !hasCopyInProgress ? (
           <div className="empty-state m-2 flex-1 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
             <div className="font-medium text-foreground">No instances installed</div>
             <p className="mt-1 text-xs text-muted-foreground">Add a pack instance to start building your launcher library.</p>
