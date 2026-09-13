@@ -2,7 +2,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetLauncherStore } from "../stores/launcher-store";
-import { InstanceGridCard, type InstanceGridCardCommands } from "./InstanceGridCard";
+import { createProcess } from "../lib/background-processes";
+import { InstanceCopyPlaceholderCard, InstanceGridCard, type InstanceGridCardCommands } from "./InstanceGridCard";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -77,5 +78,18 @@ describe("InstanceGridCard context menu", () => {
     });
 
     expect(document.body.textContent).toContain("Choose an instance icon");
+  });
+});
+
+describe("InstanceCopyPlaceholderCard", () => {
+  it("shows the current copy percentage in the library card", async () => {
+    const process = { ...createProcess("copy", "copy-id", "Copied instance"), pct: 0.42 };
+
+    await act(async () => {
+      root.render(<InstanceCopyPlaceholderCard proc={process} />);
+    });
+
+    expect(container.querySelector(".instance-copy-placeholder")?.textContent).toContain("42%");
+    expect(container.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("42");
   });
 });
