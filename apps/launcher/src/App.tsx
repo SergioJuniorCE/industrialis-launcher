@@ -1898,7 +1898,9 @@ function LauncherToolbar({
   return (
     <header className="app-toolbar h-11 shrink-0 flex items-center px-3 gap-1.5">
       <div className="flex items-center gap-2 pr-1.5">
-        <span className="brand-mark size-5 rounded-md" aria-hidden="true" />
+        <span className="brand-mark size-5 rounded-md" aria-hidden="true">
+          <img src="/ebf.png" alt="" draggable={false} />
+        </span>
         <span className="toolbar-brand-name font-semibold text-sm tracking-tight">Industrialis</span>
       </div>
       <Button
