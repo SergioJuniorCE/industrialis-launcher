@@ -32,6 +32,7 @@ async function compactLogFile(filePath: string): Promise<void> {
 
 export class ConsoleLogWriter {
   private readonly pending = new Map<string, Promise<void>>();
+  private readonly flushWaiters = new Map<string, Set<() => void>>();
 
   constructor(private readonly pathForId: (id: string) => string) {}
 
@@ -56,20 +57,21 @@ export class ConsoleLogWriter {
     const current = previous.then(operation).catch(() => undefined);
     this.pending.set(id, current);
     void current.then(() => {
-      if (this.pending.get(id) === current) this.pending.delete(id);
+      if (this.pending.get(id) !== current) return;
+      this.pending.delete(id);
+      const waiters = this.flushWaiters.get(id);
+      this.flushWaiters.delete(id);
+      for (const resolve of waiters ?? []) resolve();
     });
     return current;
   }
 
-  async flush(id: string): Promise<void> {
-    while (true) {
-      const pending = this.pending.get(id);
-      if (!pending) return;
-      await pending;
-      if (this.pending.get(id) === pending) {
-        this.pending.delete(id);
-        return;
-      }
-    }
+  flush(id: string): Promise<void> {
+    if (!this.pending.has(id)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const waiters = this.flushWaiters.get(id) ?? new Set<() => void>();
+      waiters.add(resolve);
+      this.flushWaiters.set(id, waiters);
+    });
   }
 }

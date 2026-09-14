@@ -1,0 +1,102 @@
+name: Bug report
+description: Report a reproducible problem with Industrialis.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Industrialis!
+
+        Please search existing issues before submitting. Do not include passwords, tokens, account details, or other sensitive information.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of the project is affected?
+      options:
+        - Launcher
+        - Server CLI or daemon
+        - Dashboard
+        - Website
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which release, commit, or installation are you using?
+      placeholder: "For example: launcher v0.1.42"
+
+  - type: dropdown
+    id: operating_system
+    attributes:
+      label: Operating system
+      description: Select the operating system where the problem occurs.
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Not applicable
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem clearly and include any visible error message.
+      placeholder: Tell us what went wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest set of steps that reliably shows the problem.
+      placeholder: |
+        1. Open...
+        2. Select...
+        3. Click...
+        4. See...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: What did you expect to happen?
+      placeholder: Describe the expected result.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: What happened instead?
+      placeholder: Describe the actual result, including how often it happens.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs_and_screenshots
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant logs or drag in screenshots. Remove sensitive information first.
+      placeholder: Paste logs or add screenshots here.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I removed passwords, tokens, personal information, and other sensitive data.
+          required: true

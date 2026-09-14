@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html id="top" lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body className="font-sans">{children}</body>
     </html>
   );

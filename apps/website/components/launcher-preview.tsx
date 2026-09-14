@@ -1,24 +1,47 @@
 import Image from "next/image";
+import { Boxes, Cog, Terminal, Zap } from "lucide-react";
+
+function FloatingMark({
+  className,
+  children,
+}: Readonly<{
+  className: string;
+  children: React.ReactNode;
+}>) {
+  return (
+    <div aria-hidden className={`floating-mark ${className}`}>
+      {children}
+    </div>
+  );
+}
 
 export function LauncherPreview() {
   return (
-    <figure className="relative mx-auto w-full max-w-2xl">
-      <div aria-hidden className="pointer-events-none absolute -inset-4 rounded-2xl bg-primary/10 blur-3xl" />
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/40">
+    <figure className="hero-preview-wrap">
+      <FloatingMark className="floating-mark-one">
+        <Boxes className="size-7" strokeWidth={1.5} />
+      </FloatingMark>
+      <FloatingMark className="floating-mark-two">
+        <Cog className="size-7" strokeWidth={1.5} />
+      </FloatingMark>
+      <FloatingMark className="floating-mark-three">
+        <Terminal className="size-7" strokeWidth={1.5} />
+      </FloatingMark>
+      <FloatingMark className="floating-mark-four">
+        <Zap className="size-7" strokeWidth={1.5} />
+      </FloatingMark>
+
+      <div className="hero-preview-frame">
         <Image
           src="/launcher-screenshot.png"
-          alt="Industrialis Launcher showing a GTNH 2.9.0-beta-1 instance with version, size, Java, RAM, and authentication details."
-          width={1102}
-          height={782}
+          alt="Industrialis launcher showing GTNH 2.9.0 running with the Logs view open"
+          width={1602}
+          height={901}
           priority
-          sizes="(min-width: 1024px) 48vw, 100vw"
           className="h-auto w-full"
         />
       </div>
-      <figcaption className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
-        <span>Actual launcher screen - GTNH 2.9.0-beta-1</span>
-        <span className="font-mono">Windows build</span>
-      </figcaption>
+      <figcaption className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/70">Live launcher view</figcaption>
     </figure>
   );
 }

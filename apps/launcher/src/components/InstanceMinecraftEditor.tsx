@@ -1,3 +1,4 @@
+import type { ForgeConfigDocument } from "../lib/forge-cfg";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "../lib/desktop";
 import { ChevronRight, FileText, Folder, Save, Undo2 } from "lucide-react";
@@ -5,25 +6,13 @@ import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "./ui/resizable";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./ui/resizable";
 import { useLauncherSettings } from "../context/launcher-settings-context";
 import { cn } from "../lib/utils";
 import { ConfigCodeEditor } from "./ConfigCodeEditor";
 import { ForgeConfigEasyEditor } from "./ForgeConfigEasyEditor";
-import {
-  isForgeConfigFile,
-  parseForgeConfig,
-  serializeForgeConfig,
-} from "../lib/forge-cfg";
-import {
-  readMinecraftEditorMode,
-  writeMinecraftEditorMode,
-  type MinecraftEditorMode,
-} from "../lib/minecraft-editor-storage";
+import { isForgeConfigFile, parseForgeConfig, serializeForgeConfig } from "../lib/forge-cfg";
+import { readMinecraftEditorMode, writeMinecraftEditorMode, type MinecraftEditorMode } from "../lib/minecraft-editor-storage";
 
 interface MinecraftDirEntry {
   name: string;
@@ -47,19 +36,22 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
   const [editorMode, setEditorMode] = useState<MinecraftEditorMode>(() => readMinecraftEditorMode());
   const saveRef = useRef<() => Promise<void>>(async () => {});
 
-  const loadDir = useCallback(async (subpath: string) => {
-    setError(null);
-    try {
-      const list = await invoke<MinecraftDirEntry[]>("list_minecraft_entries", {
-        id: instanceId,
-        subpath: subpath || null,
-      });
-      setEntries(list);
-      setCwd(subpath);
-    } catch (e) {
-      setError(String(e));
-    }
-  }, [instanceId]);
+  const loadDir = useCallback(
+    async (subpath: string) => {
+      setError(null);
+      try {
+        const list = await invoke<MinecraftDirEntry[]>("list_minecraft_entries", {
+          id: instanceId,
+          subpath: subpath || null,
+        });
+        setEntries(list);
+        setCwd(subpath);
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [instanceId],
+  );
 
   useEffect(() => {
     void loadDir("");
@@ -133,11 +125,7 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
       setSelectedPath(entry.rel_path);
       setContent(text);
       setDirty(false);
-      if (
-        editorMode === "easy" &&
-        isForgeConfigFile(entry.rel_path) &&
-        !parseForgeConfig(text)
-      ) {
+      if (editorMode === "easy" && isForgeConfigFile(entry.rel_path) && !parseForgeConfig(text)) {
         setEditorMode("advanced");
         writeMinecraftEditorMode("advanced");
       }
@@ -186,19 +174,11 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
         <span className="ml-1 text-muted-foreground/80">Ctrl+S to save.</span>
       </p>
 
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className="flex-1 min-h-0 overflow-hidden rounded-md border border-border bg-card"
-      >
+      <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0 overflow-hidden rounded-md border border-border bg-card">
         <ResizablePanel defaultSize="38%" minSize="15%" maxSize="60%">
           <div className="flex h-full flex-col bg-card">
             <div className="px-2 py-1.5 border-b border-border text-xs flex items-center gap-1 flex-wrap text-left">
-              <Button
-                type="button"
-                variant="link"
-                className="h-auto p-0 text-xs"
-                onClick={() => void loadDir("")}
-              >
+              <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => void loadDir("")}>
                 .minecraft
               </Button>
               {crumbs.map((part, i) => {
@@ -206,12 +186,7 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
                 return (
                   <span key={path} className="flex items-center gap-1">
                     <ChevronRight className="size-3 text-muted-foreground" />
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="h-auto p-0 text-xs"
-                      onClick={() => void loadDir(path)}
-                    >
+                    <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => void loadDir(path)}>
                       {part}
                     </Button>
                   </span>
@@ -264,68 +239,113 @@ export function InstanceMinecraftEditor({ instanceId }: { instanceId: string }) 
 
         <ResizableHandle withHandle />
 
-        <ResizablePanel defaultSize="62%" minSize="30%">
-          <div className="flex h-full min-w-0 flex-col bg-card">
-            <div className="flex flex-wrap items-center gap-2 border-b border-border px-2 py-1.5 shrink-0">
-              <span className="min-w-0 flex-1 truncate text-left text-xs font-mono text-muted-foreground">
-                {selectedPath ?? "Select a file"}
-              </span>
-              <Tabs value={editorMode} onValueChange={(v) => handleModeChange(v as MinecraftEditorMode)}>
-                <TabsList>
-                  <TabsTrigger value="easy" disabled={!canUseEasyMode || !selectedPath}>
-                    Easy
-                  </TabsTrigger>
-                  <TabsTrigger value="advanced" disabled={!selectedPath}>
-                    Advanced
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={!selectedPath || loading}
-                onClick={() => void revertOverride()}
-              >
-                <Undo2 className="size-3.5" />
-                Revert override
-              </Button>
-              <Button size="sm" disabled={!selectedPath || !dirty || loading} onClick={() => void save()}>
-                <Save className="size-3.5" />
-                {saved ? "Saved" : "Save"}
-              </Button>
-            </div>
-            {error && <p className="text-xs text-destructive px-2 py-1">{error}</p>}
-            {editorMode === "easy" && forgeDoc && selectedPath ? (
-              <ForgeConfigEasyEditor
-                document={forgeDoc}
-                serialize={serializeForgeConfig}
-                onChange={(next) => {
-                  setContent(next);
-                  setDirty(true);
-                }}
-              />
-            ) : (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {editorMode === "easy" && selectedPath && !canUseEasyMode && (
-                  <p className="px-2 py-1 text-xs text-muted-foreground">
-                    Easy mode is only available for Forge .cfg files. Use Advanced mode for this file.
-                  </p>
-                )}
-                <ConfigCodeEditor
-                  value={content}
-                  disabled={!selectedPath || loading}
-                  isDark={isDark}
-                  className="flex-1"
-                  onChange={(next) => {
-                    setContent(next);
-                    setDirty(true);
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </ResizablePanel>
+        <MinecraftFileEditorPane
+          selectedPath={selectedPath}
+          editorMode={editorMode}
+          handleModeChange={handleModeChange}
+          canUseEasyMode={canUseEasyMode}
+          loading={loading}
+          revertOverride={revertOverride}
+          dirty={dirty}
+          save={save}
+          saved={saved}
+          error={error}
+          forgeDoc={forgeDoc}
+          setContent={setContent}
+          setDirty={setDirty}
+          content={content}
+          isDark={isDark}
+        />
       </ResizablePanelGroup>
     </div>
+  );
+}
+
+function MinecraftFileEditorPane({
+  selectedPath,
+  editorMode,
+  handleModeChange,
+  canUseEasyMode,
+  loading,
+  revertOverride,
+  dirty,
+  save,
+  saved,
+  error,
+  forgeDoc,
+  setContent,
+  setDirty,
+  content,
+  isDark,
+}: {
+  selectedPath: string | null;
+  editorMode: MinecraftEditorMode;
+  handleModeChange: (mode: MinecraftEditorMode) => void;
+  canUseEasyMode: boolean;
+  loading: boolean;
+  revertOverride: () => Promise<void>;
+  dirty: boolean;
+  save: () => Promise<void>;
+  saved: boolean;
+  error: string | null;
+  forgeDoc: ForgeConfigDocument | null;
+  setContent: React.Dispatch<React.SetStateAction<string>>;
+  setDirty: React.Dispatch<React.SetStateAction<boolean>>;
+  content: string;
+  isDark: boolean;
+}) {
+  return (
+    <ResizablePanel defaultSize="62%" minSize="30%">
+      <div className="flex h-full min-w-0 flex-col bg-card">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-2 py-1.5 shrink-0">
+          <span className="min-w-0 flex-1 truncate text-left text-xs font-mono text-muted-foreground">{selectedPath ?? "Select a file"}</span>
+          <Tabs value={editorMode} onValueChange={(v) => handleModeChange(v as MinecraftEditorMode)}>
+            <TabsList>
+              <TabsTrigger value="easy" disabled={!canUseEasyMode || !selectedPath}>
+                Easy
+              </TabsTrigger>
+              <TabsTrigger value="advanced" disabled={!selectedPath}>
+                Advanced
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button size="sm" variant="ghost" disabled={!selectedPath || loading} onClick={() => void revertOverride()}>
+            <Undo2 className="size-3.5" />
+            Revert override
+          </Button>
+          <Button size="sm" disabled={!selectedPath || !dirty || loading} onClick={() => void save()}>
+            <Save className="size-3.5" />
+            {saved ? "Saved" : "Save"}
+          </Button>
+        </div>
+        {error && <p className="text-xs text-destructive px-2 py-1">{error}</p>}
+        {editorMode === "easy" && forgeDoc && selectedPath ? (
+          <ForgeConfigEasyEditor
+            document={forgeDoc}
+            serialize={serializeForgeConfig}
+            onChange={(next) => {
+              setContent(next);
+              setDirty(true);
+            }}
+          />
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {editorMode === "easy" && selectedPath && !canUseEasyMode && (
+              <p className="px-2 py-1 text-xs text-muted-foreground">Easy mode is only available for Forge .cfg files. Use Advanced mode for this file.</p>
+            )}
+            <ConfigCodeEditor
+              value={content}
+              disabled={!selectedPath || loading}
+              isDark={isDark}
+              className="flex-1"
+              onChange={(next) => {
+                setContent(next);
+                setDirty(true);
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </ResizablePanel>
   );
 }

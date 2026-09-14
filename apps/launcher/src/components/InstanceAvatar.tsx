@@ -164,59 +164,16 @@ export const InstanceAvatar = forwardRef<
       {galleryOpen
         ? createPortal(
             <Dialog open={galleryOpen} onOpenChange={setGalleryOpen}>
-              <DialogContent className="w-[min(92vw,32rem)] max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Choose an instance icon</DialogTitle>
-                  <DialogDescription>Pick a built-in icon or add an image to your reusable icon library.</DialogDescription>
-                </DialogHeader>
-
-                <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border p-2">
-                  {galleryLoading ? (
-                    <div className="flex min-h-32 items-center justify-center text-muted-foreground">
-                      <Loader2 className="size-5 animate-spin" />
-                    </div>
-                  ) : icons.length ? (
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                      {icons.map((icon) => (
-                        <button
-                          key={icon.id}
-                          type="button"
-                          className="min-w-0 rounded-md border border-border bg-muted/25 p-2 text-left transition-colors hover:border-primary/55 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-                          onClick={() => void applyLibraryIcon(icon.id)}
-                          disabled={busy}
-                          aria-label={`Use ${icon.label}`}
-                        >
-                          <span className="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-background">
-                            <img src={convertFileSrc(icon.path)} alt="" className="size-full object-contain" draggable={false} />
-                          </span>
-                          <span className="mt-2 block truncate text-xs font-medium">{icon.label}</span>
-                          <span className="block text-[10px] text-muted-foreground">{icon.built_in ? "Built in" : "Custom"}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">No icons in the library.</div>
-                  )}
-                </div>
-
-                {galleryError ? <p className="mt-3 text-sm text-destructive">{galleryError}</p> : null}
-
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={() => void importCustomIcon()} disabled={busy || galleryLoading}>
-                      <ImagePlus />
-                      Add custom icon
-                    </Button>
-                    <Button variant="ghost" onClick={() => void openIconsFolder()} disabled={busy}>
-                      <FolderOpen />
-                      Icons folder
-                    </Button>
-                  </div>
-                  <Button variant="secondary" onClick={() => setGalleryOpen(false)} disabled={busy}>
-                    Done
-                  </Button>
-                </div>
-              </DialogContent>
+              <InstanceIconGalleryContent
+                galleryLoading={galleryLoading}
+                icons={icons}
+                applyLibraryIcon={applyLibraryIcon}
+                busy={busy}
+                galleryError={galleryError}
+                importCustomIcon={importCustomIcon}
+                openIconsFolder={openIconsFolder}
+                setGalleryOpen={setGalleryOpen}
+              />
             </Dialog>,
             document.body,
           )
@@ -224,3 +181,79 @@ export const InstanceAvatar = forwardRef<
     </>
   );
 });
+
+function InstanceIconGalleryContent({
+  galleryLoading,
+  icons,
+  applyLibraryIcon,
+  busy,
+  galleryError,
+  importCustomIcon,
+  openIconsFolder,
+  setGalleryOpen,
+}: {
+  galleryLoading: boolean;
+  icons: InstanceIconEntry[];
+  applyLibraryIcon: (iconId: string) => Promise<void>;
+  busy: boolean;
+  galleryError: string | null;
+  importCustomIcon: () => Promise<void>;
+  openIconsFolder: () => Promise<void>;
+  setGalleryOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  return (
+    <DialogContent className="w-[min(92vw,32rem)] max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Choose an instance icon</DialogTitle>
+        <DialogDescription>Pick a built-in icon or add an image to your reusable icon library.</DialogDescription>
+      </DialogHeader>
+
+      <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border p-2">
+        {galleryLoading ? (
+          <div className="flex min-h-32 items-center justify-center text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" />
+          </div>
+        ) : icons.length ? (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {icons.map((icon) => (
+              <button
+                key={icon.id}
+                type="button"
+                className="min-w-0 rounded-md border border-border bg-muted/25 p-2 text-left transition-colors hover:border-primary/55 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                onClick={() => void applyLibraryIcon(icon.id)}
+                disabled={busy}
+                aria-label={`Use ${icon.label}`}
+              >
+                <span className="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-background">
+                  <img src={convertFileSrc(icon.path)} alt="" className="size-full object-contain" draggable={false} />
+                </span>
+                <span className="mt-2 block truncate text-xs font-medium">{icon.label}</span>
+                <span className="block text-[10px] text-muted-foreground">{icon.built_in ? "Built in" : "Custom"}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">No icons in the library.</div>
+        )}
+      </div>
+
+      {galleryError ? <p className="mt-3 text-sm text-destructive">{galleryError}</p> : null}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => void importCustomIcon()} disabled={busy || galleryLoading}>
+            <ImagePlus />
+            Add custom icon
+          </Button>
+          <Button variant="ghost" onClick={() => void openIconsFolder()} disabled={busy}>
+            <FolderOpen />
+            Icons folder
+          </Button>
+        </div>
+        <Button variant="secondary" onClick={() => setGalleryOpen(false)} disabled={busy}>
+          Done
+        </Button>
+      </div>
+    </DialogContent>
+  );
+}

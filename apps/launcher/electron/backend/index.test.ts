@@ -36,7 +36,16 @@ import { LauncherBackend } from "./index";
 interface BackendInternals {
   consoleLogWriter: ConsoleLogWriter;
   emitLog(id: string, stream: string, line: string): void;
-  state: { running: Map<string, { pid: number; creationId?: string }> };
+  notifyInstanceOperationWaiters(): void;
+  trackFilesystemOperation<T>(operation: () => Promise<T>): Promise<T>;
+  state: {
+    running: Map<string, { pid: number; creationId?: string }>;
+    installInProgress: Set<string>;
+    updateInProgress: Set<string>;
+    reinstallInProgress: Set<string>;
+    copyInProgress: Set<string>;
+    deleteCancel: Map<string, { cancelled: boolean }>;
+  };
 }
 
 let tempRoot = "";
@@ -89,6 +98,50 @@ describe("LauncherBackend console log endpoint", () => {
     expect(stat.size).toBeLessThanOrEqual(MAX_PERSISTED_CONSOLE_LOG_BYTES);
     expect(result.length).toBeLessThan(entryCount);
     expect(result[result.length - 1]).toEqual({ stream: "stdout", line: `${entryCount - 1}:${filler}` });
+  });
+});
+
+describe("LauncherBackend shutdown", () => {
+  it("waits for active instance operations before completing disposal", async () => {
+    const backend = new LauncherBackend({ emit: vi.fn() });
+    const internals = backend as unknown as BackendInternals;
+    internals.state.updateInProgress.add("alpha");
+
+    let disposed = false;
+    const disposal = backend.dispose().then(() => {
+      disposed = true;
+    });
+    await Promise.resolve();
+    expect(disposed).toBe(false);
+
+    internals.state.updateInProgress.delete("alpha");
+    internals.notifyInstanceOperationWaiters();
+    await disposal;
+    expect(disposed).toBe(true);
+  });
+
+  it("waits for other filesystem mutations before completing disposal", async () => {
+    const backend = new LauncherBackend({ emit: vi.fn() });
+    const internals = backend as unknown as BackendInternals;
+    let release!: () => void;
+    const mutation = internals.trackFilesystemOperation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+
+    let disposed = false;
+    const disposal = backend.dispose().then(() => {
+      disposed = true;
+    });
+    await Promise.resolve();
+    expect(disposed).toBe(false);
+
+    release();
+    await mutation;
+    await disposal;
+    expect(disposed).toBe(true);
   });
 });
 
