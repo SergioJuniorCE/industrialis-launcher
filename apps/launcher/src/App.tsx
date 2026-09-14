@@ -56,7 +56,7 @@ import {
   stageLabel,
   type BackgroundProcess,
 } from "./lib/background-processes";
-import { formatLaunchLog, type LaunchLogLine } from "./lib/launch-log";
+import { classifyLaunchLogLine, extractLatestCrashLines, formatLaunchLog, type LaunchLogLine } from "./lib/launch-log";
 import { formatPlayTime, mergeInstanceSettings, type InstanceSettings } from "./lib/instance-settings";
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
 import { InstanceMinecraftEditor } from "./components/InstanceMinecraftEditor";
@@ -1241,6 +1241,10 @@ function LogView({
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [crashCopied, setCrashCopied] = useState(false);
+  const [crashCopying, setCrashCopying] = useState(false);
+  const [crashFailed, setCrashFailed] = useState(false);
+  const [crashFallback, setCrashFallback] = useState(false);
 
   const copy = async () => {
     setCopying(true);
@@ -1265,11 +1269,59 @@ function LogView({
     }
   };
 
+  const copyCrash = async () => {
+    setCrashCopying(true);
+    setCrashCopied(false);
+    setCrashFailed(false);
+    setCrashFallback(false);
+    try {
+      const source = onCopy ? await onCopy() : log;
+      const base = source.length > 0 ? source : log;
+      if (base.length === 0) {
+        setCrashFailed(true);
+        return;
+      }
+      const excerpt = extractLatestCrashLines(base);
+      if (excerpt.length === 0) {
+        setCrashFailed(true);
+        return;
+      }
+      const text = formatLaunchLog(excerpt);
+      if (!text) {
+        setCrashFailed(true);
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      const hasError = excerpt.some((entry) => classifyLaunchLogLine(entry) === "error");
+      setCrashFallback(!hasError);
+      setCrashCopied(true);
+      setCrashFailed(false);
+      window.setTimeout(() => {
+        setCrashCopied(false);
+        setCrashFallback(false);
+      }, 2000);
+    } catch {
+      setCrashCopied(false);
+      setCrashFailed(true);
+    } finally {
+      setCrashCopying(false);
+    }
+  };
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex gap-0.5 px-3 pb-0.5 shrink-0">
-        <Button size="sm" variant="ghost" onClick={() => void copy()} disabled={copying || log.length === 0}>
+        <Button size="sm" variant="ghost" onClick={() => void copy()} disabled={copying || crashCopying || log.length === 0}>
           {copying ? "Preparing..." : copied ? "Copied" : copyFailed ? "Copy failed" : "Copy"}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void copyCrash()}
+          disabled={copying || crashCopying || log.length === 0}
+          title="Copy only the latest launch's crash output (the log persists across launches) for pasting into an AI debugger"
+        >
+          {crashCopying ? "Preparing..." : crashCopied ? (crashFallback ? "Launch copied" : "Crash copied") : crashFailed ? "Copy failed" : "Copy crash"}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClear} disabled={disableClear || log.length === 0}>
           Clear
