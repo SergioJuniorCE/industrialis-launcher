@@ -17,7 +17,8 @@ export function ServerHosting() {
             <p className="eyebrow">Also included</p>
             <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-[-0.04em] sm:text-4xl">Host a GTNH server from the same project.</h2>
             <p className="mt-4 leading-relaxed text-muted-foreground">
-              The Linux daemon, lightweight dashboard, and Docker integration give you a practical way to create and manage worlds on a VPS.
+              The Linux daemon, lightweight dashboard, and Docker integration give you a practical way to create and manage worlds on a VPS, keeping world and
+              backup data on disk.
             </p>
             <p className="mt-8 text-sm leading-relaxed text-muted-foreground">
               After <code className="code-inline">up</code>, open <code className="code-inline">http://127.0.0.1:3001</code> to create, start, and stop GTNH

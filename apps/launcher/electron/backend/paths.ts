@@ -41,6 +41,18 @@ export function consoleLogPath(id: string): string {
   return path.join(instanceDir(id), "console.log");
 }
 
+export function instanceBackupsDir(id: string): string {
+  return path.join(instanceDir(id), ".minecraft", "backups");
+}
+
+export function googleDriveStatePath(): string {
+  return path.join(dataDir(), "google-drive-state.json");
+}
+
+export function backupStatePath(): string {
+  return path.join(dataDir(), "backup-state.json");
+}
+
 export function packCacheRoot(): string {
   return path.join(dataDir(), "pack-cache");
 }

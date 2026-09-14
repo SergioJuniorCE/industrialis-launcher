@@ -40,6 +40,9 @@ export function validateLauncherSettings(settings: LauncherSettings): void {
   if (!Number.isInteger(settings.instance_grid_columns) || settings.instance_grid_columns < 2 || settings.instance_grid_columns > 5) {
     throw new Error("instance grid columns must be between 2 and 5");
   }
+  if (!Number.isInteger(settings.backup_retention_limit) || settings.backup_retention_limit < 1 || settings.backup_retention_limit > 1_000) {
+    throw new Error("backup retention limit must be between 1 and 1000");
+  }
   if (!isValidLauncherWindowSettings(settings)) {
     throw new Error("invalid launcher window settings");
   }

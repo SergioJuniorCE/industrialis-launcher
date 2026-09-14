@@ -2,6 +2,7 @@ import type { LauncherUpdateState } from "./lib/launcher-update";
 import type { InstanceGroupsState } from "./stores/launcher-store";
 import type { LauncherSettingsData } from "./lib/launcher-settings";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import launcherPackage from "../package.json";
 import { desktopPlatform, invoke, openUrl } from "./lib/desktop";
 import {
   Plus,
@@ -27,6 +28,7 @@ import {
   Copy,
   ExternalLink,
   Pencil,
+  Cloud,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./components/ui/card";
@@ -59,6 +61,7 @@ import { formatPlayTime, mergeInstanceSettings, type InstanceSettings } from "./
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
 import { InstanceMinecraftEditor } from "./components/InstanceMinecraftEditor";
 import { CustomModsPanel } from "./components/CustomModsPanel";
+import { LauncherBackupsSettings } from "./components/BackupsPanel";
 import { UpdatePackDialog } from "./components/UpdatePackDialog";
 import { ReinstallInstanceDialog } from "./components/ReinstallInstanceDialog";
 import { PackVersionStatus } from "./components/PackVersionStatus";
@@ -687,6 +690,7 @@ export default function App() {
           {tab === "settings" && (
             <div className="settings-page mx-auto w-full max-w-5xl p-4">
               <SettingsTab
+                instances={instances}
                 javaOptions={javaOptions}
                 javaRefreshing={javaRefreshing}
                 onRefreshJava={refreshJava}
@@ -705,6 +709,11 @@ export default function App() {
                 windowHeight={launcherSettings.window_height}
                 onWindowHeightChange={(windowHeight) => {
                   updateSettings({ window_height: windowHeight });
+                  void saveSettingsNow();
+                }}
+                backupRetentionLimit={launcherSettings.backup_retention_limit}
+                onBackupRetentionLimitChange={(backupRetentionLimit) => {
+                  updateSettings({ backup_retention_limit: backupRetentionLimit });
                   void saveSettingsNow();
                 }}
                 onError={(message) => setError(`Settings failed: ${message}`)}
@@ -1499,6 +1508,7 @@ function LauncherWindowCard({
 // ── Settings Tab ──
 
 function SettingsTab({
+  instances,
   javaOptions,
   javaRefreshing,
   onRefreshJava,
@@ -1510,8 +1520,11 @@ function SettingsTab({
   onWindowWidthChange,
   windowHeight,
   onWindowHeightChange,
+  backupRetentionLimit,
+  onBackupRetentionLimitChange,
   onError,
 }: {
+  instances: InstanceInfo[];
   javaOptions: JavaInfo[];
   javaRefreshing: boolean;
   onRefreshJava: () => Promise<JavaInfo[]>;
@@ -1523,6 +1536,8 @@ function SettingsTab({
   onWindowWidthChange: (width: number) => void;
   windowHeight: number;
   onWindowHeightChange: (height: number) => void;
+  backupRetentionLimit: number;
+  onBackupRetentionLimitChange: (value: number) => void;
   onError: (message: string) => void;
 }) {
   const [settingsTab, setSettingsTab] = useState("java");
@@ -1568,6 +1583,10 @@ function SettingsTab({
             <SlidersHorizontal className="size-4" aria-hidden="true" />
             Appearance
           </TabsTrigger>
+          <TabsTrigger value="backups" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Cloud className="size-4" aria-hidden="true" />
+            Backups
+          </TabsTrigger>
           <TabsTrigger value="about" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
             <Info className="size-4" aria-hidden="true" />
             About
@@ -1610,13 +1629,17 @@ function SettingsTab({
           />
         </TabsContent>
 
+        <TabsContent value="backups" className="mt-0">
+          <LauncherBackupsSettings instances={instances} retentionLimit={backupRetentionLimit} onRetentionLimitChange={onBackupRetentionLimitChange} />
+        </TabsContent>
+
         <TabsContent value="about" className="mt-0">
           <Card>
             <CardHeader>
               <CardTitle>About</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-1">
-              <p>Industrialis Launcher v0.1.0</p>
+              <p>Industrialis Launcher v{launcherPackage.version}</p>
               <p>GT New Horizons modpack manager built with Electron.</p>
               <a
                 href={GITHUB_URL}

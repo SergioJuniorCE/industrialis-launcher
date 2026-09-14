@@ -4,9 +4,10 @@ import { ExternalLink } from "lucide-react";
 const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 
 const links = [
-  { href: "#features", label: "Features" },
-  { href: "#workflow", label: "Workflow" },
-  { href: "#server", label: "Server" },
+  { href: "/#features", label: "Features" },
+  { href: "/#workflow", label: "Workflow" },
+  { href: "/docs/cloud-backups", label: "Cloud backups" },
+  { href: "/#server", label: "Server" },
 ];
 
 export function SiteHeader() {

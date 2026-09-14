@@ -2,6 +2,8 @@ export interface InstanceSettings {
   name: string;
   pack_version: string;
   pack_java_type: string;
+  backups_enabled: boolean;
+  backup_retention_override: number | null;
   java_path: string | null;
   min_ram_mb: number;
   max_ram_mb: number;
@@ -54,6 +56,8 @@ export const DEFAULT_INSTANCE_SETTINGS: InstanceSettings = {
   name: "",
   pack_version: "",
   pack_java_type: "java17+",
+  backups_enabled: false,
+  backup_retention_override: null,
   java_path: null,
   min_ram_mb: 4096,
   max_ram_mb: 6144,
