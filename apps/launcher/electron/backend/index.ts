@@ -1,9 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn as spawnChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
-import { app, BrowserWindow, dialog, shell } from "electron";
-import { accountToInfo, createOfflineAccount, ensureFreshToken, handleOauthCallback, loadAccounts, startMicrosoftLogin } from "./auth";
+import { app, BrowserWindow, dialog } from "electron";
+import { accountToInfo, createOfflineAccount, loadAccounts, startMicrosoftLogin } from "./auth";
 import { BackupService } from "./backups";
 import { BackupManager, type BackupInstancePolicy } from "./backup-manager";
 import { GoogleDriveAdapter } from "./google-drive";
@@ -13,164 +11,60 @@ import {
   getGroupsState,
   getInstanceGroup,
   moveInstanceInGroup,
-  removeInstanceFromGroups,
   renameGroup,
   setGroupCollapsed,
   setGroupInstanceOrder,
   setInstanceGroup,
 } from "./groups";
-import { copyTree, dirSize, exists, listFiles, mapConcurrent, removeIfExists } from "./fs-utils";
-import { defaultInstanceIconPath, ensureInstanceIconLibrary, importInstanceIcon, instanceIconLibraryPath, listInstanceIcons } from "./instance-icons";
+import { dirSize, exists } from "./fs-utils";
 import {
-  buildClasspath,
-  buildLaunchConfig,
-  expandMinecraftArguments,
-  instanceCommandVars,
-  runShellCommand,
-  splitCommandArgs,
-  substituteCommandVars,
-  syncAssets,
-  writeLaunchArgfile,
-} from "./launch";
-import { detectJava, javaGuiExecutable, javaPath, testJava } from "./java";
-import { backupPlayerData, preserveDirName, restorePlayerData, wipeInstanceForReinstall } from "./migration";
+  cancelDelete,
+  copyInstance,
+  deleteInstance,
+  downloadInstall,
+  openBackupsFolder,
+  openInstanceFolder,
+  openModsFolder,
+  previewUpdate,
+  refreshSizes,
+  reinstallInstance,
+  updateInstance,
+} from "./instance-lifecycle";
+import { getConsoleLog } from "./console-logs";
+import { killInstance, launchInstance } from "./game-launch";
 import {
-  applyPersistentMinecraft,
-  deletePersistentFile,
-  listMinecraftEntries,
-  listPersistentFiles,
-  readMinecraftFile,
-  writeMinecraftFile,
-} from "./minecraft-files";
-import {
-  addCustomMod,
-  applyPersistentCustomMods,
-  buildUpdatePreview,
-  downloadAndExtractToStaging,
-  flattenNestedPack,
-  installStagingContents,
-  prepareInstanceConfigs,
-  listCustomMods,
-  persistentCustomModsDir,
-  removeCustomMod,
-  removeCustomModsExcept,
-  resolveModsDir,
-} from "./pack";
+  clearInstanceIcon,
+  importInstanceIcon,
+  listInstanceIcons,
+  openInstanceIconsFolder,
+  resolveIconPath,
+  setInstanceIcon,
+  setInstanceIconFromLibrary,
+} from "./instance-icons";
+import { ReleaseUpdater } from "./release-updater";
+import type { BackendContext, LaunchArgs, LaunchState } from "./backend-context";
+import { detectJava, testJava } from "./java";
+import { deletePersistentFile, listMinecraftEntries, listPersistentFiles, readMinecraftFile, writeMinecraftFile } from "./minecraft-files";
+import { addCustomMod, listCustomMods, removeCustomMod } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
-import { backupStatePath, consoleLogPath, iconsDir, instanceBackupsDir, instanceDir, instancesDir, sanitizeName, validateInstanceId } from "./paths";
+import { backupStatePath, consoleLogPath, instanceDir, instancesDir, sanitizeName } from "./paths";
 import { loadRunningGamePids, saveRunningGamePids, type RunningGamePid } from "./running-game-pids";
 import { loadInstanceSettings, loadLauncherSettings, saveInstanceSettings, saveLauncherSettings } from "./settings";
+import { getProcessCreationId, isProcessAlive, normalizeProcessCreationId, waitForGameProcess, type RunningProcess } from "./process-manager";
 import {
-  getProcessCreationId,
-  isProcessAlive,
-  killGameProcess,
-  normalizeProcessCreationId,
-  spawnGameProcess,
-  waitForGameProcess,
-  type RunningProcess,
-} from "./process-manager";
-import {
+  defaultInstanceSettings,
   defaultLauncherSettings,
   type AccountData,
   type DownloadProgress,
   type InstanceInfo,
   type InstanceSettings,
   type LauncherSettings,
-  type LauncherUpdateState,
   type LaunchLogLine,
 } from "./types";
-import { MAX_RETAINED_LOG_LINES, takeLogTail } from "../../src/lib/log-buffer";
-import { ConsoleLogWriter, MAX_PERSISTED_CONSOLE_LOG_BYTES } from "./console-log-writer";
-import { downloadLauncherInstaller, isTrustedLauncherDownloadUrl } from "./launcher-updater";
+import { ConsoleLogWriter } from "./console-log-writer";
 
 export interface BackendHost {
   emit(event: string, payload: unknown): void;
-}
-
-interface LaunchArgs {
-  id: string;
-  packVersion?: string;
-  javaType?: string;
-  keepModIdentities?: string[];
-  group?: string;
-  name?: string;
-  sourceId?: string;
-  newId?: string;
-  newName?: string;
-  settings?: InstanceSettings;
-  username?: string;
-  accountId?: string;
-  pathOverride?: string;
-  javaPath?: string;
-  subpath?: string | null;
-  relPath?: string;
-  content?: string;
-  persist?: boolean;
-  sourcePath?: string;
-  iconId?: string;
-  identity?: string;
-  oldName?: string;
-  order?: string[];
-  collapsed?: boolean;
-  direction?: string;
-  ids?: string[] | null;
-  full?: boolean;
-  groupName?: string;
-  idPreset?: string;
-  instanceId?: string;
-  enabled?: boolean;
-  launcherSettings?: LauncherSettings;
-  fileName?: string;
-  snapshotId?: string;
-  clientId?: string;
-  providerId?: string;
-}
-
-interface LaunchState {
-  running: Map<string, RunningProcess>;
-  installInProgress: Set<string>;
-  updateInProgress: Set<string>;
-  reinstallInProgress: Set<string>;
-  copyInProgress: Set<string>;
-  deleteCancel: Map<string, { cancelled: boolean }>;
-}
-
-const CONSOLE_LOG_TAIL_BYTES = MAX_PERSISTED_CONSOLE_LOG_BYTES;
-
-async function readConsoleLogTail(filePath: string): Promise<string> {
-  const file = await fs.open(filePath, "r").catch(() => null);
-  if (!file) return "";
-
-  try {
-    const size = (await file.stat()).size;
-    const start = Math.max(0, size - CONSOLE_LOG_TAIL_BYTES);
-    const buffer = Buffer.alloc(size - start);
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, start);
-    return buffer.subarray(0, bytesRead).toString("utf8");
-  } finally {
-    await file.close();
-  }
-}
-
-function isLaunchLogLine(value: unknown): value is LaunchLogLine {
-  if (typeof value !== "object" || value === null) return false;
-  const entry = value as Record<string, unknown>;
-  return typeof entry.stream === "string" && typeof entry.line === "string";
-}
-
-function parseConsoleLog(contents: string, full: boolean): LaunchLogLine[] {
-  const entries = contents
-    .split(/\r?\n/u)
-    .filter(Boolean)
-    .flatMap((line) => {
-      try {
-        const value: unknown = JSON.parse(line);
-        return isLaunchLogLine(value) ? [value] : [];
-      } catch {
-        return [];
-      }
-    });
-  return full ? entries : takeLogTail(entries, MAX_RETAINED_LOG_LINES);
 }
 
 export class LauncherBackend {
@@ -193,8 +87,8 @@ export class LauncherBackend {
   private readonly backupManagerReady: Promise<void>;
   private readonly instanceOperationWaiters = new Set<() => void>();
   private activeFilesystemOperations = 0;
-  private launcherUpdateRequest: Promise<LauncherUpdateState> | null = null;
-  private launcherUpdateResult: LauncherUpdateState | null = null;
+  private readonly ctx: BackendContext;
+  private readonly releaseUpdater: ReleaseUpdater;
   private disposing = false;
 
   constructor(private readonly host: BackendHost) {
@@ -217,6 +111,20 @@ export class LauncherBackend {
     // Tracked (rather than fire-and-forget) so dispose() can quiesce the
     // initial run and polling timer before temporary data is cleaned up.
     this.backupManagerReady = this.backupManager.start().catch(() => undefined);
+    this.ctx = {
+      state: this.state,
+      emit: (event, payload) => this.emit(event, payload),
+      emitProgress: (payload) => this.emitProgress(payload),
+      emitLog: (id, stream, line) => this.emitLog(id, stream, line),
+      knownInstanceIds: () => this.knownInstanceIds(),
+      saveAndRefreshSize: (id, settings) => this.saveAndRefreshSize(id, settings),
+      notifyInstanceOperationWaiters: () => this.notifyInstanceOperationWaiters(),
+      waitForInstanceOperations: () => this.waitForInstanceOperations(),
+      persistRunningProcesses: () => this.persistRunningProcesses(),
+      flushConsoleLog: (id) => this.flushConsoleLog(id),
+      compactConsoleLog: (id) => this.compactConsoleLog(id),
+    };
+    this.releaseUpdater = new ReleaseUpdater(this.ctx);
   }
 
   private emit(event: string, payload: unknown): void {
@@ -268,6 +176,10 @@ export class LauncherBackend {
 
   private flushConsoleLog(id: string): Promise<void> {
     return this.consoleLogWriter.flush(id);
+  }
+
+  private compactConsoleLog(id: string): Promise<void> {
+    return this.consoleLogWriter.compact(id);
   }
 
   private async knownInstanceIds(): Promise<Set<string>> {
@@ -332,7 +244,7 @@ export class LauncherBackend {
           settings.pack_version = id;
           await saveInstanceSettings(id, settings);
         }
-        const icon = await this.resolveIconPath(id, settings);
+        const icon = await resolveIconPath(id, settings);
         return { id, installed: true, size_bytes: settings.cached_size_bytes, settings, group: await getInstanceGroup(id, known), icon_path: icon };
       }),
     );
@@ -391,15 +303,6 @@ export class LauncherBackend {
     return write;
   }
 
-  private async resolveIconPath(id: string, settings: InstanceSettings): Promise<string | null> {
-    const instance = instanceDir(id);
-    if (settings.custom_icon && (await exists(path.join(instance, settings.custom_icon)))) return path.join(instance, settings.custom_icon);
-    for (const entry of await fs.readdir(instance, { withFileTypes: true }).catch(() => [])) {
-      if (entry.name.startsWith("instance-icon") && /\.(png|jpe?g|webp|gif|bmp|ico)$/iu.test(entry.name)) return path.join(instance, entry.name);
-    }
-    return null;
-  }
-
   async invoke(command: string, rawArgs: unknown): Promise<unknown> {
     await this.runningProcessReady;
     if (this.disposing) throw new Error("launcher is shutting down");
@@ -411,7 +314,7 @@ export class LauncherBackend {
       case "get_instances":
         return track(() => this.loadInstances());
       case "refresh_instance_sizes":
-        return track(() => this.refreshSizes(args.ids));
+        return track(() => refreshSizes(this.ctx, args.ids));
       case "get_instance_groups":
         return getGroupsState(await this.knownInstanceIds());
       case "set_instance_group":
@@ -427,17 +330,17 @@ export class LauncherBackend {
       case "set_group_collapsed":
         return track(async () => setGroupCollapsed(String(args.group ?? ""), Boolean(args.collapsed), await this.knownInstanceIds()));
       case "delete_instance":
-        return track(() => this.deleteInstance(args.id));
+        return track(() => deleteInstance(this.ctx, args.id));
       case "cancel_delete_instance":
-        return this.cancelDelete(args.id);
+        return cancelDelete(this.ctx, args.id);
       case "copy_instance":
-        return track(() => this.copyInstance(args));
+        return track(() => copyInstance(this.ctx, args));
       case "open_instance_folder":
-        return track(() => this.openInstanceFolder(args.id));
+        return track(() => openInstanceFolder(args.id));
       case "open_mods_folder":
-        return track(() => this.openModsFolder(args.id));
+        return track(() => openModsFolder(args.id));
       case "open_backups_folder":
-        return this.openBackupsFolder(args.id);
+        return openBackupsFolder(args.id);
       case "get_google_drive_status":
         return this.googleDrive.getStatus();
       case "configure_google_drive":
@@ -472,17 +375,17 @@ export class LauncherBackend {
         if (!args.snapshotId) throw new Error("backup snapshot id is required");
         return this.backupManager.delete(args.id, args.snapshotId);
       case "save_settings":
-        return track(() => this.saveSettingsAndRefreshBackups(sanitizeName(args.id), args.settings ?? defaultSettings()));
+        return track(() => this.saveSettingsAndRefreshBackups(sanitizeName(args.id), args.settings ?? defaultInstanceSettings()));
       case "get_settings":
         return loadInstanceSettings(sanitizeName(args.id));
       case "download_install":
-        return track(() => this.downloadInstall(args));
+        return track(() => downloadInstall(this.ctx, args));
       case "preview_update_mods":
-        return track(() => this.previewUpdate(args));
+        return track(() => previewUpdate(this.ctx, args));
       case "update_instance":
-        return track(() => this.updateInstance(args));
+        return track(() => updateInstance(this.ctx, args));
       case "reinstall_instance":
-        return track(() => this.reinstallInstance(args));
+        return track(() => reinstallInstance(this.ctx, args));
       case "list_minecraft_entries":
         return listMinecraftEntries(instanceDir(sanitizeName(args.id)), args.subpath ?? "");
       case "read_minecraft_file":
@@ -516,13 +419,13 @@ export class LauncherBackend {
       case "import_instance_icon":
         return track(() => importInstanceIcon(String(args.sourcePath ?? "")));
       case "set_instance_icon_from_library":
-        return track(() => this.setInstanceIconFromLibrary(args));
+        return track(() => setInstanceIconFromLibrary(args));
       case "open_instance_icons_folder":
-        return track(() => this.openInstanceIconsFolder());
+        return track(() => openInstanceIconsFolder());
       case "set_instance_icon":
-        return track(() => this.setInstanceIcon(args));
+        return track(() => setInstanceIcon(args));
       case "clear_instance_icon":
-        return track(() => this.clearInstanceIcon(args.id));
+        return track(() => clearInstanceIcon(args.id));
       case "detect_java":
         return detectJava();
       case "browse_java_executable":
@@ -530,14 +433,14 @@ export class LauncherBackend {
       case "test_java":
         return testJava(args.javaPath ?? args.pathOverride);
       case "launch_instance":
-        return this.launchInstance(args.id);
+        return launchInstance(this.ctx, args.id);
       case "exit_launcher":
         app.quit();
         return undefined;
       case "kill_instance":
-        return this.killInstance(args.id);
+        return killInstance(this.ctx, args.id);
       case "get_instance_console_log":
-        return track(() => this.getConsoleLog(args.id, Boolean(args.full)));
+        return track(() => getConsoleLog(this.ctx, args.id, Boolean(args.full)));
       case "clear_instance_console_log":
         return track(() => fs.rm(consoleLogPath(sanitizeName(args.id)), { force: true }));
       case "get_accounts":
@@ -553,9 +456,9 @@ export class LauncherBackend {
       case "start_microsoft_login":
         return startMicrosoftLogin((event, payload) => this.emit(event, payload));
       case "check_launcher_update":
-        return this.checkLauncherUpdate();
+        return this.releaseUpdater.checkForUpdate();
       case "install_launcher_update":
-        return this.installLauncherUpdate();
+        return this.releaseUpdater.installUpdate();
       default:
         throw new Error(`Unknown Electron launcher command: ${command}`);
     }
@@ -566,304 +469,10 @@ export class LauncherBackend {
     return fetchGtnhVersions();
   }
 
-  private async refreshSizes(ids: string[] | null | undefined): Promise<Record<string, number>> {
-    const target = ids?.map((id) => sanitizeName(id.trim())) ?? [...(await this.knownInstanceIds())];
-    const sizes = await mapConcurrent(
-      target,
-      async (id) => {
-        const [size, settings] = await Promise.all([dirSize(instanceDir(id)), loadInstanceSettings(id)]);
-        settings.cached_size_bytes = size;
-        await saveInstanceSettings(id, settings);
-        return [id, size] as const;
-      },
-      4,
-    );
-    return Object.fromEntries(sizes);
-  }
-
-  private async deleteInstance(rawId: string): Promise<void> {
-    const id = sanitizeName(rawId.trim());
-    if (this.state.deleteCancel.has(id)) throw new Error("delete already in progress for this instance");
-    const cancel = { cancelled: false };
-    this.state.deleteCancel.set(id, cancel);
-    try {
-      const files = await listFiles(instanceDir(id));
-      this.emitProgress({ stage: "deleting", operation: "delete", pct: 0, id });
-      const total = Math.max(files.length, 1);
-      for (let index = 0; index < files.length; index += 1) {
-        if (cancel.cancelled) throw new Error("deletion cancelled");
-        await fs.rm(files[index], { force: true });
-        this.emitProgress({ stage: "deleting", operation: "delete", pct: (index + 1) / total, id });
-      }
-      await removeIfExists(instanceDir(id));
-      await removeInstanceFromGroups(id, await this.knownInstanceIds());
-      this.emitProgress({ stage: "done", operation: "delete", pct: 1, id });
-    } finally {
-      this.state.deleteCancel.delete(id);
-      this.notifyInstanceOperationWaiters();
-    }
-  }
-
-  private cancelDelete(rawId: string): void {
-    const entry = this.state.deleteCancel.get(sanitizeName(rawId.trim()));
-    if (!entry) throw new Error("no deletion in progress for this instance");
-    entry.cancelled = true;
-  }
-
-  private async copyInstance(args: LaunchArgs): Promise<void> {
-    const sourceId = sanitizeName(String(args.sourceId ?? "").trim());
-    const newId = validateInstanceId(String(args.newId ?? ""));
-    const newName = String(args.newName ?? "").trim();
-    if (!newName) throw new Error("instance name cannot be empty");
-    if (sourceId === newId) throw new Error("new instance id must differ from the source");
-    if (this.state.running.has(sourceId)) throw new Error("cannot copy while instance is running");
-    if (this.state.copyInProgress.has(sourceId)) throw new Error("copy already in progress for this instance");
-    this.state.copyInProgress.add(sourceId);
-    let ownsDestination = false;
-    try {
-      const known = await this.knownInstanceIds();
-      if (!known.has(sourceId)) throw new Error("source instance not found");
-      if (known.has(newId)) throw new Error("an instance with that id already exists");
-      const source = instanceDir(sourceId);
-      const destination = instanceDir(newId);
-      ownsDestination = true;
-      this.emitProgress({ stage: "copying", operation: "copy", pct: 0, id: newId, name: newName });
-      await copyTree(source, destination);
-      const settings = await loadInstanceSettings(newId);
-      settings.name = newName;
-      if (!(await this.resolveIconPath(newId, settings))) settings.custom_icon = await installDefaultInstanceIcon(destination);
-      settings.cached_size_bytes = await dirSize(destination);
-      await saveInstanceSettings(newId, settings);
-      const group = await getInstanceGroup(sourceId, known);
-      if (group) await setInstanceGroup(newId, group, new Set([...known, newId]));
-      this.emitProgress({ stage: "done", operation: "copy", pct: 1, id: newId, name: newName });
-    } catch (error) {
-      if (ownsDestination) await removeIfExists(instanceDir(newId));
-      throw error;
-    } finally {
-      this.state.copyInProgress.delete(sourceId);
-      this.notifyInstanceOperationWaiters();
-    }
-  }
-
-  private async openInstanceFolder(rawId: string): Promise<void> {
-    const id = sanitizeName(rawId);
-    const instance = instanceDir(id);
-    if (!(await exists(instance))) throw new Error("instance not installed");
-    await flattenNestedPack(instance);
-    const error = await shell.openPath(instance);
-    if (error) throw new Error(`failed to open instance folder: ${error}`);
-  }
-
-  private async openModsFolder(rawId: string): Promise<void> {
-    const id = sanitizeName(rawId);
-    const instance = instanceDir(id);
-    if (!(await exists(instance))) throw new Error("instance not installed");
-    await flattenNestedPack(instance);
-    const mods = await resolveModsDir(instance);
-    await fs.mkdir(mods, { recursive: true });
-    const error = await shell.openPath(mods);
-    if (error) throw new Error(`failed to open mods folder: ${error}`);
-  }
-
-  private async openBackupsFolder(rawId: string): Promise<void> {
-    const id = sanitizeName(rawId);
-    const instance = instanceDir(id);
-    if (!(await exists(instance))) throw new Error("instance not installed");
-    const backups = instanceBackupsDir(id);
-    await fs.mkdir(backups, { recursive: true });
-    const error = await shell.openPath(backups);
-    if (error) throw new Error(`failed to open backups folder: ${error}`);
-  }
-
-  private async downloadInstall(args: LaunchArgs): Promise<void> {
-    const id = validateInstanceId(String(args.id));
-    const instance = instanceDir(id);
-    const packVersion = String(args.packVersion);
-    const javaType = String(args.javaType ?? "java17+");
-    if (this.state.installInProgress.has(id)) throw new Error("install already in progress for this instance");
-    this.state.installInProgress.add(id);
-    try {
-      const known = await this.knownInstanceIds();
-      if (known.has(id)) throw new Error("an instance with that id already exists");
-      await fs.mkdir(instance, { recursive: true });
-      const staging = await downloadAndExtractToStaging(
-        (payload) => this.emitProgress({ ...payload, id, operation: payload.operation ?? "install" } as DownloadProgress),
-        packVersion,
-        javaType,
-        instance,
-        "install",
-        id,
-      );
-      await installStagingContents(staging, instance);
-      await removeIfExists(staging);
-      await flattenNestedPack(instance);
-      await prepareInstanceConfigs(instance, true);
-      const customIcon = await installDefaultInstanceIcon(instance);
-      const settings = {
-        ...defaultSettings(),
-        name: String(args.name ?? "").trim() || `GTNH ${packVersion}`,
-        pack_version: packVersion,
-        pack_java_type: javaType,
-        custom_icon: customIcon,
-      };
-      await this.saveAndRefreshSize(id, settings);
-      if (args.group) await setInstanceGroup(id, args.group, await this.knownInstanceIds());
-      this.emitProgress({ stage: "done", pct: 1, id, operation: "install" });
-    } finally {
-      this.state.installInProgress.delete(id);
-      this.notifyInstanceOperationWaiters();
-    }
-  }
-
-  private async previewUpdate(args: LaunchArgs): Promise<unknown> {
-    const id = sanitizeName(String(args.id).trim());
-    const known = await this.knownInstanceIds();
-    if (!known.has(id)) throw new Error("instance not found");
-    const instance = instanceDir(id);
-    const settings = await loadInstanceSettings(id);
-    const target = String(args.packVersion);
-    const javaType = String(args.javaType ?? settings.pack_java_type);
-    this.emitProgress({ stage: "preview", pct: 0, operation: "preview", id, log_line: `Preparing mod analysis: ${settings.pack_version || id} → ${target}` });
-    const previewDir = path.join(instance, ".update-preview");
-    await removeIfExists(previewDir);
-    try {
-      return await buildUpdatePreview(instance, target, javaType, (payload) => this.emitProgress({ ...payload, id, operation: "preview" } as DownloadProgress));
-    } finally {
-      await removeIfExists(previewDir);
-    }
-  }
-
-  private async updateInstance(args: LaunchArgs): Promise<void> {
-    const id = sanitizeName(String(args.id).trim());
-    if (this.state.running.has(id)) throw new Error("cannot update while instance is running");
-    if (this.state.updateInProgress.has(id)) throw new Error("update already in progress for this instance");
-    if (this.state.reinstallInProgress.has(id)) throw new Error("reinstall already in progress for this instance");
-    this.state.updateInProgress.add(id);
-    try {
-      await this.reinstallCore(id, String(args.packVersion), String(args.javaType ?? "java17+"), args.keepModIdentities ?? [], "update-pack");
-    } finally {
-      this.state.updateInProgress.delete(id);
-      this.notifyInstanceOperationWaiters();
-    }
-  }
-
-  private async reinstallInstance(args: LaunchArgs): Promise<void> {
-    const id = sanitizeName(String(args.id).trim());
-    if (this.state.running.has(id)) throw new Error("cannot reinstall while instance is running");
-    if (this.state.reinstallInProgress.has(id)) throw new Error("reinstall already in progress for this instance");
-    if (this.state.updateInProgress.has(id)) throw new Error("update already in progress for this instance");
-    this.state.reinstallInProgress.add(id);
-    try {
-      await this.reinstallCore(id, String(args.packVersion), String(args.javaType ?? "java17+"), [], "reinstall");
-    } finally {
-      this.state.reinstallInProgress.delete(id);
-      this.notifyInstanceOperationWaiters();
-    }
-  }
-
-  private async reinstallCore(id: string, packVersion: string, javaType: string, keepIds: string[], operation: "update-pack" | "reinstall"): Promise<void> {
-    const known = await this.knownInstanceIds();
-    if (!known.has(id)) throw new Error("instance not found");
-    const instance = instanceDir(id);
-    const preserve = path.join(instance, preserveDirName);
-    const persistentMods = persistentCustomModsDir(instance);
-    if (operation === "update-pack") {
-      const removed = await removeCustomModsExcept(persistentMods, new Set(keepIds));
-      if (removed) this.emitProgress({ stage: "updating", pct: 0.05, operation, id, log_line: `Removed ${removed} custom mod(s) not selected to keep` });
-    }
-    this.emitProgress({
-      stage: operation === "update-pack" ? "updating" : "reinstalling",
-      pct: 0.05,
-      operation,
-      id,
-      log_line: "Backing up saves, JourneyMap, and player settings",
-    });
-    await backupPlayerData(instance, preserve);
-    await wipeInstanceForReinstall(instance, preserve);
-    await fs.mkdir(instance, { recursive: true });
-    const staging = await downloadAndExtractToStaging(
-      (payload) => this.emitProgress({ ...payload, id, operation } as DownloadProgress),
-      packVersion,
-      javaType,
-      instance,
-      operation,
-      id,
-    );
-    this.emitProgress({ stage: operation === "update-pack" ? "updating" : "reinstalling", pct: 0.75, operation, id, log_line: "Installing fresh pack files" });
-    await installStagingContents(staging, instance);
-    await removeIfExists(staging);
-    await flattenNestedPack(instance);
-    await prepareInstanceConfigs(instance, true);
-    await restorePlayerData(instance, preserve);
-    const settings = await loadInstanceSettings(id);
-    settings.pack_version = packVersion;
-    settings.pack_java_type = javaType;
-    await this.saveAndRefreshSize(id, settings);
-    await applyPersistentCustomMods(instance);
-    await applyPersistentMinecraft(instance);
-    await removeIfExists(preserve);
-    this.emitProgress({ stage: "done", pct: 1, operation, id, log_line: operation === "update-pack" ? "Update complete" : "Clean reinstall complete" });
-  }
-
   private async pickFile(title: string, filters: Array<{ name: string; extensions: string[] }>): Promise<string | null> {
     const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     const result = await dialog.showOpenDialog(window, { title, properties: ["openFile"], filters });
     return result.canceled ? null : (result.filePaths[0] ?? null);
-  }
-
-  private async setInstanceIcon(args: LaunchArgs): Promise<void> {
-    const id = sanitizeName(args.id);
-    const source = String(args.sourcePath ?? "");
-    const instance = instanceDir(id);
-    const stat = await fs.stat(source).catch(() => null);
-    if (!stat?.isFile()) throw new Error("image file not found");
-    if (stat.size > 4 * 1024 * 1024) throw new Error("image must be under 4 MB");
-    const extension = path.extname(source).toLowerCase();
-    if (!/\.(png|jpe?g|webp|gif|bmp|ico)$/u.test(extension)) throw new Error("unsupported image type; use PNG, JPG, WebP, GIF, BMP, or ICO");
-    await fs.mkdir(instance, { recursive: true });
-    await this.clearInstanceIcon(id);
-    const filename = `instance-icon${extension}`;
-    await fs.copyFile(source, path.join(instance, filename));
-    const settings = await loadInstanceSettings(id);
-    settings.custom_icon = filename;
-    await saveInstanceSettings(id, settings);
-  }
-
-  private async setInstanceIconFromLibrary(args: LaunchArgs): Promise<void> {
-    const sourcePath = await instanceIconLibraryPath(String(args.iconId ?? ""));
-    await this.setInstanceIcon({ ...args, sourcePath });
-  }
-
-  private async openInstanceIconsFolder(): Promise<void> {
-    await ensureInstanceIconLibrary();
-    const error = await shell.openPath(iconsDir());
-    if (error) throw new Error(`failed to open icons folder: ${error}`);
-  }
-
-  private async clearInstanceIcon(rawId: string): Promise<void> {
-    const id = sanitizeName(rawId.trim());
-    const instance = instanceDir(id);
-    for (const entry of await fs.readdir(instance, { withFileTypes: true }).catch(() => []))
-      if (entry.name.startsWith("instance-icon")) await fs.rm(path.join(instance, entry.name), { force: true });
-    const settings = await loadInstanceSettings(id);
-    settings.custom_icon = null;
-    await saveInstanceSettings(id, settings);
-  }
-
-  private async killInstance(rawId: string): Promise<void> {
-    const id = sanitizeName(rawId);
-    const running = this.state.running.get(id);
-    if (running) await killGameProcess(running);
-  }
-
-  private async getConsoleLog(rawId: string, full: boolean): Promise<LaunchLogLine[]> {
-    const id = sanitizeName(rawId);
-    await this.flushConsoleLog(id);
-    await this.consoleLogWriter.compact(id);
-    const filePath = consoleLogPath(id);
-    const contents = await readConsoleLogTail(filePath);
-    return parseConsoleLog(contents, full);
   }
 
   private async removeAccount(id: string): Promise<void> {
@@ -874,225 +483,8 @@ export class LauncherBackend {
     await saveAccounts(accounts);
   }
 
-  private async launchInstance(rawId: string): Promise<void> {
-    const id = sanitizeName(rawId.trim());
-    if (this.state.running.has(id)) throw new Error("Instance is already running");
-    if (this.state.updateInProgress.has(id)) throw new Error("pack update in progress for this instance");
-    if (this.state.reinstallInProgress.has(id)) throw new Error("clean reinstall in progress for this instance");
-    const instance = instanceDir(id);
-    if (!(await exists(instance))) throw new Error("instance not installed");
-    await flattenNestedPack(instance);
-    await prepareInstanceConfigs(instance, false);
-    await applyPersistentCustomMods(instance);
-    await applyPersistentMinecraft(instance);
-    const [settings, launcherSettings] = await Promise.all([loadInstanceSettings(id), loadLauncherSettings()]);
-    const java = resolveJava(settings, launcherSettings.default_java_path);
-    const config = await buildLaunchConfig(instance, id, (entryId, stream, line) => this.emitLog(entryId, stream, line));
-    await syncAssets(config, id, (entryId, stream, line) => this.emitLog(entryId, stream, line));
-    const classpath = buildClasspath(config.libraries);
-    const vars = instanceCommandVars(id, settings.name, instance, java);
-    if (settings.override_commands && settings.pre_launch_command.trim()) {
-      await runShellCommand(substituteCommandVars(settings.pre_launch_command.trim(), vars), instance, settings.override_env ? settings.env_vars : {});
-      this.emitLog(id, "system", "Pre-launch command finished");
-    }
-    const args = [`-Xms${settings.override_memory ? settings.min_ram_mb : 4096}M`, `-Xmx${settings.override_memory ? settings.max_ram_mb : 6144}M`];
-    if (settings.override_memory && settings.perm_gen_mb > 0) args.push(`-XX:PermSize=${settings.perm_gen_mb}M`, `-XX:MaxPermSize=${settings.perm_gen_mb}M`);
-    if (settings.override_java_args && settings.jvm_args.trim()) args.push(...splitCommandArgs(settings.jvm_args));
-    args.push("-cp", classpath, ...config.jvmArgs, config.mainClass, ...config.programArgs);
-    if (settings.override_window && !settings.launch_maximized) args.push("--width", String(settings.window_width), "--height", String(settings.window_height));
-    if (settings.join_server_on_launch && settings.join_server_address.trim()) args.push("--server", settings.join_server_address.trim());
-    const accounts = await loadAccounts();
-    const account = chooseAccount(settings, accounts, launcherSettings.default_account_id);
-    const auth = await this.launchAuth(account);
-    if (config.minecraftArgumentsTemplate)
-      args.push(
-        ...expandMinecraftArguments(config.minecraftArgumentsTemplate, {
-          auth_player_name: auth.username,
-          version_name: config.minecraftVersion,
-          game_directory: config.gameDir,
-          assets_root: config.assetsDir,
-          assets_index_name: config.assetIndex?.id ?? config.minecraftVersion,
-          auth_uuid: auth.uuid,
-          auth_access_token: auth.accessToken,
-          user_properties: "{}",
-          user_type: auth.userType,
-        }),
-      );
-    else
-      args.push(
-        "--username",
-        auth.username,
-        "--version",
-        config.minecraftVersion,
-        "--gameDir",
-        config.gameDir,
-        "--assetsDir",
-        config.assetsDir,
-        "--accessToken",
-        auth.accessToken,
-        "--uuid",
-        auth.uuid,
-        "--userType",
-        auth.userType,
-      );
-    this.emitLog(id, "system", "──────── Launch ────────");
-    this.emitLog(id, "system", `Java: ${java}`);
-    this.emitLog(id, "system", `Main class: ${config.mainClass}`);
-    this.emitLog(id, "system", `Classpath: ${config.libraries.length} libraries (${classpath.length} chars)`);
-    await writeLaunchArgfile(path.join(instance, "launch.arg"), args);
-    this.emitLog(id, "system", `Launch args saved to ${path.join(instance, "launch.arg")}`);
-    const launchJava = javaGuiExecutable(java);
-    const command = resolveLaunchCommand(settings, launchJava, args, vars);
-    const gameDir = config.gameDir;
-    await fs.mkdir(gameDir, { recursive: true });
-    const started = Date.now();
-    const running = await spawnGameProcess(command.executable, command.args, gameDir, settings.override_env ? settings.env_vars : {}, (stream, line) => {
-      for (const part of line.split(/\r?\n/u)) if (part) this.emitLog(id, stream, part);
-    });
-    this.state.running.set(id, running);
-    await this.persistRunningProcesses().catch((error) => {
-      this.emitLog(id, "system", `Could not remember game process ${running.pid}: ${String(error)}`);
-    });
-    this.emit("instance-started", { id });
-    const exitCode = await waitForGameProcess(running);
-    this.state.running.delete(id);
-    await this.persistRunningProcesses().catch((error) => {
-      this.emitLog(id, "system", `Could not clear remembered game process: ${String(error)}`);
-    });
-    this.emitLog(id, "system", `Process exited with code ${exitCode}`);
-    try {
-      if (settings.override_game_time && settings.record_game_time) {
-        settings.total_play_seconds += Math.floor((Date.now() - started) / 1000);
-        await saveInstanceSettings(id, settings);
-      }
-      if (settings.override_commands && settings.post_exit_command.trim()) {
-        await runShellCommand(substituteCommandVars(settings.post_exit_command.trim(), vars), instance, settings.override_env ? settings.env_vars : {});
-        this.emitLog(id, "system", "Post-exit command finished");
-      }
-    } finally {
-      await this.flushConsoleLog(id);
-      this.emit("instance-stopped", { id, exit_code: exitCode });
-    }
-    if (exitCode !== 0) throw new Error(`game exited with code ${exitCode}`);
-  }
-
-  private async launchAuth(account: AccountData): Promise<{ username: string; uuid: string; accessToken: string; userType: string }> {
-    if (account.account_type === "offline") {
-      const username = account.minecraft_profile?.name ?? "";
-      const uuid = account.minecraft_profile?.id ?? "";
-      if (!username || !uuid) throw new Error("Offline account is missing a username.");
-      return { username, uuid, accessToken: "0", userType: "legacy" };
-    }
-    if (account.minecraft_entitlement && !account.minecraft_entitlement.can_play_minecraft)
-      throw new Error("This Microsoft account does not own Minecraft Java Edition.");
-    const token = await ensureFreshToken(account);
-    const username = account.minecraft_profile?.name ?? "";
-    const uuid = account.minecraft_profile?.id ?? "";
-    if (!username || !uuid) throw new Error("This Microsoft account has no Minecraft profile yet. Set a username in the official launcher first.");
-    return { username, uuid, accessToken: token, userType: "msa" };
-  }
-
-  private async checkLauncherUpdate(): Promise<LauncherUpdateState> {
-    const current_version = app.getVersion();
-    if (!app.isPackaged) return { status: "disabled", current_version };
-    try {
-      const response = await fetch("https://api.github.com/repos/SergioJuniorCE/industrialis-launcher/releases/latest", {
-        headers: { Accept: "application/vnd.github+json", "User-Agent": "industrialis-launcher" },
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) throw new Error(`GitHub release lookup failed: HTTP ${response.status}`);
-      const release = (await response.json()) as {
-        tag_name?: string;
-        body?: string;
-        draft?: boolean;
-        prerelease?: boolean;
-        html_url?: string;
-        assets?: Array<{ name?: string; browser_download_url?: string; digest?: string }>;
-      };
-      const version = release.tag_name?.replace(/^launcher-v/u, "");
-      if (!version || release.draft || release.prerelease || !isNewerVersion(version, current_version)) return { status: "up-to-date", current_version };
-      const asset = release.assets?.find((entry) => {
-        const name = entry.name?.toLowerCase() ?? "";
-        return process.platform === "win32"
-          ? name.endsWith("setup.exe")
-          : process.platform === "darwin"
-            ? name.endsWith(".dmg")
-            : name.endsWith(".deb") || name.endsWith(".rpm");
-      });
-      const state = {
-        status: "available",
-        current_version,
-        version,
-        body: release.body ?? "",
-        release_url: release.html_url ?? "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest",
-        ...(asset?.browser_download_url ? { download_url: asset.browser_download_url } : {}),
-        ...(asset?.digest ? { sha256: asset.digest } : {}),
-      } satisfies LauncherUpdateState;
-      this.emit("launcher-update", state);
-      return state;
-    } catch (error) {
-      return { status: "failed", current_version, error: String(error) };
-    }
-  }
-
-  private installLauncherUpdate(): Promise<LauncherUpdateState> {
-    if (this.launcherUpdateRequest) return this.launcherUpdateRequest;
-    if (this.launcherUpdateResult) return Promise.resolve(this.launcherUpdateResult);
-    const request = this.installLauncherUpdateCore();
-    this.launcherUpdateRequest = request.finally(() => {
-      this.launcherUpdateRequest = null;
-    });
-    return this.launcherUpdateRequest;
-  }
-
-  private async installLauncherUpdateCore(): Promise<LauncherUpdateState> {
-    const state = await this.checkLauncherUpdate();
-    if (state.status === "available") {
-      if (process.platform === "win32" && state.download_url && isTrustedLauncherDownloadUrl(state.download_url)) {
-        const updateDirectory = await fs.mkdtemp(path.join(app.getPath("temp"), "industrialis-launcher-update-"));
-        const installer = path.join(updateDirectory, "IndustrialisLauncherSetup.exe");
-        try {
-          await downloadLauncherInstaller({
-            url: state.download_url,
-            destination: installer,
-            expectedSha256: state.sha256,
-            onProgress: ({ progress }) => {
-              const downloading = { ...state, status: "downloading", progress } satisfies LauncherUpdateState;
-              this.emit("launcher-update", downloading);
-            },
-          });
-
-          const child = spawnChildProcess(installer, [], { detached: true, stdio: "ignore", windowsHide: true });
-          await new Promise<void>((resolve, reject) => {
-            child.once("spawn", resolve);
-            child.once("error", reject);
-          });
-          child.unref();
-          const installing = { ...state, status: "installing", progress: 1 } satisfies LauncherUpdateState;
-          this.launcherUpdateResult = installing;
-          this.emit("launcher-update", installing);
-          setTimeout(() => {
-            void this.waitForInstanceOperations().then(() => app.quit());
-          }, 300);
-          return installing;
-        } catch (error) {
-          await fs.rm(updateDirectory, { recursive: true, force: true }).catch(() => undefined);
-          throw error;
-        }
-      }
-
-      const releaseUrl = state.release_url ?? "https://github.com/SergioJuniorCE/industrialis-launcher/releases/latest";
-      await shell.openExternal(releaseUrl);
-      const manual = { ...state, status: "manual" } satisfies LauncherUpdateState;
-      this.emit("launcher-update", manual);
-      return manual;
-    }
-    return state;
-  }
-
   handleDeepLinks(urls: string[]): void {
     for (const url of urls) {
-      handleOauthCallback(url);
       this.emit("oauth-deep-link", { url });
     }
   }
@@ -1105,106 +497,4 @@ export class LauncherBackend {
     await this.waitForInstanceOperations();
     await this.persistRunningProcesses();
   }
-}
-
-const defaultInstanceIconFilename = "instance-icon.png";
-
-async function installDefaultInstanceIcon(instance: string): Promise<string> {
-  const source = await defaultInstanceIconPath();
-  await fs.copyFile(source, path.join(instance, defaultInstanceIconFilename));
-  return defaultInstanceIconFilename;
-}
-
-function defaultSettings(): InstanceSettings {
-  return {
-    name: "",
-    pack_version: "",
-    pack_java_type: "java17+",
-    backups_enabled: false,
-    backup_retention_override: null,
-    java_path: null,
-    min_ram_mb: 4096,
-    max_ram_mb: 6144,
-    perm_gen_mb: 128,
-    jvm_args: "",
-    auth_mode: "offline",
-    username: "",
-    offline_username_confirmed: false,
-    override_window: false,
-    launch_maximized: false,
-    window_width: 854,
-    window_height: 480,
-    close_after_launch: false,
-    quit_after_game_stop: false,
-    override_console: false,
-    show_console_on_launch: false,
-    show_console_on_error: true,
-    auto_close_console: false,
-    override_game_time: false,
-    show_game_time: true,
-    record_game_time: true,
-    total_play_seconds: 0,
-    override_account: false,
-    account_id: null,
-    join_server_on_launch: false,
-    join_server_address: "",
-    override_java_location: false,
-    skip_java_compat: false,
-    override_memory: false,
-    override_java_args: false,
-    override_commands: false,
-    pre_launch_command: "",
-    wrapper_command: "",
-    post_exit_command: "",
-    override_env: false,
-    env_vars: {},
-    cached_size_bytes: 0,
-    custom_icon: null,
-  };
-}
-function resolveJava(settings: InstanceSettings, defaultPath: string | null): string {
-  if (settings.override_java_location && settings.java_path?.trim()) {
-    if (!existsSync(settings.java_path)) throw new Error(`configured Java not found: ${settings.java_path}`);
-    return settings.java_path;
-  }
-  if (defaultPath?.trim()) {
-    if (!existsSync(defaultPath)) throw new Error(`default Java not found: ${defaultPath}`);
-    return defaultPath;
-  }
-  const detected = javaPath();
-  if (!detected)
-    throw new Error("no Java configured or found — choose a default Java in launcher settings, set JAVA_HOME, or pick a Java in instance settings");
-  return detected;
-}
-
-function chooseAccount(settings: InstanceSettings, accounts: AccountData[], defaultAccountId: string | null): AccountData {
-  if (!accounts.length) throw new Error("Add an account in Accounts before launching.");
-  if (settings.override_account && settings.account_id) {
-    const account = accounts.find((entry) => entry.id === settings.account_id);
-    if (!account) throw new Error("The account selected in instance settings was not found.");
-    return account;
-  }
-  if (defaultAccountId) {
-    const account = accounts.find((entry) => entry.id === defaultAccountId);
-    if (account) return account;
-  }
-  if (accounts.length === 1) return accounts[0];
-  throw new Error("Set a default account in Accounts before launching.");
-}
-
-function resolveLaunchCommand(settings: InstanceSettings, java: string, args: string[], vars: Record<string, string>): { executable: string; args: string[] } {
-  if (!settings.override_commands || !settings.wrapper_command.trim()) return { executable: java, args };
-  const wrapper = substituteCommandVars(settings.wrapper_command.trim(), vars);
-  const parts = splitCommandArgs(wrapper);
-  const executable = parts.shift();
-  if (!executable) throw new Error("wrapper command is empty");
-  return { executable, args: [...parts, java, ...args] };
-}
-
-function isNewerVersion(candidate: string, current: string): boolean {
-  const parse = (value: string) => value.split(/[.-]/u).map((part) => Number(part.replace(/\D.*$/u, "")) || 0);
-  const a = parse(candidate);
-  const b = parse(current);
-  for (let i = 0; i < Math.max(a.length, b.length); i += 1) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0);
-  return false;
 }

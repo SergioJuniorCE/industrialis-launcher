@@ -1,8 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { app } from "electron";
+import { app, shell } from "electron";
 import { exists } from "./fs-utils";
-import { iconsDir } from "./paths";
+import { iconsDir, instanceDir, sanitizeName } from "./paths";
+import { loadInstanceSettings, saveInstanceSettings } from "./settings";
+import type { LaunchArgs } from "./backend-context";
+import type { InstanceSettings } from "./types";
 
 const supportedIconExtension = /\.(png|jpe?g|webp|gif|bmp|ico)$/iu;
 const defaultIconId = "gtnh-logo.png";
@@ -97,4 +100,60 @@ export async function instanceIconLibraryPath(rawId: string): Promise<string> {
 
 export function defaultInstanceIconPath(): Promise<string> {
   return instanceIconLibraryPath(defaultIconId);
+}
+
+const defaultInstanceIconFilename = "instance-icon.png";
+
+export async function installDefaultInstanceIcon(instance: string): Promise<string> {
+  const source = await defaultInstanceIconPath();
+  await fs.copyFile(source, path.join(instance, defaultInstanceIconFilename));
+  return defaultInstanceIconFilename;
+}
+
+export async function resolveIconPath(id: string, settings: InstanceSettings): Promise<string | null> {
+  const instance = instanceDir(id);
+  if (settings.custom_icon && (await exists(path.join(instance, settings.custom_icon)))) return path.join(instance, settings.custom_icon);
+  for (const entry of await fs.readdir(instance, { withFileTypes: true }).catch(() => [])) {
+    if (entry.name.startsWith("instance-icon") && /\.(png|jpe?g|webp|gif|bmp|ico)$/iu.test(entry.name)) return path.join(instance, entry.name);
+  }
+  return null;
+}
+
+export async function setInstanceIcon(args: LaunchArgs): Promise<void> {
+  const id = sanitizeName(args.id);
+  const source = String(args.sourcePath ?? "");
+  const instance = instanceDir(id);
+  const stat = await fs.stat(source).catch(() => null);
+  if (!stat?.isFile()) throw new Error("image file not found");
+  if (stat.size > 4 * 1024 * 1024) throw new Error("image must be under 4 MB");
+  const extension = path.extname(source).toLowerCase();
+  if (!/\.(png|jpe?g|webp|gif|bmp|ico)$/u.test(extension)) throw new Error("unsupported image type; use PNG, JPG, WebP, GIF, BMP, or ICO");
+  await fs.mkdir(instance, { recursive: true });
+  await clearInstanceIcon(id);
+  const filename = `instance-icon${extension}`;
+  await fs.copyFile(source, path.join(instance, filename));
+  const settings = await loadInstanceSettings(id);
+  settings.custom_icon = filename;
+  await saveInstanceSettings(id, settings);
+}
+
+export async function setInstanceIconFromLibrary(args: LaunchArgs): Promise<void> {
+  const sourcePath = await instanceIconLibraryPath(String(args.iconId ?? ""));
+  await setInstanceIcon({ ...args, sourcePath });
+}
+
+export async function openInstanceIconsFolder(): Promise<void> {
+  await ensureInstanceIconLibrary();
+  const error = await shell.openPath(iconsDir());
+  if (error) throw new Error(`failed to open icons folder: ${error}`);
+}
+
+export async function clearInstanceIcon(rawId: string): Promise<void> {
+  const id = sanitizeName(rawId.trim());
+  const instance = instanceDir(id);
+  for (const entry of await fs.readdir(instance, { withFileTypes: true }).catch(() => []))
+    if (entry.name.startsWith("instance-icon")) await fs.rm(path.join(instance, entry.name), { force: true });
+  const settings = await loadInstanceSettings(id);
+  settings.custom_icon = null;
+  await saveInstanceSettings(id, settings);
 }

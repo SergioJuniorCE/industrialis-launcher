@@ -5,6 +5,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { safeStorage, shell } from "electron";
 import { readJson, removeIfExists, writeJson } from "./fs-utils";
+import { retryWithBackoff } from "./http";
 import { googleDriveStatePath } from "./paths";
 import type { BackupStore, DownloadOptions, RemoteObject, TransferProgress, UploadOptions, UploadSource } from "./backup-types";
 
@@ -89,6 +90,15 @@ async function responseError(response: Response): Promise<Error> {
 async function jsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) throw await responseError(response);
   return (await response.json()) as T;
+}
+
+class RetryableChunkError extends Error {
+  readonly status: number;
+  constructor(status: number, body: string) {
+    super(`Google Drive chunk upload failed: HTTP ${status}${body ? ` - ${body}` : ""}`);
+    this.name = "RetryableChunkError";
+    this.status = status;
+  }
 }
 
 function normalizeKey(key: string): string {
@@ -430,27 +440,29 @@ export class GoogleDriveAdapter implements BackupStore {
   }
 
   private async putChunk(sessionUrl: string, buffer: Buffer, start: number, end: number, total: number): Promise<{ next_offset: number; file?: DriveFile }> {
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const response = await fetch(sessionUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Length": String(buffer.length),
-          "Content-Range": total === 0 ? "bytes */0" : `bytes ${start}-${end}/${total}`,
-        },
-        body: buffer as unknown as BodyInit,
-      });
-      if (response.status === 308) {
-        const range = response.headers.get("range");
-        const lastByte = range?.match(/bytes=\d+-(\d+)/u)?.[1];
-        return { next_offset: lastByte ? Number(lastByte) + 1 : start + buffer.length };
-      }
-      if (response.ok) return { next_offset: total, file: (await response.json()) as DriveFile };
-      if (response.status >= 500 && attempt < 3) {
-        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
-        continue;
-      }
-      throw await responseError(response);
-    }
-    throw new Error("Google Drive upload failed after retries");
+    return retryWithBackoff(
+      async () => {
+        const response = await fetch(sessionUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Length": String(buffer.length),
+            "Content-Range": total === 0 ? "bytes */0" : `bytes ${start}-${end}/${total}`,
+          },
+          body: buffer as unknown as BodyInit,
+        });
+        if (response.status === 308) {
+          const range = response.headers.get("range");
+          const lastByte = range?.match(/bytes=\d+-(\d+)/u)?.[1];
+          return { next_offset: lastByte ? Number(lastByte) + 1 : start + buffer.length };
+        }
+        if (response.ok) return { next_offset: total, file: (await response.json()) as DriveFile };
+        if (response.status >= 500) {
+          const body = await response.text().catch(() => "");
+          throw new RetryableChunkError(response.status, body);
+        }
+        throw await responseError(response);
+      },
+      { maxAttempts: 4, baseDelayMs: 500, shouldRetry: (error) => error instanceof RetryableChunkError },
+    );
   }
 }

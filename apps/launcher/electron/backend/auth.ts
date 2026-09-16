@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { shell } from "electron";
+import { formatHttpResult, requestJson, sleep, DEFAULT_REQUEST_TIMEOUT_MS } from "./http";
 import { accountsPath } from "./paths";
 import { readJson, writeJson } from "./fs-utils";
 import type { AccountData, AccountInfo, DeviceCodeInfo, MinecraftEntitlement, MinecraftProfile, MsaToken, StoredToken } from "./types";
@@ -9,8 +10,6 @@ const scopes = "XboxLive.SignIn XboxLive.offline_access";
 const msaTokenUrl = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
 const msaDeviceCodeUrl = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const refreshWindowSeconds = 12 * 60 * 60;
-
-let pendingOauth: { state: string; resolve: (code: string) => void; reject: (error: Error) => void } | null = null;
 
 function now(): number {
   return Math.floor(Date.now() / 1000);
@@ -110,29 +109,6 @@ export async function createOfflineAccount(usernameRaw: string): Promise<Account
   return accountInfo(account);
 }
 
-async function requestJson(url: string, init: RequestInit): Promise<{ status: number; body: any }> {
-  const response = await fetch(url, init);
-  const status = response.status;
-  if (!response.ok) {
-    const text = await response.text();
-    let body: any = {};
-    try {
-      body = text ? JSON.parse(text) : {};
-    } catch {
-      body = { raw: text };
-    }
-    return { status, body };
-  }
-  const text = await response.text();
-  let body: any = {};
-  try {
-    body = text ? JSON.parse(text) : {};
-  } catch {
-    body = { raw: text };
-  }
-  return { status, body };
-}
-
 async function requestDeviceCode(): Promise<any> {
   const result = await requestJson(msaDeviceCodeUrl, {
     method: "POST",
@@ -140,6 +116,9 @@ async function requestDeviceCode(): Promise<any> {
     body: new URLSearchParams({ client_id: clientId, scope: scopes }),
   });
   if (result.body.error) throw new Error(`device code (${result.body.error}): ${result.body.error_description ?? ""}`);
+  if (result.status < 200 || result.status >= 300 || !result.body.device_code) {
+    throw new Error(`device code request failed (HTTP ${result.status}): ${JSON.stringify(result.body)}`);
+  }
   return result.body;
 }
 
@@ -155,17 +134,29 @@ function emitDeviceCode(emit: (event: string, payload: unknown) => void, device:
 async function pollDeviceCode(device: any): Promise<MsaToken> {
   const deadline = Date.now() + Number(device.expires_in ?? 900) * 1000;
   let interval = Math.max(Number(device.interval ?? 5), 5);
+  let networkFailures = 0;
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, interval * 1000));
-    const result = await requestJson(msaTokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-        device_code: String(device.device_code),
-      }),
-    });
+    await sleep(interval * 1000);
+    let result: { status: number; body: any };
+    try {
+      result = await requestJson(msaTokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+          device_code: String(device.device_code),
+        }),
+      });
+    } catch (error) {
+      // A dropped poll request shouldn't abort the whole login — the user may
+      // still be completing sign-in in their browser. Keep polling, but give
+      // up if the network stays down.
+      networkFailures += 1;
+      if (networkFailures >= 3) throw error;
+      continue;
+    }
+    networkFailures = 0;
     if (result.body.access_token) {
       return {
         access_token: result.body.access_token,
@@ -184,7 +175,7 @@ async function pollDeviceCode(device: any): Promise<MsaToken> {
       case "access_denied":
         throw new Error("login denied");
       default:
-        throw new Error(`device code poll failed (${result.body.error ?? "unknown"}): ${result.body.error_description ?? ""}`);
+        throw new Error(`device code poll failed (HTTP ${result.status}, ${result.body.error ?? "unknown"}): ${result.body.error_description ?? ""}`);
     }
   }
   throw new Error("device code login timed out");
@@ -211,7 +202,7 @@ async function xboxUserAuth(msaAccess: string): Promise<any> {
       TokenType: "JWT",
     }),
   });
-  if (!result.body.Token) throw new Error(`Xbox user auth failed: ${JSON.stringify(result.body)}`);
+  if (!result.body.Token) throw new Error(`Xbox user auth failed (HTTP ${result.status}): ${JSON.stringify(result.body)}`);
   return result.body;
 }
 
@@ -237,7 +228,7 @@ async function xstsAuth(userToken: StoredToken): Promise<any> {
     if (code === 2148916238) throw new Error("This account is a child account and must be added to a family.");
     if (code === 2148916235) throw new Error("Xbox Live is unavailable in your region.");
     if (code === 2148916236 || code === 2148916237) throw new Error("This account needs adult verification on Xbox Live.");
-    throw new Error(`Xbox authorization failed${Number.isFinite(code) ? ` (XErr ${code})` : ""}: ${JSON.stringify(result.body)}`);
+    throw new Error(`Xbox authorization failed (HTTP ${result.status})${Number.isFinite(code) ? ` (XErr ${code})` : ""}: ${JSON.stringify(result.body)}`);
   }
   return result.body;
 }
@@ -250,21 +241,32 @@ async function minecraftLogin(uhs: string, xstsToken: string): Promise<any> {
     body: JSON.stringify({ xtoken: identity, platform: "PC_LAUNCHER" }),
   });
   if (primary.body.access_token) return primary.body;
-  if (primary.body.error !== "FORBIDDEN") throw new Error(`Minecraft launcher login failed: ${JSON.stringify(primary.body)}`);
+  // The primary endpoint can fail transiently (notably HTTP 429, whose body
+  // is just {"path":"/launcher/login"}) while the legacy endpoint — on a
+  // separate rate-limit bucket — still succeeds. Always try the fallback
+  // before giving up instead of only on FORBIDDEN.
   const fallback = await requestJson("https://api.minecraftservices.com/authentication/login_with_xbox", {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify({ identityToken: identity }),
   });
   if (fallback.body.access_token) return fallback.body;
-  throw new Error(`Minecraft API rejected this Azure application: ${JSON.stringify(primary.body)}`);
+  if (primary.status === 429 || fallback.status === 429) {
+    throw new Error(
+      `Minecraft services are rate-limiting logins (HTTP 429). Wait a minute and try again. [launcher/login ${formatHttpResult(primary)}; login_with_xbox ${formatHttpResult(fallback)}]`,
+    );
+  }
+  if (primary.body.error === "FORBIDDEN") throw new Error(`Minecraft API rejected this Azure application: ${formatHttpResult(primary)}`);
+  throw new Error(`Minecraft launcher login failed: launcher/login ${formatHttpResult(primary)}; login_with_xbox ${formatHttpResult(fallback)}`);
 }
 
 async function checkEntitlements(token: string): Promise<MinecraftEntitlement> {
   const result = await requestJson("https://api.minecraftservices.com/entitlements/license?requestId=00000000-0000-0000-0000-000000000000", {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (result.status < 200 || result.status >= 300) throw new Error(`entitlements check failed: ${JSON.stringify(result.body)}`);
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`entitlements check failed (HTTP ${result.status}): ${JSON.stringify(result.body)}`);
+  }
   let owns = false;
   let canPlay = false;
   for (const item of result.body.items ?? []) {
@@ -277,16 +279,23 @@ async function checkEntitlements(token: string): Promise<MinecraftEntitlement> {
 async function fetchProfile(token: string): Promise<MinecraftProfile | undefined> {
   const result = await requestJson("https://api.minecraftservices.com/minecraft/profile", { headers: { Authorization: `Bearer ${token}` } });
   if (result.status === 404) return undefined;
-  if (result.status < 200 || result.status >= 300) throw new Error(`profile fetch failed: ${JSON.stringify(result.body)}`);
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`profile fetch failed (HTTP ${result.status}): ${JSON.stringify(result.body)}`);
+  }
   return result.body as MinecraftProfile;
 }
 
 async function downloadSkin(profile?: MinecraftProfile): Promise<string | undefined> {
   const skin = profile?.skins?.find((entry) => entry.state === "ACTIVE") ?? profile?.skins?.[0];
   if (!skin?.url) return undefined;
-  const response = await fetch(skin.url);
-  if (!response.ok) return undefined;
-  return Buffer.from(await response.arrayBuffer()).toString("base64");
+  // Best effort: a skin download failure must never fail the login itself.
+  try {
+    const response = await fetch(skin.url, { signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS) });
+    if (!response.ok) return undefined;
+    return Buffer.from(await response.arrayBuffer()).toString("base64");
+  } catch {
+    return undefined;
+  }
 }
 
 async function runPipeline(msa: MsaToken): Promise<AccountData> {
@@ -322,7 +331,7 @@ export async function ensureFreshToken(account: AccountData): Promise<string> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: clientId, refresh_token: msa.refresh_token, grant_type: "refresh_token", scope: scopes }),
   });
-  if (!result.body.access_token) throw new Error(`MSA refresh failed: ${JSON.stringify(result.body)}`);
+  if (!result.body.access_token) throw new Error(`MSA refresh failed (HTTP ${result.status}): ${JSON.stringify(result.body)}`);
   const refreshed = await runPipeline({
     access_token: result.body.access_token,
     refresh_token: result.body.refresh_token ?? msa.refresh_token,
@@ -331,23 +340,6 @@ export async function ensureFreshToken(account: AccountData): Promise<string> {
   refreshed.id = account.id;
   await upsertAccount(refreshed);
   return accessToken(refreshed);
-}
-
-export function handleOauthCallback(url: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return;
-  }
-  if (parsed.protocol !== "industrialislauncher:" || parsed.hostname !== "oauth" || !/^\/microsoft\/?$/u.test(parsed.pathname)) return;
-  if (!pendingOauth) return;
-  const current = pendingOauth;
-  pendingOauth = null;
-  const error = parsed.searchParams.get("error");
-  if (error) current.reject(new Error(`Microsoft login error (${error}): ${parsed.searchParams.get("error_description") ?? ""}`));
-  else if (parsed.searchParams.get("state") !== current.state) current.reject(new Error("OAuth state mismatch"));
-  else current.resolve(parsed.searchParams.get("code") ?? "");
 }
 
 export function accountToInfo(account: AccountData): AccountInfo {
