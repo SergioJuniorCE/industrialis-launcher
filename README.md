@@ -50,7 +50,7 @@ pnpm dev
 Or run a single app:
 
 ```bash
-pnpm dev:launcher    # Electron desktop app (Vite renderer on :5173, override with PORT=5197 or VITE_PORT=5197)
+pnpm dev:launcher    # Electron desktop app (Vite renderer on :5173, override with VITE_PORT=5197 or PORT=5197; VITE_PORT wins)
 pnpm dev:website     # Next.js site on :3000
 pnpm dev:server      # GTNH server daemon on :4310
 pnpm dev:dashboard   # Astro server console on :3001

@@ -83,4 +83,30 @@ describe("ensureFreshToken Minecraft login", () => {
     stubAuthNetwork({ status: 429, body: { path: "/launcher/login" } }, { status: 429, body: { path: "/authentication/login_with_xbox" } });
     await expect(ensureFreshToken(expiredAccount())).rejects.toThrow(/rate-limiting/i);
   });
+
+  it("fails fast without calling the fallback on permanent client errors", async () => {
+    const calls: string[] = [];
+    const xboxToken = {
+      Token: "xbox-token",
+      NotAfter: new Date(Date.now() + 3600_000).toISOString(),
+      DisplayClaims: { xui: [{ uhs: "U" }] },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) => {
+        const target = String(url);
+        calls.push(target);
+        if (target.includes("login.microsoftonline.com")) return jsonResponse(200, { access_token: "msa", refresh_token: "refresh", expires_in: 3600 });
+        if (target.includes("user.auth.xboxlive.com")) return jsonResponse(200, xboxToken);
+        if (target.includes("xsts.auth.xboxlive.com")) return jsonResponse(200, xboxToken);
+        if (target.includes("/launcher/login")) return jsonResponse(400, { error: "BAD_REQUEST" });
+        if (target.includes("/authentication/login_with_xbox")) return jsonResponse(200, { access_token: "mc-token", expires_in: 86400 });
+        if (target.includes("/entitlements/license")) return jsonResponse(200, { items: [] });
+        if (target.includes("/minecraft/profile")) return jsonResponse(404, { path: "/minecraft/profile", error: "NOT_FOUND" });
+        throw new Error(`unexpected fetch: ${target}`);
+      }),
+    );
+    await expect(ensureFreshToken(expiredAccount())).rejects.toThrow(/launcher login failed/i);
+    expect(calls.filter((target) => target.includes("/authentication/login_with_xbox"))).toHaveLength(0);
+  });
 });

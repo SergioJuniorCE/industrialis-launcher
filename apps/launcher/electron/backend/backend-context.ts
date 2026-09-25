@@ -40,6 +40,53 @@ export interface LaunchArgs {
   providerId?: string;
 }
 
+/** Narrow per-operation views of the flat IPC arg bag. Internal backend
+ * functions take these instead of the god-interface LaunchArgs so each
+ * module declares only the fields it reads. The Electron IPC boundary in
+ * index.ts still receives LaunchArgs and maps fields explicitly. */
+export interface CopyInstanceArgs {
+  sourceId?: string;
+  newId?: string;
+  newName?: string;
+}
+
+export interface DownloadInstallArgs {
+  id: string;
+  packVersion?: string;
+  javaType?: string;
+  name?: string;
+  group?: string;
+}
+
+export interface PreviewUpdateArgs {
+  id: string;
+  packVersion?: string;
+  javaType?: string;
+}
+
+export interface UpdateInstanceArgs {
+  id: string;
+  packVersion?: string;
+  javaType?: string;
+  keepModIdentities?: string[];
+}
+
+export interface ReinstallInstanceArgs {
+  id: string;
+  packVersion?: string;
+  javaType?: string;
+}
+
+export interface SetInstanceIconArgs {
+  id: string;
+  sourcePath?: string;
+}
+
+export interface SetInstanceIconFromLibraryArgs {
+  id: string;
+  iconId?: string;
+}
+
 export interface LaunchState {
   running: Map<string, RunningProcess>;
   installInProgress: Set<string>;
@@ -61,4 +108,13 @@ export interface BackendContext {
   persistRunningProcesses(): Promise<void>;
   flushConsoleLog(id: string): Promise<void>;
   compactConsoleLog(id: string): Promise<void>;
+  /** Read-only operation-state queries. Mutations go through `state`
+   * directly so ownership stays visible at the call site. */
+  isRunning(id: string): boolean;
+  isInstallInProgress(id: string): boolean;
+  isUpdateInProgress(id: string): boolean;
+  isReinstallInProgress(id: string): boolean;
+  isCopyInProgress(id: string): boolean;
+  isDeleteInProgress(id: string): boolean;
+  getDeleteCancel(id: string): { cancelled: boolean } | undefined;
 }

@@ -4,7 +4,7 @@ import { app, shell } from "electron";
 import { exists } from "./fs-utils";
 import { iconsDir, instanceDir, sanitizeName } from "./paths";
 import { loadInstanceSettings, saveInstanceSettings } from "./settings";
-import type { LaunchArgs } from "./backend-context";
+import type { SetInstanceIconArgs, SetInstanceIconFromLibraryArgs } from "./backend-context";
 import type { InstanceSettings } from "./types";
 
 const supportedIconExtension = /\.(png|jpe?g|webp|gif|bmp|ico)$/iu;
@@ -119,7 +119,7 @@ export async function resolveIconPath(id: string, settings: InstanceSettings): P
   return null;
 }
 
-export async function setInstanceIcon(args: LaunchArgs): Promise<void> {
+export async function setInstanceIcon(args: SetInstanceIconArgs): Promise<void> {
   const id = sanitizeName(args.id);
   const source = String(args.sourcePath ?? "");
   const instance = instanceDir(id);
@@ -137,9 +137,9 @@ export async function setInstanceIcon(args: LaunchArgs): Promise<void> {
   await saveInstanceSettings(id, settings);
 }
 
-export async function setInstanceIconFromLibrary(args: LaunchArgs): Promise<void> {
+export async function setInstanceIconFromLibrary(args: SetInstanceIconFromLibraryArgs): Promise<void> {
   const sourcePath = await instanceIconLibraryPath(String(args.iconId ?? ""));
-  await setInstanceIcon({ ...args, sourcePath });
+  await setInstanceIcon({ id: args.id, sourcePath });
 }
 
 export async function openInstanceIconsFolder(): Promise<void> {

@@ -2,7 +2,7 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 export interface JsonResult {
   status: number;
-  body: any;
+  body: unknown;
 }
 
 export interface RequestJsonOptions {
@@ -23,17 +23,22 @@ export async function requestJson(url: string, init: RequestInit, options: Reque
     );
   }
   const text = await response.text();
-  let body: any = {};
+  let body: unknown = {};
   try {
-    body = text ? JSON.parse(text) : {};
+    body = text ? (JSON.parse(text) as unknown) : {};
   } catch {
     body = { raw: text };
   }
   return { status: response.status, body };
 }
 
-export function formatHttpResult(result: { status: number; body: unknown }): string {
+export function formatHttpResult(result: JsonResult): string {
   return `HTTP ${result.status}: ${JSON.stringify(result.body)}`;
+}
+
+/** HTTP statuses worth retrying or falling back on (rate-limit / transient). */
+export function isTransientHttpStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
 }
 
 export function sleep(ms: number): Promise<void> {

@@ -31,9 +31,9 @@ export async function killInstance(ctx: BackendContext, rawId: string): Promise<
 
 export async function launchInstance(ctx: BackendContext, rawId: string): Promise<void> {
   const id = sanitizeName(rawId.trim());
-  if (ctx.state.running.has(id)) throw new Error("Instance is already running");
-  if (ctx.state.updateInProgress.has(id)) throw new Error("pack update in progress for this instance");
-  if (ctx.state.reinstallInProgress.has(id)) throw new Error("clean reinstall in progress for this instance");
+  if (ctx.isRunning(id)) throw new Error("Instance is already running");
+  if (ctx.isUpdateInProgress(id)) throw new Error("pack update in progress for this instance");
+  if (ctx.isReinstallInProgress(id)) throw new Error("clean reinstall in progress for this instance");
   const instance = instanceDir(id);
   if (!(await exists(instance))) throw new Error("instance not installed");
   await flattenNestedPack(instance);

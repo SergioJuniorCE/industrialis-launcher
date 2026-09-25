@@ -20,7 +20,7 @@ import {
 import { instanceBackupsDir, instanceDir, sanitizeName, validateInstanceId } from "./paths";
 import { loadInstanceSettings, saveInstanceSettings } from "./settings";
 import { defaultInstanceSettings, type DownloadProgress } from "./types";
-import type { BackendContext, LaunchArgs } from "./backend-context";
+import type { BackendContext, CopyInstanceArgs, DownloadInstallArgs, PreviewUpdateArgs, ReinstallInstanceArgs, UpdateInstanceArgs } from "./backend-context";
 
 export async function refreshSizes(ctx: BackendContext, ids: string[] | null | undefined): Promise<Record<string, number>> {
   const target = ids?.map((id) => sanitizeName(id.trim())) ?? [...(await ctx.knownInstanceIds())];
@@ -39,7 +39,7 @@ export async function refreshSizes(ctx: BackendContext, ids: string[] | null | u
 
 export async function deleteInstance(ctx: BackendContext, rawId: string): Promise<void> {
   const id = sanitizeName(rawId.trim());
-  if (ctx.state.deleteCancel.has(id)) throw new Error("delete already in progress for this instance");
+  if (ctx.isDeleteInProgress(id)) throw new Error("delete already in progress for this instance");
   const cancel = { cancelled: false };
   ctx.state.deleteCancel.set(id, cancel);
   try {
@@ -61,19 +61,19 @@ export async function deleteInstance(ctx: BackendContext, rawId: string): Promis
 }
 
 export function cancelDelete(ctx: BackendContext, rawId: string): void {
-  const entry = ctx.state.deleteCancel.get(sanitizeName(rawId.trim()));
+  const entry = ctx.getDeleteCancel(sanitizeName(rawId.trim()));
   if (!entry) throw new Error("no deletion in progress for this instance");
   entry.cancelled = true;
 }
 
-export async function copyInstance(ctx: BackendContext, args: LaunchArgs): Promise<void> {
+export async function copyInstance(ctx: BackendContext, args: CopyInstanceArgs): Promise<void> {
   const sourceId = sanitizeName(String(args.sourceId ?? "").trim());
   const newId = validateInstanceId(String(args.newId ?? ""));
   const newName = String(args.newName ?? "").trim();
   if (!newName) throw new Error("instance name cannot be empty");
   if (sourceId === newId) throw new Error("new instance id must differ from the source");
-  if (ctx.state.running.has(sourceId)) throw new Error("cannot copy while instance is running");
-  if (ctx.state.copyInProgress.has(sourceId)) throw new Error("copy already in progress for this instance");
+  if (ctx.isRunning(sourceId)) throw new Error("cannot copy while instance is running");
+  if (ctx.isCopyInProgress(sourceId)) throw new Error("copy already in progress for this instance");
   ctx.state.copyInProgress.add(sourceId);
   let ownsDestination = false;
   try {
@@ -102,42 +102,45 @@ export async function copyInstance(ctx: BackendContext, args: LaunchArgs): Promi
   }
 }
 
-export async function openInstanceFolder(rawId: string): Promise<void> {
+async function requireInstalledInstance(rawId: string): Promise<{ id: string; instance: string }> {
   const id = sanitizeName(rawId);
   const instance = instanceDir(id);
   if (!(await exists(instance))) throw new Error("instance not installed");
+  return { id, instance };
+}
+
+async function openPathOrThrow(target: string, label: string): Promise<void> {
+  const error = await shell.openPath(target);
+  if (error) throw new Error(`failed to open ${label} folder: ${error}`);
+}
+
+export async function openInstanceFolder(rawId: string): Promise<void> {
+  const { instance } = await requireInstalledInstance(rawId);
   await flattenNestedPack(instance);
-  const error = await shell.openPath(instance);
-  if (error) throw new Error(`failed to open instance folder: ${error}`);
+  await openPathOrThrow(instance, "instance");
 }
 
 export async function openModsFolder(rawId: string): Promise<void> {
-  const id = sanitizeName(rawId);
-  const instance = instanceDir(id);
-  if (!(await exists(instance))) throw new Error("instance not installed");
+  const { instance } = await requireInstalledInstance(rawId);
   await flattenNestedPack(instance);
   const mods = await resolveModsDir(instance);
   await fs.mkdir(mods, { recursive: true });
-  const error = await shell.openPath(mods);
-  if (error) throw new Error(`failed to open mods folder: ${error}`);
+  await openPathOrThrow(mods, "mods");
 }
 
 export async function openBackupsFolder(rawId: string): Promise<void> {
-  const id = sanitizeName(rawId);
-  const instance = instanceDir(id);
-  if (!(await exists(instance))) throw new Error("instance not installed");
+  const { id } = await requireInstalledInstance(rawId);
   const backups = instanceBackupsDir(id);
   await fs.mkdir(backups, { recursive: true });
-  const error = await shell.openPath(backups);
-  if (error) throw new Error(`failed to open backups folder: ${error}`);
+  await openPathOrThrow(backups, "backups");
 }
 
-export async function downloadInstall(ctx: BackendContext, args: LaunchArgs): Promise<void> {
+export async function downloadInstall(ctx: BackendContext, args: DownloadInstallArgs): Promise<void> {
   const id = validateInstanceId(String(args.id));
   const instance = instanceDir(id);
   const packVersion = String(args.packVersion);
   const javaType = String(args.javaType ?? "java17+");
-  if (ctx.state.installInProgress.has(id)) throw new Error("install already in progress for this instance");
+  if (ctx.isInstallInProgress(id)) throw new Error("install already in progress for this instance");
   ctx.state.installInProgress.add(id);
   try {
     const known = await ctx.knownInstanceIds();
@@ -172,7 +175,7 @@ export async function downloadInstall(ctx: BackendContext, args: LaunchArgs): Pr
   }
 }
 
-export async function previewUpdate(ctx: BackendContext, args: LaunchArgs): Promise<unknown> {
+export async function previewUpdate(ctx: BackendContext, args: PreviewUpdateArgs): Promise<unknown> {
   const id = sanitizeName(String(args.id).trim());
   const known = await ctx.knownInstanceIds();
   if (!known.has(id)) throw new Error("instance not found");
@@ -190,11 +193,11 @@ export async function previewUpdate(ctx: BackendContext, args: LaunchArgs): Prom
   }
 }
 
-export async function updateInstance(ctx: BackendContext, args: LaunchArgs): Promise<void> {
+export async function updateInstance(ctx: BackendContext, args: UpdateInstanceArgs): Promise<void> {
   const id = sanitizeName(String(args.id).trim());
-  if (ctx.state.running.has(id)) throw new Error("cannot update while instance is running");
-  if (ctx.state.updateInProgress.has(id)) throw new Error("update already in progress for this instance");
-  if (ctx.state.reinstallInProgress.has(id)) throw new Error("reinstall already in progress for this instance");
+  if (ctx.isRunning(id)) throw new Error("cannot update while instance is running");
+  if (ctx.isUpdateInProgress(id)) throw new Error("update already in progress for this instance");
+  if (ctx.isReinstallInProgress(id)) throw new Error("reinstall already in progress for this instance");
   ctx.state.updateInProgress.add(id);
   try {
     await reinstallCore(ctx, id, String(args.packVersion), String(args.javaType ?? "java17+"), args.keepModIdentities ?? [], "update-pack");
@@ -204,11 +207,11 @@ export async function updateInstance(ctx: BackendContext, args: LaunchArgs): Pro
   }
 }
 
-export async function reinstallInstance(ctx: BackendContext, args: LaunchArgs): Promise<void> {
+export async function reinstallInstance(ctx: BackendContext, args: ReinstallInstanceArgs): Promise<void> {
   const id = sanitizeName(String(args.id).trim());
-  if (ctx.state.running.has(id)) throw new Error("cannot reinstall while instance is running");
-  if (ctx.state.reinstallInProgress.has(id)) throw new Error("reinstall already in progress for this instance");
-  if (ctx.state.updateInProgress.has(id)) throw new Error("update already in progress for this instance");
+  if (ctx.isRunning(id)) throw new Error("cannot reinstall while instance is running");
+  if (ctx.isReinstallInProgress(id)) throw new Error("reinstall already in progress for this instance");
+  if (ctx.isUpdateInProgress(id)) throw new Error("update already in progress for this instance");
   ctx.state.reinstallInProgress.add(id);
   try {
     await reinstallCore(ctx, id, String(args.packVersion), String(args.javaType ?? "java17+"), [], "reinstall");

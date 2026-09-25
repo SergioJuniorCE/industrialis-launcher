@@ -123,6 +123,13 @@ export class LauncherBackend {
       persistRunningProcesses: () => this.persistRunningProcesses(),
       flushConsoleLog: (id) => this.flushConsoleLog(id),
       compactConsoleLog: (id) => this.compactConsoleLog(id),
+      isRunning: (id) => this.state.running.has(id),
+      isInstallInProgress: (id) => this.state.installInProgress.has(id),
+      isUpdateInProgress: (id) => this.state.updateInProgress.has(id),
+      isReinstallInProgress: (id) => this.state.reinstallInProgress.has(id),
+      isCopyInProgress: (id) => this.state.copyInProgress.has(id),
+      isDeleteInProgress: (id) => this.state.deleteCancel.has(id),
+      getDeleteCancel: (id) => this.state.deleteCancel.get(id),
     };
     this.releaseUpdater = new ReleaseUpdater(this.ctx);
   }

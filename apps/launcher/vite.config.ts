@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { themeBootInlineScript } from "./src/lib/theme-boot";
+import { resolveDevPort } from "./src/lib/dev-port";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -21,7 +22,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   server: {
-    port: Number.parseInt(process.env.VITE_PORT ?? process.env.PORT ?? "5173", 10) || 5173,
+    port: resolveDevPort(),
     strictPort: true,
     host: true,
   },
