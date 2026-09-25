@@ -11,10 +11,7 @@ export default defineConfig({
     {
       name: "theme-boot-inline",
       transformIndexHtml(html) {
-        return html.replace(
-          /<!-- theme-boot -->[\s\S]*?<!-- \/theme-boot -->/,
-          `<script>${themeBootInlineScript()}</script>`
-        );
+        return html.replace(/<!-- theme-boot -->[\s\S]*?<!-- \/theme-boot -->/, `<script>${themeBootInlineScript()}</script>`);
       },
     },
   ],
@@ -24,7 +21,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   server: {
-    port: 5173,
+    port: Number.parseInt(process.env.VITE_PORT ?? process.env.PORT ?? "5173", 10) || 5173,
     strictPort: true,
     host: true,
   },
