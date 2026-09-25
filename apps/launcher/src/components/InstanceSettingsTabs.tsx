@@ -505,7 +505,7 @@ export function InstanceSettingsTabs({
   onOpenLauncherSettings?: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 max-w-2xl pb-2">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-2 pb-2">
       <LauncherSettingsLink onOpen={onOpenLauncherSettings} />
       <Tabs value={settingsTab} onValueChange={onSettingsTabChange} className="w-full">
         <TabsList className="flex flex-wrap h-auto gap-0.5">
