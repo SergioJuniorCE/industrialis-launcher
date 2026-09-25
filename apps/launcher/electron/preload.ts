@@ -16,6 +16,8 @@ const electronAPI = {
   toggleMaximizeWindow: (): Promise<boolean> => ipcRenderer.invoke("launcher:toggle-maximize-window"),
   isWindowMaximized: (): Promise<boolean> => ipcRenderer.invoke("launcher:is-window-maximized"),
   closeWindow: (): Promise<void> => ipcRenderer.invoke("launcher:close-window"),
+  openMinecraftEditorWindow: (instanceId: string, filePath?: string): Promise<void> =>
+    ipcRenderer.invoke("launcher:open-minecraft-editor-window", { instanceId, filePath }),
 };
 
 contextBridge.exposeInMainWorld("electronAPI", electronAPI);

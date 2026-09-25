@@ -62,6 +62,7 @@ beforeEach(() => {
     toggleMaximizeWindow: vi.fn(),
     isWindowMaximized: vi.fn(),
     closeWindow: vi.fn(),
+    openMinecraftEditorWindow: vi.fn(),
   } satisfies ElectronLauncherApi;
   container = document.createElement("div");
   document.body.append(container);

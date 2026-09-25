@@ -151,6 +151,7 @@ export interface MinecraftDirEntry {
   is_dir: boolean;
   has_persistent_override: boolean;
   editable: boolean;
+  too_large_to_edit: boolean;
 }
 
 export interface ModEntry {

@@ -1,9 +1,10 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, screen, shell } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
 import { LauncherBackend } from "./backend/index";
-import { dataDir } from "./backend/paths";
+import { sanitizeMinecraftRelPath } from "./backend/minecraft-files";
+import { dataDir, validateInstanceId } from "./backend/paths";
 import { loadLauncherSettings } from "./backend/settings";
 import type { LauncherSettings } from "./backend/types";
 
@@ -17,6 +18,7 @@ if (squirrelStartup) {
 let mainWindow: BrowserWindow | null = null;
 let backend: LauncherBackend | null = null;
 let isQuitting = false;
+const editorWindows = new Map<string, BrowserWindow>();
 
 function emitToRenderer(event: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -68,10 +70,67 @@ function createWindow(settings: LauncherSettings): BrowserWindow {
   return window;
 }
 
-function validateSender(event: Electron.IpcMainInvokeEvent): void {
-  if (mainWindow && event.sender !== mainWindow.webContents) {
-    throw new Error("Unauthorized renderer");
+function createMinecraftEditorWindow(rawInstanceId: string, rawFilePath?: string): BrowserWindow {
+  const instanceId = validateInstanceId(rawInstanceId);
+  const filePath = rawFilePath ? sanitizeMinecraftRelPath(rawFilePath) : undefined;
+  const key = JSON.stringify([instanceId, filePath ?? null]);
+  const existing = editorWindows.get(key);
+  if (existing && !existing.isDestroyed()) {
+    if (existing.isMinimized()) existing.restore();
+    existing.focus();
+    return existing;
   }
+
+  const display = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay();
+  const { x: areaX, y: areaY, width: areaWidth, height: areaHeight } = display.workArea;
+  const width = Math.min(1200, areaWidth);
+  const height = Math.min(820, areaHeight);
+  const window = new BrowserWindow({
+    x: areaX + Math.round((areaWidth - width) / 2),
+    y: areaY + Math.round((areaHeight - height) / 2),
+    width,
+    height,
+    minWidth: Math.min(900, width),
+    minHeight: Math.min(650, height),
+    resizable: true,
+    maximizable: true,
+    title: `${instanceId} — Minecraft file editor`,
+    autoHideMenuBar: true,
+    backgroundColor: "#0a0a0a",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  editorWindows.set(key, window);
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  window.on("closed", () => {
+    if (editorWindows.get(key) === window) editorWindows.delete(key);
+  });
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    const url = new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    url.searchParams.set("editorInstance", instanceId);
+    if (filePath) url.searchParams.set("editorPath", filePath);
+    void window.loadURL(url.toString());
+  } else {
+    void window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
+      query: { editorInstance: instanceId, ...(filePath ? { editorPath: filePath } : {}) },
+    });
+  }
+  return window;
+}
+
+function validateSender(event: Electron.IpcMainInvokeEvent): void {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const isMainWindow = senderWindow !== null && senderWindow === mainWindow;
+  const isEditorWindow = senderWindow !== null && [...editorWindows.values()].some((window) => window === senderWindow);
+  if (!isMainWindow && !isEditorWindow) throw new Error("Unauthorized renderer");
 }
 
 function registerIpcHandlers(): void {
@@ -79,6 +138,15 @@ function registerIpcHandlers(): void {
     validateSender(event);
     if (!backend) throw new Error("Launcher backend is not ready");
     return backend.invoke(command, args);
+  });
+
+  ipcMain.handle("launcher:open-minecraft-editor-window", (event, rawArgs: unknown) => {
+    validateSender(event);
+    if (event.sender !== mainWindow?.webContents) throw new Error("Only the launcher window can open an editor window");
+    const args = (rawArgs && typeof rawArgs === "object" ? rawArgs : {}) as { instanceId?: unknown; filePath?: unknown };
+    const instanceId = String(args.instanceId ?? "");
+    const filePath = args.filePath == null ? undefined : String(args.filePath);
+    createMinecraftEditorWindow(instanceId, filePath);
   });
 
   ipcMain.handle("launcher:open-url", async (event, url: string) => {

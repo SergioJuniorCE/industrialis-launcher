@@ -29,6 +29,7 @@ import {
   refreshSizes,
   reinstallInstance,
   updateInstance,
+  openMinecraftFileInDefaultApp,
 } from "./instance-lifecycle";
 import { getConsoleLog } from "./console-logs";
 import { killInstance, launchInstance } from "./game-launch";
@@ -44,7 +45,14 @@ import {
 import { ReleaseUpdater } from "./release-updater";
 import type { BackendContext, LaunchArgs, LaunchState } from "./backend-context";
 import { detectJava, testJava } from "./java";
-import { deletePersistentFile, listMinecraftEntries, listPersistentFiles, readMinecraftFile, writeMinecraftFile } from "./minecraft-files";
+import {
+  deletePersistentFile,
+  listMinecraftEntries,
+  listPersistentFiles,
+  readMinecraftFile,
+  stopAllExternalMinecraftFileWatches,
+  writeMinecraftFile,
+} from "./minecraft-files";
 import { addCustomMod, listCustomMods, removeCustomMod } from "./pack";
 import { evictExpiredPackCache } from "./pack-cache";
 import { backupStatePath, consoleLogPath, instanceDir, instancesDir, sanitizeName } from "./paths";
@@ -344,6 +352,8 @@ export class LauncherBackend {
         return track(() => copyInstance(this.ctx, args));
       case "open_instance_folder":
         return track(() => openInstanceFolder(args.id));
+      case "open_minecraft_file_external":
+        return track(() => openMinecraftFileInDefaultApp(args.id, String(args.relPath ?? "")));
       case "open_mods_folder":
         return track(() => openModsFolder(args.id));
       case "open_backups_folder":
@@ -497,6 +507,7 @@ export class LauncherBackend {
   }
   async dispose(): Promise<void> {
     /* Detached game processes intentionally remain alive when Electron exits. */
+    await stopAllExternalMinecraftFileWatches();
     await this.backupManagerReady;
     await this.backupManager.stop();
     this.disposing = true;

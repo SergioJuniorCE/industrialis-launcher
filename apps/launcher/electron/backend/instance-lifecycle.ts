@@ -5,7 +5,7 @@ import { getInstanceGroup, removeInstanceFromGroups, setInstanceGroup } from "./
 import { copyTree, dirSize, exists, listFiles, mapConcurrent, removeIfExists } from "./fs-utils";
 import { installDefaultInstanceIcon, resolveIconPath } from "./instance-icons";
 import { backupPlayerData, preserveDirName, restorePlayerData, wipeInstanceForReinstall } from "./migration";
-import { applyPersistentMinecraft } from "./minecraft-files";
+import { applyPersistentMinecraft, resolveMinecraftFilePath, stopExternalMinecraftFileWatch, watchExternalMinecraftFile } from "./minecraft-files";
 import {
   applyPersistentCustomMods,
   buildUpdatePreview,
@@ -143,6 +143,17 @@ export async function openBackupsFolder(rawId: string): Promise<void> {
   const backups = instanceBackupsDir(id);
   await fs.mkdir(backups, { recursive: true });
   await openPathOrThrow(backups, "backups");
+}
+
+export async function openMinecraftFileInDefaultApp(rawId: string, relPath: string): Promise<void> {
+  const { instance } = await requireInstalledInstance(rawId);
+  const target = await resolveMinecraftFilePath(instance, relPath);
+  await watchExternalMinecraftFile(instance, relPath);
+  const error = await shell.openPath(target);
+  if (error) {
+    await stopExternalMinecraftFileWatch(instance, relPath);
+    throw new Error(`failed to open file in the default app: ${error}`);
+  }
 }
 
 export async function downloadInstall(ctx: BackendContext, args: DownloadInstallArgs): Promise<void> {

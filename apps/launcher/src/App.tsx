@@ -60,6 +60,7 @@ import { classifyLaunchLogLine, extractLatestCrashLines, formatLaunchLog, type L
 import { formatPlayTime, mergeInstanceSettings, type InstanceSettings } from "./lib/instance-settings";
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
 import { InstanceMinecraftEditor } from "./components/InstanceMinecraftEditor";
+import { MinecraftEditorWindow } from "./components/MinecraftEditorWindow";
 import { CustomModsPanel } from "./components/CustomModsPanel";
 import { LauncherBackupsSettings } from "./components/BackupsPanel";
 import { UpdatePackDialog } from "./components/UpdatePackDialog";
@@ -621,6 +622,15 @@ function useLauncherController() {
 type LauncherController = ReturnType<typeof useLauncherController>;
 
 export default function App() {
+  const params = new URLSearchParams(window.location.search);
+  const editorInstanceId = params.get("editorInstance");
+  if (editorInstanceId) {
+    return <MinecraftEditorWindow instanceId={editorInstanceId} initialPath={params.get("editorPath") ?? undefined} />;
+  }
+  return <LauncherApp />;
+}
+
+function LauncherApp() {
   const controller = useLauncherController();
   const {
     setTab,
@@ -2533,7 +2543,7 @@ function InstanceWorkspace({ controller }: { controller: LauncherController }) {
               />
 
               <TabsContent value="files" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
-                <InstanceMinecraftEditor instanceId={selectedInstanceId!} />
+                <InstanceMinecraftEditor key={selectedInstanceId!} instanceId={selectedInstanceId!} />
               </TabsContent>
 
               <TabsContent value="mods" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
