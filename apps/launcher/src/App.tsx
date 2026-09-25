@@ -78,6 +78,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dialog, DialogContent } from "./components/ui/dialog";
 import { Label } from "./components/ui/label";
 import { Checkbox } from "./components/ui/checkbox";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable";
 import { MAX_RETAINED_LOG_LINES } from "./lib/log-buffer";
 import { cn } from "./lib/utils";
 import {
@@ -94,12 +95,52 @@ import type { JavaInfo } from "./lib/java-installations";
 import "./App.css";
 
 const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
+const INSTANCE_WORKSPACE_LAYOUT_KEY = "industrialis-instance-workspace-layout";
+const DEFAULT_INSTANCE_WORKSPACE_LAYOUT = {
+  "instance-library": 54,
+  "instance-details": 46,
+};
 
 const PRIMARY_NAV_TABS = [
   { key: "instances", label: "Instances", Icon: Boxes },
   { key: "processes", label: "Processes", Icon: Activity },
   { key: "accounts", label: "Accounts", Icon: Users },
 ] as const;
+
+function readInstanceWorkspaceLayout(): Record<string, number> {
+  try {
+    const savedLayout = window.localStorage.getItem(INSTANCE_WORKSPACE_LAYOUT_KEY);
+    if (savedLayout) {
+      const parsed: unknown = JSON.parse(savedLayout);
+      if (typeof parsed === "object" && parsed !== null) {
+        const layout = parsed as Record<string, unknown>;
+        const librarySize = layout["instance-library"];
+        const detailsSize = layout["instance-details"];
+        if (
+          typeof librarySize === "number" &&
+          Number.isFinite(librarySize) &&
+          typeof detailsSize === "number" &&
+          Number.isFinite(detailsSize) &&
+          Math.abs(librarySize + detailsSize - 100) < 0.1
+        ) {
+          return { "instance-library": librarySize, "instance-details": detailsSize };
+        }
+      }
+    }
+  } catch {
+    // A saved layout is optional; use the default split if storage is unavailable or invalid.
+  }
+
+  return { ...DEFAULT_INSTANCE_WORKSPACE_LAYOUT };
+}
+
+function saveInstanceWorkspaceLayout(layout: Record<string, number>) {
+  try {
+    window.localStorage.setItem(INSTANCE_WORKSPACE_LAYOUT_KEY, JSON.stringify(layout));
+  } catch {
+    // Keep resizing usable even if storage is unavailable.
+  }
+}
 
 // ── Types ──
 
@@ -2412,6 +2453,7 @@ function LauncherDialogs({ controller }: { controller: LauncherController }) {
 }
 
 function InstanceWorkspace({ controller }: { controller: LauncherController }) {
+  const [workspaceLayout] = useState(readInstanceWorkspaceLayout);
   const {
     instances,
     handleLaunch,
@@ -2465,143 +2507,155 @@ function InstanceWorkspace({ controller }: { controller: LauncherController }) {
   const hasCopyInProgress = [...processes.values()].some((proc) => proc.operation === "copy" && proc.status === "running");
 
   return (
-    <div className="instance-workspace min-h-0 flex-1 flex overflow-hidden p-2 gap-2">
+    <ResizablePanelGroup
+      id="instance-workspace"
+      orientation="horizontal"
+      className="instance-workspace min-h-0 flex-1 overflow-hidden"
+      defaultLayout={workspaceLayout}
+      onLayoutChanged={saveInstanceWorkspaceLayout}
+    >
       {/* Instance list */}
-      <div className="surface-panel workspace-panel workspace-panel-library min-h-0 flex-[1.15] min-w-[300px] max-w-[58%] shrink-0 overflow-hidden flex flex-col rounded-lg border border-border/80 shadow-sm">
-        {instances.length === 0 && !hasCopyInProgress ? (
-          <div className="empty-state m-2 flex-1 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
-            <div className="font-medium text-foreground">No instances installed</div>
-            <p className="mt-1 text-xs text-muted-foreground">Add a pack instance to start building your launcher library.</p>
-          </div>
-        ) : (
-          <InstanceGroupList
-            commands={{
-              launch: handleLaunch,
-              kill: handleKill,
-              openFolder: handleOpenInstanceFolder,
-              delete: handleDelete,
-              cancelDelete: handleCancelDelete,
-              iconChanged: loadInstances,
-              iconError: (message) => setError(`Icon update failed: ${message}`),
-              toggleGroupCollapsed: handleToggleGroupCollapsed,
-              renameGroup: handleRenameGroup,
-              deleteGroup: handleDeleteGroup,
-              reorderInstances: handleReorderInstances,
-            }}
-          />
-        )}
-      </div>
+      <ResizablePanel id="instance-library" defaultSize="54%" minSize="260px" maxSize="68%" className="min-h-0 min-w-0 overflow-hidden">
+        <div className="surface-panel workspace-panel workspace-panel-library flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-border/80 shadow-sm">
+          {instances.length === 0 && !hasCopyInProgress ? (
+            <div className="empty-state m-2 flex-1 rounded-lg border border-dashed border-border/80 bg-muted/30 p-4 text-sm">
+              <div className="font-medium text-foreground">No instances installed</div>
+              <p className="mt-1 text-xs text-muted-foreground">Add a pack instance to start building your launcher library.</p>
+            </div>
+          ) : (
+            <InstanceGroupList
+              commands={{
+                launch: handleLaunch,
+                kill: handleKill,
+                openFolder: handleOpenInstanceFolder,
+                delete: handleDelete,
+                cancelDelete: handleCancelDelete,
+                iconChanged: loadInstances,
+                iconError: (message) => setError(`Icon update failed: ${message}`),
+                toggleGroupCollapsed: handleToggleGroupCollapsed,
+                renameGroup: handleRenameGroup,
+                deleteGroup: handleDeleteGroup,
+                reorderInstances: handleReorderInstances,
+              }}
+            />
+          )}
+        </div>
+      </ResizablePanel>
+
+      <ResizableHandle id="instance-workspace-separator" aria-label="Resize instance library and details" withHandle className="instance-workspace-separator" />
 
       {/* Details panel */}
-      <div className="surface-panel workspace-panel flex-1 flex flex-col overflow-hidden rounded-lg border border-border/80 shadow-sm">
-        {sel ? (
-          <>
-            <Tabs value={detailTab} onValueChange={setDetailTab} className="flex-1 flex flex-col overflow-hidden">
-              <InstanceDetailHeader
-                sel={sel}
-                isDeletingSelected={isDeletingSelected}
-                isUpdatingSelected={isUpdatingSelected}
-                isReinstallingSelected={isReinstallingSelected}
-                loadInstances={loadInstances}
-                setError={setError}
-                handleOpenInstanceFolder={handleOpenInstanceFolder}
-                selectedDeleteProcess={selectedDeleteProcess}
-                selectedReinstallProcess={selectedReinstallProcess}
-                selectedUpdateProcess={selectedUpdateProcess}
-                sizesRefreshing={sizesRefreshing}
-                gtnhVersions={gtnhVersions}
-                setUpdatePackInstanceId={setUpdatePackInstanceId}
-                selectedInstanceId={selectedInstanceId}
-                selectedInstanceActive={selectedInstanceActive}
-                instanceBusy={instanceBusy}
-                setSelectedInstanceId={setSelectedInstanceId}
-              />
+      <ResizablePanel id="instance-details" defaultSize="46%" minSize="320px" className="min-h-0 min-w-0 overflow-hidden">
+        <div className="surface-panel workspace-panel flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-border/80 shadow-sm">
+          {sel ? (
+            <>
+              <Tabs value={detailTab} onValueChange={setDetailTab} className="flex-1 flex flex-col overflow-hidden">
+                <InstanceDetailHeader
+                  sel={sel}
+                  isDeletingSelected={isDeletingSelected}
+                  isUpdatingSelected={isUpdatingSelected}
+                  isReinstallingSelected={isReinstallingSelected}
+                  loadInstances={loadInstances}
+                  setError={setError}
+                  handleOpenInstanceFolder={handleOpenInstanceFolder}
+                  selectedDeleteProcess={selectedDeleteProcess}
+                  selectedReinstallProcess={selectedReinstallProcess}
+                  selectedUpdateProcess={selectedUpdateProcess}
+                  sizesRefreshing={sizesRefreshing}
+                  gtnhVersions={gtnhVersions}
+                  setUpdatePackInstanceId={setUpdatePackInstanceId}
+                  selectedInstanceId={selectedInstanceId}
+                  selectedInstanceActive={selectedInstanceActive}
+                  instanceBusy={instanceBusy}
+                  setSelectedInstanceId={setSelectedInstanceId}
+                />
 
-              <InstanceInfoTab
-                sel={sel}
-                gtnhVersions={gtnhVersions}
-                setUpdatePackInstanceId={setUpdatePackInstanceId}
-                selectedInstanceId={selectedInstanceId}
-                selectedInstanceActive={selectedInstanceActive}
-                instanceBusy={instanceBusy}
-                setReinstallInstanceId={setReinstallInstanceId}
-                sizesRefreshing={sizesRefreshing}
-                groupsState={groupsState}
-                launcherSettings={launcherSettings}
-                accounts={accounts}
-                defaultAccountId={defaultAccountId}
-              />
-
-              <TabsContent value="files" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
-                <InstanceMinecraftEditor instanceId={selectedInstanceId!} />
-              </TabsContent>
-
-              <TabsContent value="mods" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
-                <CustomModsPanel instanceId={selectedInstanceId!} />
-              </TabsContent>
-
-              <TabsContent value="settings" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
-                <InstanceSettingsPanel
-                  instanceId={selectedInstanceId!}
-                  packVersion={instancePackVersion(sel)}
-                  javaRefreshing={javaRefreshing}
+                <InstanceInfoTab
+                  sel={sel}
+                  gtnhVersions={gtnhVersions}
+                  setUpdatePackInstanceId={setUpdatePackInstanceId}
+                  selectedInstanceId={selectedInstanceId}
+                  selectedInstanceActive={selectedInstanceActive}
+                  instanceBusy={instanceBusy}
+                  setReinstallInstanceId={setReinstallInstanceId}
+                  sizesRefreshing={sizesRefreshing}
+                  groupsState={groupsState}
+                  launcherSettings={launcherSettings}
                   accounts={accounts}
-                  onOpenLauncherSettings={() => setTab("settings")}
-                  onRefreshJava={refreshJava}
-                  onSave={handleSaveSettings}
+                  defaultAccountId={defaultAccountId}
                 />
-              </TabsContent>
 
-              <TabsContent value="logs" className="flex-1 overflow-hidden flex flex-col mt-0">
-                <LogView
-                  log={instanceLogs[selectedInstanceId!] ?? []}
-                  onClear={() => handleClearConsole(selectedInstanceId!)}
-                  disableClear={selectedInstanceActive}
-                  onCopy={async () => {
-                    if (selectedInstanceActive) return instanceLogs[selectedInstanceId!] ?? [];
-                    try {
-                      return await session.getConsoleLog(selectedInstanceId!);
-                    } catch {
-                      return instanceLogs[selectedInstanceId!] ?? [];
-                    }
-                  }}
-                />
-              </TabsContent>
-            </Tabs>
+                <TabsContent value="files" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
+                  <InstanceMinecraftEditor instanceId={selectedInstanceId!} />
+                </TabsContent>
 
-            {/* Action bar */}
-            <InstanceDetailActions
-              selectedReinstallProcess={selectedReinstallProcess}
-              openProcesses={openProcesses}
-              selectedInstanceId={selectedInstanceId}
-              selectedUpdateProcess={selectedUpdateProcess}
-              selectedDeleteProcess={selectedDeleteProcess}
-              handleCancelDelete={handleCancelDelete}
-              selectedInstanceRunning={selectedInstanceRunning}
-              selectedInstanceStarting={selectedInstanceStarting}
-              handleKill={handleKill}
-              selectedInstanceActive={selectedInstanceActive}
-              instanceBusy={instanceBusy}
-              setUpdatePackInstanceId={setUpdatePackInstanceId}
-              setChangeGroupInstanceId={setChangeGroupInstanceId}
-              setCopyInstanceId={setCopyInstanceId}
-              handleDelete={handleDelete}
-              handleLaunch={handleLaunch}
-              launching={launching}
-            />
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="empty-state max-w-sm rounded-lg border border-dashed border-border/80 bg-muted/30 p-6 text-center">
-              <div className="mx-auto mb-3 instance-avatar size-11 rounded-lg flex items-center justify-center">
-                <Boxes className="size-5 text-muted-foreground" />
+                <TabsContent value="mods" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
+                  <CustomModsPanel instanceId={selectedInstanceId!} />
+                </TabsContent>
+
+                <TabsContent value="settings" className="flex-1 overflow-auto px-4 pb-4 pt-3 mt-0">
+                  <InstanceSettingsPanel
+                    instanceId={selectedInstanceId!}
+                    packVersion={instancePackVersion(sel)}
+                    javaRefreshing={javaRefreshing}
+                    accounts={accounts}
+                    onOpenLauncherSettings={() => setTab("settings")}
+                    onRefreshJava={refreshJava}
+                    onSave={handleSaveSettings}
+                  />
+                </TabsContent>
+
+                <TabsContent value="logs" className="flex-1 overflow-hidden flex flex-col mt-0">
+                  <LogView
+                    log={instanceLogs[selectedInstanceId!] ?? []}
+                    onClear={() => handleClearConsole(selectedInstanceId!)}
+                    disableClear={selectedInstanceActive}
+                    onCopy={async () => {
+                      if (selectedInstanceActive) return instanceLogs[selectedInstanceId!] ?? [];
+                      try {
+                        return await session.getConsoleLog(selectedInstanceId!);
+                      } catch {
+                        return instanceLogs[selectedInstanceId!] ?? [];
+                      }
+                    }}
+                  />
+                </TabsContent>
+              </Tabs>
+
+              {/* Action bar */}
+              <InstanceDetailActions
+                selectedReinstallProcess={selectedReinstallProcess}
+                openProcesses={openProcesses}
+                selectedInstanceId={selectedInstanceId}
+                selectedUpdateProcess={selectedUpdateProcess}
+                selectedDeleteProcess={selectedDeleteProcess}
+                handleCancelDelete={handleCancelDelete}
+                selectedInstanceRunning={selectedInstanceRunning}
+                selectedInstanceStarting={selectedInstanceStarting}
+                handleKill={handleKill}
+                selectedInstanceActive={selectedInstanceActive}
+                instanceBusy={instanceBusy}
+                setUpdatePackInstanceId={setUpdatePackInstanceId}
+                setChangeGroupInstanceId={setChangeGroupInstanceId}
+                setCopyInstanceId={setCopyInstanceId}
+                handleDelete={handleDelete}
+                handleLaunch={handleLaunch}
+                launching={launching}
+              />
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-6">
+              <div className="empty-state max-w-sm rounded-lg border border-dashed border-border/80 bg-muted/30 p-6 text-center">
+                <div className="mx-auto mb-3 instance-avatar size-11 rounded-lg flex items-center justify-center">
+                  <Boxes className="size-5 text-muted-foreground" />
+                </div>
+                <div className="font-medium">Select an instance</div>
+                <p className="mt-1 text-xs text-muted-foreground">Pick a pack from the library to view files, mods, settings, and launch logs.</p>
               </div>
-              <div className="font-medium">Select an instance</div>
-              <p className="mt-1 text-xs text-muted-foreground">Pick a pack from the library to view files, mods, settings, and launch logs.</p>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+        </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }
