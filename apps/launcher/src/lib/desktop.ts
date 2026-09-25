@@ -13,6 +13,7 @@ export interface ElectronLauncherApi {
   toggleMaximizeWindow(): Promise<boolean>;
   isWindowMaximized(): Promise<boolean>;
   closeWindow(): Promise<void>;
+  openMinecraftEditorWindow(instanceId: string, filePath?: string): Promise<void>;
 }
 
 declare global {
@@ -72,4 +73,8 @@ export function isWindowMaximized(): Promise<boolean> {
 
 export function closeWindow(): Promise<void> {
   return getApi().closeWindow();
+}
+
+export function openMinecraftEditorWindow(instanceId: string, filePath?: string): Promise<void> {
+  return getApi().openMinecraftEditorWindow(instanceId, filePath);
 }

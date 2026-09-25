@@ -33,19 +33,5 @@
     "turbo": "^2.10.6",
     "vite": "8.0.16"
   },
-  "packageManager": "pnpm@9.15.9",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron-winstaller",
-      "esbuild",
-      "fs-xattr",
-      "lefthook",
-      "macos-alias",
-      "protobufjs",
-      "sharp"
-    ],
-    "overrides": {
-      "@electron/packager>extract-zip": "file:./scripts/extract-zip-node24"
-    }
-  }
+  "packageManager": "pnpm@12.6.0"
 }

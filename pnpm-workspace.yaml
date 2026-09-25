@@ -2,5 +2,25 @@ packages:
   - "apps/*"
   - "packages/*"
 
-onlyBuiltDependencies:
-  - lefthook
+# Restores the pre-pnpm-11 layout: .npmrc is auth/registry-only since pnpm 11,
+# so public-hoist-pattern[]=* there is ignored. Vercel's Next.js output
+# collection expects the hoisted layout.
+publicHoistPattern:
+  - "*"
+
+overrides:
+  "@electron/packager>extract-zip": file:./scripts/extract-zip-node24
+
+# @electron/rebuild 3.7.2 uses Electron's commit-pinned node-gyp fork.
+blockExoticSubdeps: false
+
+allowBuilds:
+  cpu-features: false
+  electron-winstaller: true
+  esbuild: true
+  fs-xattr: true
+  lefthook: true
+  macos-alias: true
+  protobufjs: true
+  sharp: true
+  ssh2: false

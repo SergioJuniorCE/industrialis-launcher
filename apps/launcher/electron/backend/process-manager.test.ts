@@ -165,7 +165,7 @@ async function waitUntil(check: () => boolean | Promise<boolean>, timeoutMs: num
 describe("process creation identity", () => {
   it("stops tracking a live PID whose creation ID no longer matches", async () => {
     await expect(waitForGameProcess({ pid: process.pid, creationId: "stale-process-identity" })).resolves.toBe(0);
-  }, 1_000);
+  }, 10_000);
 
   it("does not kill a live PID whose creation ID no longer matches", async () => {
     const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });

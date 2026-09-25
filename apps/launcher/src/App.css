@@ -497,6 +497,12 @@ body {
   word-break: break-word;
 }
 
+.config-code-editor-no-wrap .cm-content,
+.config-code-editor-no-wrap .cm-line {
+  white-space: pre;
+  word-break: normal;
+}
+
 .config-code-editor-light .cm-editor {
   background-color: transparent;
 }
