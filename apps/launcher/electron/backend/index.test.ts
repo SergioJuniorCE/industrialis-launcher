@@ -325,6 +325,36 @@ describe("LauncherBackend mods folder endpoint", () => {
   });
 });
 
+describe("LauncherBackend copy progress", () => {
+  it("emits incremental progress while copying an instance", async () => {
+    const source = instanceDir("source");
+    await fs.mkdir(path.join(source, ".minecraft"), { recursive: true });
+    await fs.writeFile(path.join(source, "mmc-pack.json"), "{}", "utf8");
+    await fs.writeFile(path.join(source, ".minecraft", "first.txt"), "first", "utf8");
+    await fs.writeFile(path.join(source, ".minecraft", "second.txt"), "second", "utf8");
+
+    const bundledIcons = path.join(electronState.appData, "electron", "icons");
+    await fs.mkdir(bundledIcons, { recursive: true });
+    await fs.writeFile(path.join(bundledIcons, "gtnh-logo.png"), "icon", "utf8");
+
+    const emit = vi.fn();
+    const backend = new LauncherBackend({ emit });
+    await backend.invoke("copy_instance", { sourceId: "source", newId: "copied", newName: "Copied instance" });
+
+    const progress = emit.mock.calls
+      .filter(([event]) => event === "dl-progress")
+      .map(([, payload]) => payload as { stage: string; pct: number; id: string; name: string });
+    const copying = progress.filter((event) => event.stage === "copying");
+
+    expect(copying[0]).toMatchObject({ stage: "copying", pct: 0, id: "copied", name: "Copied instance" });
+    expect(copying.some((event) => event.pct > 0 && event.pct < 1)).toBe(true);
+    expect(progress.at(-1)).toMatchObject({ stage: "done", pct: 1, id: "copied", name: "Copied instance" });
+    await expect(fs.readFile(path.join(instanceDir("copied"), ".minecraft", "second.txt"), "utf8")).resolves.toBe("second");
+
+    await backend.dispose();
+  });
+});
+
 describe("LauncherBackend backup endpoint", () => {
   it("rejects uploads for an instance with cloud backups disabled", async () => {
     const backend = new LauncherBackend({ emit: vi.fn() });

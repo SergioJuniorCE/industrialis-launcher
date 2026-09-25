@@ -508,3 +508,39 @@ function InstanceCardProgress({ processes }: { processes: Array<BackgroundProces
     </div>
   );
 }
+
+export function InstanceCopyPlaceholderCard({ proc }: { proc: BackgroundProcess }) {
+  const percentage = Math.round(Math.max(0, Math.min(1, proc.pct)) * 100);
+
+  return (
+    <div
+      className="instance-grid-card instance-copy-placeholder w-36 shrink-0 relative flex flex-col rounded-lg border border-dashed border-primary/45 bg-primary/5 p-2.5"
+      role="status"
+      aria-live="polite"
+      aria-label={`Copying ${proc.name}: ${percentage}%`}
+      title={`Copying ${proc.name}`}
+    >
+      <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
+        <div className="instance-avatar relative flex size-14 items-center justify-center rounded-xl text-base text-muted-foreground">
+          <Copy className="size-6" aria-hidden="true" />
+          <Loader2 className="absolute bottom-1 right-1 size-3.5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+        </div>
+        <div className="w-full min-w-0 text-center">
+          <div className="truncate text-xs font-semibold leading-tight">{proc.name}</div>
+          <div className="mt-0.5 truncate text-[10px] text-muted-foreground leading-tight">
+            {stageLabel(proc.stage)} Â· {percentage}%
+          </div>
+        </div>
+      </div>
+      <Progress
+        value={percentage}
+        className="mt-2 h-1"
+        role="progressbar"
+        aria-label={`Copy progress for ${proc.name}`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percentage}
+      />
+    </div>
+  );
+}

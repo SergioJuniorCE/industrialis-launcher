@@ -2,13 +2,7 @@ export type ProcessOperation = "install" | "update-pack" | "delete" | "reinstall
 
 export type ProcessStatus = "running" | "done" | "failed";
 
-export const BACKGROUND_PROCESS_OPERATIONS: readonly ProcessOperation[] = [
-  "install",
-  "update-pack",
-  "delete",
-  "reinstall",
-  "copy",
-] as const;
+export const BACKGROUND_PROCESS_OPERATIONS: readonly ProcessOperation[] = ["install", "update-pack", "delete", "reinstall", "copy"] as const;
 
 export interface BackgroundProcess {
   key: string;
@@ -37,15 +31,11 @@ export interface DlProgressEvent {
   total_mb?: number;
 }
 
-export function isBackgroundProcessOperation(
-  operation: string | undefined,
-): operation is ProcessOperation {
+export function isBackgroundProcessOperation(operation: string | undefined): operation is ProcessOperation {
   return BACKGROUND_PROCESS_OPERATIONS.includes(operation as ProcessOperation);
 }
 
-export function normalizeProcessOperation(
-  operation: string | undefined,
-): ProcessOperation | null {
+export function normalizeProcessOperation(operation: string | undefined): ProcessOperation | null {
   if (operation === "install" || operation === "delete" || operation === "reinstall" || operation === "copy") {
     return operation;
   }
@@ -78,11 +68,7 @@ export function processKey(operation: ProcessOperation, id: string): string {
   return `${operation}:${id}`;
 }
 
-export function getInstanceProcess(
-  processes: Map<string, BackgroundProcess>,
-  operation: ProcessOperation,
-  id: string,
-): BackgroundProcess | undefined {
+export function getInstanceProcess(processes: Map<string, BackgroundProcess>, operation: ProcessOperation, id: string): BackgroundProcess | undefined {
   return processes.get(processKey(operation, id));
 }
 
@@ -129,6 +115,8 @@ export function stageLabel(stage: string): string {
       return "Reinstalling";
     case "copying":
       return "Copying";
+    case "finalizing":
+      return "Finalizing";
     case "done":
       return "Complete";
     case "failed":
@@ -138,12 +126,7 @@ export function stageLabel(stage: string): string {
   }
 }
 
-export function createProcess(
-  operation: ProcessOperation,
-  id: string,
-  name: string,
-  initialLog?: string,
-): BackgroundProcess {
+export function createProcess(operation: ProcessOperation, id: string, name: string, initialLog?: string): BackgroundProcess {
   return {
     key: processKey(operation, id),
     id,
@@ -166,10 +149,7 @@ export function createProcess(
   };
 }
 
-export function resolveOperation(
-  processes: Map<string, BackgroundProcess>,
-  event: DlProgressEvent,
-): ProcessOperation | null {
+export function resolveOperation(processes: Map<string, BackgroundProcess>, event: DlProgressEvent): ProcessOperation | null {
   const inferred = inferOperation(event);
   if (inferred) return inferred;
   if (!event.id) return null;
@@ -181,10 +161,7 @@ export function resolveOperation(
   return null;
 }
 
-export function applyDlProgressEvent(
-  processes: Map<string, BackgroundProcess>,
-  event: DlProgressEvent,
-): Map<string, BackgroundProcess> {
+export function applyDlProgressEvent(processes: Map<string, BackgroundProcess>, event: DlProgressEvent): Map<string, BackgroundProcess> {
   const id = event.id;
   const operation = resolveOperation(processes, event);
   if (!operation || !id || !isBackgroundProcessOperation(operation)) return processes;
@@ -259,10 +236,7 @@ export function markProcessFailed(
   return next;
 }
 
-export function dismissProcess(
-  processes: Map<string, BackgroundProcess>,
-  key: string,
-): Map<string, BackgroundProcess> {
+export function dismissProcess(processes: Map<string, BackgroundProcess>, key: string): Map<string, BackgroundProcess> {
   const next = new Map(processes);
   next.delete(key);
   return next;
@@ -270,11 +244,7 @@ export function dismissProcess(
 
 export function isInstanceBusy(processes: Map<string, BackgroundProcess>, id: string): boolean {
   for (const proc of processes.values()) {
-    if (
-      proc.id === id &&
-      proc.status === "running" &&
-      isBackgroundProcessOperation(proc.operation)
-    ) {
+    if (proc.id === id && proc.status === "running" && isBackgroundProcessOperation(proc.operation)) {
       return true;
     }
   }

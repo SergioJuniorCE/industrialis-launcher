@@ -6,6 +6,7 @@ import {
   dismissProcess as dismissBackgroundProcess,
   markProcessFailed,
   operationLabel,
+  processKey,
   resolveOperation,
   type DlProgressEvent,
   type ProcessOperation,
@@ -15,6 +16,7 @@ import type { LaunchLogLine } from "./launch-log";
 import type { InstanceSettings } from "./instance-settings";
 import type { JavaInfo } from "./java-installations";
 import { hideWindow, invoke, listen } from "./desktop";
+import { playCompletionSound, prepareCompletionSound } from "./completion-sound";
 import type { GtnhVersion, InstanceGroupsState, InstanceInfo, LauncherAccount, LauncherStoreState } from "../stores/launcher-store";
 import { useLauncherStore } from "../stores/launcher-store";
 
@@ -194,6 +196,7 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
     const progress = event.payload;
     const previous = store.getState().processes;
     const operation = resolveOperation(previous, progress);
+    const wasAlreadyDone = Boolean(progress.id && operation && previous.get(processKey(operation, progress.id))?.status === "done");
     const next = applyDlProgressEvent(previous, progress);
     store.setState({ processes: next });
 
@@ -203,6 +206,8 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
     }
 
     if (progress.stage !== "done" || !progress.id) return;
+
+    if (operation === "copy" && !wasAlreadyDone) playCompletionSound();
 
     if (operation === "delete") {
       store.setState((state) => ({
@@ -398,6 +403,7 @@ export function createLauncherSession({ desktop, store }: CreateLauncherSessionO
   };
 
   const startProcess = (operation: ProcessOperation, id: string, name: string, initialLog?: string): string => {
+    if (operation === "copy") prepareCompletionSound();
     const process = createProcess(operation, id, name, initialLog);
     store.setState((state) => {
       const processes = new Map(state.processes);
