@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { themeBootInlineScript } from "./src/lib/theme-boot";
+import { resolveDevPort } from "./src/lib/dev-port";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,10 +12,7 @@ export default defineConfig({
     {
       name: "theme-boot-inline",
       transformIndexHtml(html) {
-        return html.replace(
-          /<!-- theme-boot -->[\s\S]*?<!-- \/theme-boot -->/,
-          `<script>${themeBootInlineScript()}</script>`
-        );
+        return html.replace(/<!-- theme-boot -->[\s\S]*?<!-- \/theme-boot -->/, `<script>${themeBootInlineScript()}</script>`);
       },
     },
   ],
@@ -24,7 +22,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   server: {
-    port: 5173,
+    port: resolveDevPort(),
     strictPort: true,
     host: true,
   },

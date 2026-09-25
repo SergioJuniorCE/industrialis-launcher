@@ -63,3 +63,54 @@ export function classifyLaunchLogLine(entry: LaunchLogLine): LaunchLogLevel {
 export function formatLaunchLog(log: LaunchLogLine[]): string {
   return log.map((entry) => entry.line).join("\n");
 }
+
+export const LAUNCH_SEPARATOR_PATTERN = /─{3,}\s*Launch\s*─{3,}/;
+export const CRASH_EXCERPT_MAX_LINES = 400;
+export const CRASH_EXCERPT_HEADER_LINES = 15;
+
+export function isLaunchStartLine(line: string): boolean {
+  return LAUNCH_SEPARATOR_PATTERN.test(line);
+}
+
+function findLatestLaunchStart(log: readonly LaunchLogLine[]): number {
+  for (let index = log.length - 1; index >= 0; index -= 1) {
+    if (isLaunchStartLine(log[index].line)) return index;
+  }
+  return -1;
+}
+
+/** Slice log lines belonging to the most recent launch. Falls back to the full log when no launch marker exists. */
+export function sliceLatestLaunch(log: readonly LaunchLogLine[]): LaunchLogLine[] {
+  const start = findLatestLaunchStart(log);
+  if (start < 0) return [...log];
+  return log.slice(start);
+}
+
+/**
+ * Extract a copy-paste friendly excerpt of the latest launch for AI debugging.
+ * The persisted console log spans multiple launches, so this isolates the latest
+ * launch (from the last `──────── Launch ────────` marker). Small launches are
+ * returned whole; large ones keep the launch header plus the tail where the
+ * crash/error output lives, with a truncation marker in between.
+ */
+export function extractLatestCrashLines(log: readonly LaunchLogLine[], maxLines: number = CRASH_EXCERPT_MAX_LINES): LaunchLogLine[] {
+  if (log.length === 0) return [];
+  const latest = sliceLatestLaunch(log);
+  if (latest.length === 0) return [];
+  const limit = Number.isInteger(maxLines) && maxLines > 1 ? maxLines : CRASH_EXCERPT_MAX_LINES;
+  if (latest.length <= limit) return latest;
+
+  const headerCount = Math.min(CRASH_EXCERPT_HEADER_LINES, Math.max(2, Math.floor(limit / 4)), limit - 2);
+  const header = latest.slice(0, Math.max(0, headerCount));
+  const tailCount = limit - header.length - 1;
+  const tail = latest.slice(-tailCount);
+  const truncated = latest.length - header.length - tail.length;
+  const hasBoundary = findLatestLaunchStart(log) >= 0;
+  const marker: LaunchLogLine = {
+    stream: "system",
+    line: hasBoundary
+      ? `... [truncated ${truncated} lines from latest launch — showing launch header + last ${tail.length} lines for AI debugging] ...`
+      : `... [truncated ${truncated} lines — showing first ${header.length} + last ${tail.length} lines for AI debugging] ...`,
+  };
+  return [...header, marker, ...tail];
+}

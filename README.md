@@ -50,7 +50,7 @@ pnpm dev
 Or run a single app:
 
 ```bash
-pnpm dev:launcher    # Electron desktop app (Vite renderer on :5173)
+pnpm dev:launcher    # Electron desktop app (Vite renderer on :5173, override with VITE_PORT=5197 or PORT=5197; VITE_PORT wins)
 pnpm dev:website     # Next.js site on :3000
 pnpm dev:server      # GTNH server daemon on :4310
 pnpm dev:dashboard   # Astro server console on :3001
@@ -108,6 +108,18 @@ the Accounts tab and enter the displayed code.
 Use of the application ID is subject to the
 [Microsoft Identity Platform terms of use](https://learn.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use).
 
+## Cloud backups
+
+The launcher can automatically upload completed files from each enabled
+instance's `.minecraft/backups` folder. Google Drive is available first;
+S3-compatible storage, OneDrive, FTP/FTPS, and SFTP are planned.
+
+- [Connect Google Drive and troubleshoot cloud backups](docs/cloud-backups.md)
+- [Public cloud-backup guide](https://industrialislauncher.yoggan.dev/docs/cloud-backups)
+
+Provider configuration lives in **Launcher Settings > Backups**. Enable backups
+for an individual pack under **Instance Settings > General > Cloud backups**.
+
 ## Project structure
 
 ```
@@ -119,7 +131,9 @@ industrialis/
 |   `-- dashboard/         # Astro server console
 |-- packages/
 |   `-- server-contracts/
-|-- docs/server-hosting.md
+|-- docs/
+|   |-- cloud-backups.md
+|   `-- server-hosting.md
 |-- package.json
 |-- pnpm-workspace.yaml
 `-- turbo.json

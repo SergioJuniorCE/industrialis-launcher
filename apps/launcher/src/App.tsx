@@ -2,6 +2,7 @@ import type { LauncherUpdateState } from "./lib/launcher-update";
 import type { InstanceGroupsState } from "./stores/launcher-store";
 import type { LauncherSettingsData } from "./lib/launcher-settings";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import launcherPackage from "../package.json";
 import { desktopPlatform, invoke, openUrl } from "./lib/desktop";
 import {
   Plus,
@@ -27,6 +28,7 @@ import {
   Copy,
   ExternalLink,
   Pencil,
+  Cloud,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./components/ui/card";
@@ -54,11 +56,12 @@ import {
   stageLabel,
   type BackgroundProcess,
 } from "./lib/background-processes";
-import { formatLaunchLog, type LaunchLogLine } from "./lib/launch-log";
+import { classifyLaunchLogLine, extractLatestCrashLines, formatLaunchLog, type LaunchLogLine } from "./lib/launch-log";
 import { formatPlayTime, mergeInstanceSettings, type InstanceSettings } from "./lib/instance-settings";
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
 import { InstanceMinecraftEditor } from "./components/InstanceMinecraftEditor";
 import { CustomModsPanel } from "./components/CustomModsPanel";
+import { LauncherBackupsSettings } from "./components/BackupsPanel";
 import { UpdatePackDialog } from "./components/UpdatePackDialog";
 import { ReinstallInstanceDialog } from "./components/ReinstallInstanceDialog";
 import { PackVersionStatus } from "./components/PackVersionStatus";
@@ -687,6 +690,7 @@ export default function App() {
           {tab === "settings" && (
             <div className="settings-page mx-auto w-full max-w-5xl p-4">
               <SettingsTab
+                instances={instances}
                 javaOptions={javaOptions}
                 javaRefreshing={javaRefreshing}
                 onRefreshJava={refreshJava}
@@ -705,6 +709,11 @@ export default function App() {
                 windowHeight={launcherSettings.window_height}
                 onWindowHeightChange={(windowHeight) => {
                   updateSettings({ window_height: windowHeight });
+                  void saveSettingsNow();
+                }}
+                backupRetentionLimit={launcherSettings.backup_retention_limit}
+                onBackupRetentionLimitChange={(backupRetentionLimit) => {
+                  updateSettings({ backup_retention_limit: backupRetentionLimit });
                   void saveSettingsNow();
                 }}
                 onError={(message) => setError(`Settings failed: ${message}`)}
@@ -1252,6 +1261,10 @@ function LogView({
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [crashCopied, setCrashCopied] = useState(false);
+  const [crashCopying, setCrashCopying] = useState(false);
+  const [crashFailed, setCrashFailed] = useState(false);
+  const [crashFallback, setCrashFallback] = useState(false);
 
   const copy = async () => {
     setCopying(true);
@@ -1276,11 +1289,59 @@ function LogView({
     }
   };
 
+  const copyCrash = async () => {
+    setCrashCopying(true);
+    setCrashCopied(false);
+    setCrashFailed(false);
+    setCrashFallback(false);
+    try {
+      const source = onCopy ? await onCopy() : log;
+      const base = source.length > 0 ? source : log;
+      if (base.length === 0) {
+        setCrashFailed(true);
+        return;
+      }
+      const excerpt = extractLatestCrashLines(base);
+      if (excerpt.length === 0) {
+        setCrashFailed(true);
+        return;
+      }
+      const text = formatLaunchLog(excerpt);
+      if (!text) {
+        setCrashFailed(true);
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      const hasError = excerpt.some((entry) => classifyLaunchLogLine(entry) === "error");
+      setCrashFallback(!hasError);
+      setCrashCopied(true);
+      setCrashFailed(false);
+      window.setTimeout(() => {
+        setCrashCopied(false);
+        setCrashFallback(false);
+      }, 2000);
+    } catch {
+      setCrashCopied(false);
+      setCrashFailed(true);
+    } finally {
+      setCrashCopying(false);
+    }
+  };
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex gap-0.5 px-3 pb-0.5 shrink-0">
-        <Button size="sm" variant="ghost" onClick={() => void copy()} disabled={copying || log.length === 0}>
+        <Button size="sm" variant="ghost" onClick={() => void copy()} disabled={copying || crashCopying || log.length === 0}>
           {copying ? "Preparing..." : copied ? "Copied" : copyFailed ? "Copy failed" : "Copy"}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void copyCrash()}
+          disabled={copying || crashCopying || log.length === 0}
+          title="Copy only the latest launch's crash output (the log persists across launches) for pasting into an AI debugger"
+        >
+          {crashCopying ? "Preparing..." : crashCopied ? (crashFallback ? "Launch copied" : "Crash copied") : crashFailed ? "Copy failed" : "Copy crash"}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClear} disabled={disableClear || log.length === 0}>
           Clear
@@ -1519,6 +1580,7 @@ function LauncherWindowCard({
 // ── Settings Tab ──
 
 function SettingsTab({
+  instances,
   javaOptions,
   javaRefreshing,
   onRefreshJava,
@@ -1530,8 +1592,11 @@ function SettingsTab({
   onWindowWidthChange,
   windowHeight,
   onWindowHeightChange,
+  backupRetentionLimit,
+  onBackupRetentionLimitChange,
   onError,
 }: {
+  instances: InstanceInfo[];
   javaOptions: JavaInfo[];
   javaRefreshing: boolean;
   onRefreshJava: () => Promise<JavaInfo[]>;
@@ -1543,6 +1608,8 @@ function SettingsTab({
   onWindowWidthChange: (width: number) => void;
   windowHeight: number;
   onWindowHeightChange: (height: number) => void;
+  backupRetentionLimit: number;
+  onBackupRetentionLimitChange: (value: number) => void;
   onError: (message: string) => void;
 }) {
   const [settingsTab, setSettingsTab] = useState("java");
@@ -1588,6 +1655,10 @@ function SettingsTab({
             <SlidersHorizontal className="size-4" aria-hidden="true" />
             Appearance
           </TabsTrigger>
+          <TabsTrigger value="backups" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
+            <Cloud className="size-4" aria-hidden="true" />
+            Backups
+          </TabsTrigger>
           <TabsTrigger value="about" className="h-9 justify-start gap-2 rounded-md px-3 text-left text-sm">
             <Info className="size-4" aria-hidden="true" />
             About
@@ -1630,13 +1701,17 @@ function SettingsTab({
           />
         </TabsContent>
 
+        <TabsContent value="backups" className="mt-0">
+          <LauncherBackupsSettings instances={instances} retentionLimit={backupRetentionLimit} onRetentionLimitChange={onBackupRetentionLimitChange} />
+        </TabsContent>
+
         <TabsContent value="about" className="mt-0">
           <Card>
             <CardHeader>
               <CardTitle>About</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-1">
-              <p>Industrialis Launcher v0.1.0</p>
+              <p>Industrialis Launcher v{launcherPackage.version}</p>
               <p>GT New Horizons modpack manager built with Electron.</p>
               <a
                 href={GITHUB_URL}
@@ -1918,7 +1993,9 @@ function LauncherToolbar({
   return (
     <header className="app-toolbar h-11 shrink-0 flex items-center px-3 gap-1.5">
       <div className="flex items-center gap-2 pr-1.5">
-        <span className="brand-mark size-5 rounded-md" aria-hidden="true" />
+        <span className="brand-mark size-5 rounded-md" aria-hidden="true">
+          <img src="/ebf.png" alt="" draggable={false} />
+        </span>
         <span className="toolbar-brand-name font-semibold text-sm tracking-tight">Industrialis</span>
       </div>
       <Button

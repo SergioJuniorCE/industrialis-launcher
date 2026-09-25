@@ -127,10 +127,18 @@ body {
 }
 
 .brand-mark {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 92%, white 16%), color-mix(in srgb, var(--color-primary) 72%, black 18%));
+  background: var(--color-card);
+  overflow: hidden;
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.32),
     0 0 28px color-mix(in srgb, var(--color-primary) 34%, transparent);
+}
+
+.brand-mark img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 
 .surface-panel {
@@ -207,7 +215,7 @@ body {
 }
 
 .app-shell .brand-mark {
-  background: color-mix(in srgb, var(--color-primary) 88%, var(--color-card));
+  background: var(--color-card);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
 }
 

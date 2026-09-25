@@ -54,7 +54,7 @@
   }
 
   .brand-mark {
-    @apply flex size-8 items-center justify-center border border-border bg-card;
+    @apply flex size-8 items-center justify-center overflow-hidden border border-border bg-card p-0;
   }
 
   .hero-section {

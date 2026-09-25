@@ -1,11 +1,13 @@
-import { Boxes, ExternalLink } from "lucide-react";
+import Image from "next/image";
+import { ExternalLink } from "lucide-react";
 
 const GITHUB_URL = "https://github.com/SergioJuniorCE/industrialis-launcher";
 
 const links = [
-  { href: "#features", label: "Features" },
-  { href: "#workflow", label: "Workflow" },
-  { href: "#server", label: "Server" },
+  { href: "/#features", label: "Features" },
+  { href: "/#workflow", label: "Workflow" },
+  { href: "/docs/cloud-backups", label: "Cloud backups" },
+  { href: "/#server", label: "Server" },
 ];
 
 export function SiteHeader() {
@@ -14,7 +16,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-5 px-5 sm:px-8">
         <a href="#top" className="flex shrink-0 items-center gap-2.5 font-semibold tracking-tight">
           <span className="brand-mark">
-            <Boxes className="size-4 text-primary" strokeWidth={2} />
+            <Image src="/ebf.png" alt="" width={32} height={32} className="size-full object-cover" />
           </span>
           Industrialis
         </a>

@@ -1,26 +1,26 @@
 import Image from "next/image";
-import { Boxes, Coffee, Shield, Terminal, type LucideIcon } from "lucide-react";
+import { Boxes, Coffee, Terminal, Users, type LucideIcon } from "lucide-react";
 
 const features: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Boxes,
-    title: "Keep the library clean",
-    body: "Only installed GTNH versions stay in the library. Add another instance when you actually need it.",
+    title: "A library that stays focused",
+    body: "Install the GTNH versions you want and keep each pack in its own instance. Only installed versions stay in the library.",
   },
   {
     icon: Coffee,
-    title: "Use the right Java",
-    body: "Detect Java from PATH, JAVA_HOME, and common install locations. Override it per instance when a pack needs a specific version.",
+    title: "Runtime controls per pack",
+    body: "Detect Java from PATH, JAVA_HOME, and common install locations, then choose the runtime, RAM, JVM arguments, and window behavior per instance.",
   },
   {
-    icon: Shield,
-    title: "Sign in without friction",
-    body: "Connect a Microsoft account in the browser with a device-code fallback and automatic token refresh.",
+    icon: Users,
+    title: "Accounts when you need them",
+    body: "Manage Microsoft and offline profiles, set a default account or override it per instance, and stay signed in with automatic token refresh.",
   },
   {
     icon: Terminal,
-    title: "See what the game is doing",
-    body: "Read live stdout and stderr in the launcher. Output is persisted per instance for the next time something breaks.",
+    title: "Launch state you can inspect",
+    body: "Follow installs, updates, and launches from the Processes view, and read live stdout and stderr — persisted per instance for the next time something breaks.",
   },
 ];
 
