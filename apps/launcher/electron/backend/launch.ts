@@ -89,11 +89,71 @@ function resolveLibraryUrl(entry: PatchLibraryEntry, spec: GradleSpec): string {
   return `${repo.replace(/\/$/u, "")}/${storagePath(spec).replaceAll("\\", "/")}`;
 }
 
-async function downloadToFile(url: string, destination: string): Promise<void> {
-  const response = await fetch(url);
+const DOWNLOAD_ATTEMPTS = 3;
+const ASSET_DOWNLOAD_ATTEMPTS = 4;
+const DOWNLOAD_TIMEOUT_MS = 60_000;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchBuffer(url: string, timeoutMs = DOWNLOAD_TIMEOUT_MS): Promise<Buffer> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   if (!response.ok) throw new Error(`download failed (${url}): HTTP ${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function writeFileAtomic(destination: string, data: Buffer): Promise<void> {
   await fs.mkdir(path.dirname(destination), { recursive: true });
-  await fs.writeFile(destination, Buffer.from(await response.arrayBuffer()));
+  const tmp = `${destination}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+  try {
+    await fs.writeFile(tmp, data);
+    await fs.rename(tmp, destination);
+  } finally {
+    await fs.rm(tmp, { force: true }).catch(() => undefined);
+  }
+}
+
+async function downloadToFile(url: string, destination: string): Promise<void> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      const data = await fetchBuffer(url);
+      await writeFileAtomic(destination, data);
+      return;
+    } catch (error) {
+      lastError = error;
+      await fs.rm(destination, { force: true }).catch(() => undefined);
+      if (attempt < DOWNLOAD_ATTEMPTS) await sleepMs(400 * attempt);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`download failed (${url}): ${String(lastError)}`);
+}
+
+async function downloadAssetObject(object: { hash: string; size: number }, target: string): Promise<void> {
+  const digest = assetDigest(object.hash);
+  const url = assetUrl(object.hash);
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= ASSET_DOWNLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      const data = await fetchBuffer(url);
+      if (data.length !== object.size) throw new Error(`size mismatch (expected ${object.size} bytes, got ${data.length} bytes)`);
+      const actual = sha1File(data);
+      if (actual !== digest) throw new Error(`checksum mismatch (expected sha1 ${digest}, got ${actual})`);
+      await writeFileAtomic(target, data);
+      const stat = await fs.stat(target).catch(() => null);
+      if (!stat || stat.size !== object.size) throw new Error(`size mismatch after write (expected ${object.size} bytes, got ${stat?.size ?? 0} bytes)`);
+      return;
+    } catch (error) {
+      lastError = error;
+      await fs.rm(target, { force: true }).catch(() => undefined);
+      if (attempt < ASSET_DOWNLOAD_ATTEMPTS) await sleepMs(400 * attempt);
+    }
+  }
+  const detail = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(
+    `asset object ${digest} did not verify after download (expected ${object.size} bytes). ${detail}. Check your connection and disk space, then try launching again`,
+  );
 }
 
 function sha1File(content: Buffer): string {
@@ -140,12 +200,14 @@ async function ensureAssets(assetsDir: string, index: PatchAssetIndex, id: strin
     return;
   }
   emit(id, "system", `Downloading ${missing.length} of ${objects.length} asset objects…`);
-  await mapConcurrent(missing, async (object) => {
-    const target = assetPath(assetsDir, object.hash);
-    await downloadToFile(assetUrl(object.hash), target);
-    const stat = await fs.stat(target).catch(() => null);
-    if (!stat || stat.size !== object.size) throw new Error(`asset object ${assetDigest(object.hash)} did not verify after download`);
-  });
+  await mapConcurrent(
+    missing,
+    async (object) => {
+      const target = assetPath(assetsDir, object.hash);
+      await downloadAssetObject(object, target);
+    },
+    16,
+  );
   emit(id, "system", "Asset sync complete");
 }
 
