@@ -21,6 +21,9 @@ out
 artifacts/
 *.local
 
+# Rust
+target/
+
 # Cursor agent background shell logs (not part of the project)
 terminals/
 
