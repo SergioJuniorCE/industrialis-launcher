@@ -6,14 +6,7 @@ import { resolveApiToken } from "./auth.js";
 import { ServerApiClient } from "./client.js";
 import { getConfig } from "./config.js";
 import { getRuntimePaths } from "./paths.js";
-import {
-  ensureRunDir,
-  getServiceState,
-  probeUrl,
-  startDaemon,
-  startDashboard,
-  stopAll,
-} from "./process-manager.js";
+import { ensureRunDir, getServiceState, probeUrl, startDaemon, startDashboard, stopAll } from "./process-manager.js";
 
 function printServers(servers: GtnhServer[]): void {
   if (servers.length === 0) {
@@ -41,11 +34,7 @@ const program = new Command()
   .name("industrialis")
   .description("Host and manage Docker-backed GregTech: New Horizons servers")
   .version("0.1.0")
-  .option(
-    "--api-url <url>",
-    "daemon API URL",
-    process.env.INDUSTRIALIS_API_URL ?? "http://127.0.0.1:4310",
-  );
+  .option("--api-url <url>", "daemon API URL", process.env.INDUSTRIALIS_API_URL ?? "http://127.0.0.1:4310");
 
 program
   .command("up")
@@ -124,9 +113,19 @@ program
     await startApi(getConfig({ host, port: Number(port) }));
   });
 
-program.command("list").description("list managed servers").action(async () => {
-  printServers(await (await client(program.opts().apiUrl)).list());
-});
+program
+  .command("list")
+  .description("list managed servers")
+  .action(async () => {
+    printServers(await (await client(program.opts().apiUrl)).list());
+  });
+
+program
+  .command("versions")
+  .description("list available GTNH server image releases")
+  .action(async () => {
+    console.table((await (await client(program.opts().apiUrl)).versions()).map((version) => ({ version })));
+  });
 
 program
   .command("create <name>")
@@ -155,6 +154,39 @@ for (const action of ["start", "stop", "restart"] as const) {
       console.log(`${server.name}: ${server.status}`);
     });
 }
+
+program
+  .command("update <id>")
+  .description("update a server to a GTNH release")
+  .requiredOption("--version <version>", "GTNH server image tag")
+  .option("--no-backup", "skip the pre-update world and server-file backup")
+  .action(async (id: string, options: { version: string; backup: boolean }) => {
+    const server = await (
+      await client(program.opts().apiUrl)
+    ).update(id, {
+      version: options.version,
+      createBackup: options.backup,
+    });
+    console.log(`${server.name}: updated to ${server.version} (${server.status}).`);
+  });
+
+program
+  .command("resources <id>")
+  .description("change a server's game port or memory limit")
+  .option("--port <port>", "host game port")
+  .option("--memory <megabytes>", "container memory limit in MB")
+  .action(async (id: string, options: { port?: string; memory?: string }) => {
+    if (options.port === undefined && options.memory === undefined) {
+      throw new Error("Provide --port, --memory, or both");
+    }
+    const server = await (
+      await client(program.opts().apiUrl)
+    ).updateResources(id, {
+      ...(options.port === undefined ? {} : { port: Number(options.port) }),
+      ...(options.memory === undefined ? {} : { memoryMb: Number(options.memory) }),
+    });
+    console.log(`${server.name}: port ${server.port}, memory ${server.memoryMb} MB.`);
+  });
 
 program
   .command("remove <id>")

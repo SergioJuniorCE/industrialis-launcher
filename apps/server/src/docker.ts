@@ -1,10 +1,25 @@
+import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import Docker from "dockerode";
-import type { CreateServerInput, GtnhServer, ServerStatus } from "@industrialis/server-contracts";
+import type {
+  CreateServerInput,
+  GtnhServer,
+  ServerStatus,
+  ServerVersionDetail,
+  UpdateServerInput,
+  UpdateServerResourcesInput,
+} from "@industrialis/server-contracts";
 import { DEFAULT_SERVER_MEMORY_MB, DEFAULT_SERVER_PORT, DEFAULT_SERVER_VERSION } from "@industrialis/server-contracts";
 import type { ServerConfig } from "./config.js";
+import { decodeDockerLogs } from "./docker-logs.js";
 import { ServerRegistry } from "./registry.js";
+import { getImageVersions, isValidImageTag } from "./image-versions.js";
+import { fetchPackVersions } from "./pack-versions.js";
+import { buildVersionDetails } from "./version-details.js";
+import { ServerFiles } from "./server-files.js";
+
+export { decodeDockerLogs } from "./docker-logs.js";
 
 function slugify(value: string): string {
   const slug = value
@@ -23,33 +38,25 @@ function dockerStatus(state: Docker.ContainerInspectInfo["State"]): ServerStatus
   return "stopped";
 }
 
-export function decodeDockerLogs(output: Buffer): string {
-  const chunks: Buffer[] = [];
-  let offset = 0;
-
-  while (offset + 8 <= output.length) {
-    const streamType = output[offset];
-    const length = output.readUInt32BE(offset + 4);
-    const payloadStart = offset + 8;
-    const payloadEnd = payloadStart + length;
-    if ((streamType !== 1 && streamType !== 2) || payloadEnd > output.length) {
-      return output.toString("utf8");
-    }
-    chunks.push(output.subarray(payloadStart, payloadEnd));
-    offset = payloadEnd;
-  }
-
-  return offset === output.length ? Buffer.concat(chunks).toString("utf8") : output.toString("utf8");
-}
+const DOCKER_STOP_TIMEOUT_SECONDS = 120;
+const SERVER_STARTUP_TIMEOUT_MS = 10 * 60_000;
+const SERVER_STARTUP_POLL_INTERVAL_MS = 2_000;
+const SERVER_READY_MESSAGE = /Done \([^)]*\)! For help, type/;
 
 export class DockerServerManager {
   private readonly docker: Docker;
   private readonly registry: ServerRegistry;
+  private readonly files: ServerFiles;
   private createQueue: Promise<unknown> = Promise.resolve();
+  private readonly serverQueues = new Map<string, Promise<void>>();
 
-  constructor(private readonly config: ServerConfig) {
-    this.docker = new Docker({ socketPath: config.dockerSocket });
+  constructor(
+    private readonly config: ServerConfig,
+    docker?: Docker,
+  ) {
+    this.docker = docker ?? new Docker({ socketPath: config.dockerSocket });
     this.registry = new ServerRegistry(config.dataDir);
+    this.files = new ServerFiles(this.docker, config);
   }
 
   async checkDocker(): Promise<void> {
@@ -80,7 +87,24 @@ export class DockerServerManager {
     return result;
   }
 
+  versions(): Promise<string[]> {
+    return getImageVersions(this.config.imageRepository);
+  }
+
+  async versionDetails(): Promise<ServerVersionDetail[]> {
+    const tags = await getImageVersions(this.config.imageRepository);
+    let catalog = null;
+    try {
+      catalog = await fetchPackVersions();
+    } catch {
+      catalog = null;
+    }
+    return buildVersionDetails(tags, catalog);
+  }
+
   private async createServer(input: CreateServerInput): Promise<GtnhServer> {
+    const version = input.version ?? DEFAULT_SERVER_VERSION;
+    if (!isValidImageTag(version)) throw new Error("GTNH version must be a valid image tag");
     await this.checkDocker();
     const servers = await this.registry.list();
     const baseId = slugify(input.name);
@@ -88,7 +112,6 @@ export class DockerServerManager {
     let suffix = 2;
     while (servers.some((server) => server.id === id)) id = `${baseId}-${suffix++}`;
 
-    const version = input.version ?? DEFAULT_SERVER_VERSION;
     const port = input.port ?? DEFAULT_SERVER_PORT;
     const memoryMb = input.memoryMb ?? DEFAULT_SERVER_MEMORY_MB;
     const image = `${this.config.imageRepository}:${version}`;
@@ -118,33 +141,7 @@ export class DockerServerManager {
         Name: volumeName,
         Labels: { "dev.industrialis.managed": "true", "dev.industrialis.server-id": id },
       });
-
-      const heapMb = memoryMb - 1024;
-
-      const container = await this.docker.createContainer({
-        name: `industrialis-gtnh-${id}`,
-        Image: image,
-        Labels: {
-          "dev.industrialis.managed": "true",
-          "dev.industrialis.server-id": id,
-        },
-        Entrypoint: ["/bin/sh", "-c"],
-        Cmd: [
-          `sed -E -i 's/-Xms[^ ]+/-Xms${heapMb}M/g; s/-Xmx[^ ]+/-Xmx${heapMb}M/g' /app/server/startserver-java9.sh && exec /bin/sh /app/server/startserver-java9.sh`,
-        ],
-        ExposedPorts: { "25565/tcp": {} },
-        HostConfig: {
-          Memory: memoryMb * 1024 * 1024,
-          PortBindings: { "25565/tcp": [{ HostPort: String(port) }] },
-          RestartPolicy: { Name: "unless-stopped", MaximumRetryCount: 0 },
-          Mounts: [
-            { Type: "volume", Source: volumeName, Target: "/app/server" },
-            { Type: "bind", Source: worldDir, Target: "/app/server/World" },
-            { Type: "bind", Source: backupsDir, Target: "/app/server/backups" },
-            { Type: "bind", Source: logsDir, Target: "/app/server/logs" },
-          ],
-        },
-      });
+      const container = await this.createManagedContainer(server);
       return await this.registry.update(id, { containerId: container.id, status: "stopped" });
     } catch (error) {
       await this.registry.update(id, { status: "error", error: String(error) });
@@ -153,38 +150,119 @@ export class DockerServerManager {
   }
 
   async start(id: string): Promise<GtnhServer> {
-    const server = await this.get(id);
-    const container = this.requireContainer(server);
-    await this.registry.update(id, { status: "starting", error: undefined });
-    await container.start();
-    return this.registry.update(id, { status: "running" });
+    return this.exclusiveServer(id, async () => {
+      const server = await this.get(id);
+      if (server.status === "running") return server;
+      const container = this.requireContainer(server);
+      await this.registry.update(id, { status: "starting", error: undefined });
+      try {
+        await this.startAndConfirm(container);
+        return await this.registry.update(id, { status: "running" });
+      } catch (error) {
+        await this.registry.update(id, { status: "error", error: String(error) });
+        throw error;
+      }
+    });
   }
 
   async stop(id: string): Promise<GtnhServer> {
-    const server = await this.get(id);
-    const container = this.requireContainer(server);
-    await this.registry.update(id, { status: "stopping" });
-    await this.gracefulStop(container);
-    return this.registry.update(id, { status: "stopped" });
+    return this.exclusiveServer(id, async () => {
+      const server = await this.get(id);
+      if (server.status === "starting") throw new Error("Wait for the server to finish starting before stopping it");
+      if (server.status !== "running") return server;
+      const container = this.requireContainer(server);
+      await this.registry.update(id, { status: "stopping" });
+      try {
+        await this.gracefulStop(container);
+      } catch (error) {
+        await this.registry.update(id, { status: "error", error: String(error) });
+        throw error;
+      }
+      return this.registry.update(id, { status: "stopped" });
+    });
   }
 
   async restart(id: string): Promise<GtnhServer> {
-    const server = await this.get(id);
-    const container = this.requireContainer(server);
-    await this.gracefulStop(container);
-    await container.start();
-    return this.registry.update(id, { status: "running", error: undefined });
+    return this.exclusiveServer(id, async () => {
+      const server = await this.get(id);
+      const container = this.requireContainer(server);
+      if (server.status === "running") await this.gracefulStop(container);
+      try {
+        await this.startAndConfirm(container);
+        return await this.registry.update(id, { status: "running", error: undefined });
+      } catch (error) {
+        await this.registry.update(id, { status: "error", error: String(error) });
+        throw error;
+      }
+    });
+  }
+
+  async update(id: string, input: UpdateServerInput): Promise<GtnhServer> {
+    return this.exclusiveServer(id, async () => {
+      if (!isValidImageTag(input.version)) throw new Error("GTNH version must be a valid image tag");
+      const server = await this.get(id);
+      this.assertReplaceable(server);
+      if (input.version === server.version) return server;
+      const image = `${this.config.imageRepository}:${input.version}`;
+      await this.pullImage(image);
+      return this.replaceContainer(server, { version: input.version, image }, input.createBackup);
+    });
+  }
+
+  async updateResources(id: string, input: UpdateServerResourcesInput): Promise<GtnhServer> {
+    return this.exclusiveServer(id, async () => {
+      const server = await this.get(id);
+      this.assertReplaceable(server);
+      const port = input.port ?? server.port;
+      const memoryMb = input.memoryMb ?? server.memoryMb;
+      if (port < 1024 || port > 65535 || !Number.isInteger(port)) {
+        throw new Error("Game port must be an integer between 1024 and 65535");
+      }
+      if (memoryMb < 4096 || memoryMb > 131072 || !Number.isInteger(memoryMb)) {
+        throw new Error("Memory must be an integer between 4096 and 131072 MB");
+      }
+      const allocated = (await this.registry.list()).find((candidate) => candidate.id !== id && candidate.port === port);
+      if (allocated) throw new Error(`Port ${port} is already assigned`);
+      if (server.port === port && server.memoryMb === memoryMb) return server;
+      return this.replaceContainer(server, { port, memoryMb }, false);
+    });
+  }
+
+  async listConfigFiles(id: string): Promise<string[]> {
+    return this.exclusiveServer(id, async () => {
+      const server = await this.get(id);
+      this.assertStopped(server);
+      return this.files.list(server);
+    });
+  }
+
+  async readConfigFile(id: string, path: string): Promise<string> {
+    return this.exclusiveServer(id, async () => {
+      const server = await this.get(id);
+      this.assertStopped(server);
+      return this.files.read(server, path);
+    });
+  }
+
+  async writeConfigFile(id: string, path: string, content: string): Promise<void> {
+    return this.exclusiveServer(id, async () => {
+      const server = await this.get(id);
+      this.assertStopped(server);
+      await this.files.write(server, path, content);
+    });
   }
 
   async remove(id: string): Promise<void> {
-    const server = await this.get(id);
-    if (server.containerId) {
-      const container = this.docker.getContainer(server.containerId);
-      const info = await container.inspect().catch(() => null);
-      if (info?.State.Running) await this.gracefulStop(container);
-      if (info) await container.remove();
-    }
-    await this.registry.remove(id);
+    return this.exclusiveServer(id, async () => {
+      const server = await this.get(id);
+      if (server.containerId) {
+        const container = this.docker.getContainer(server.containerId);
+        const info = await container.inspect().catch(() => null);
+        if (info?.State.Running) await this.gracefulStop(container);
+        if (info) await container.remove();
+      }
+      await this.registry.remove(id);
+    });
   }
 
   async logs(id: string, tail = 200): Promise<string> {
@@ -199,6 +277,190 @@ export class DockerServerManager {
     return decodeDockerLogs(output).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");
   }
 
+  private async replaceContainer(
+    server: GtnhServer,
+    changes: Pick<Partial<GtnhServer>, "version" | "image" | "port" | "memoryMb">,
+    createBackup: boolean,
+  ): Promise<GtnhServer> {
+    const oldContainer = this.requireContainer(server);
+    const inspection = await oldContainer.inspect();
+    if (inspection.State.Restarting) throw new Error("Wait for the server to finish restarting before changing it");
+    const wasRunning = inspection.State.Running;
+
+    if (wasRunning) {
+      await this.registry.update(server.id, { status: "stopping" });
+      try {
+        await this.gracefulStop(oldContainer);
+      } catch (error) {
+        await this.registry.update(server.id, { status: "error", error: String(error) });
+        throw error;
+      }
+    }
+
+    let backupId: string | null = null;
+    if (createBackup) {
+      try {
+        backupId = await this.files.createUpdateBackup(server);
+      } catch (error) {
+        let restartError: unknown;
+        if (wasRunning) {
+          try {
+            await this.startAndConfirm(oldContainer);
+          } catch (startError) {
+            restartError = startError;
+          }
+        }
+        await this.registry.update(server.id, {
+          status: restartError ? "error" : wasRunning ? "running" : "stopped",
+          error: restartError ? `Backup failed and the previous server could not restart: ${String(restartError)}` : undefined,
+        });
+        throw new Error(`Update cancelled because its pre-update backup failed: ${String(error)}`);
+      }
+    }
+
+    const originalName = `industrialis-gtnh-${server.id}`;
+    const rollbackName = `${originalName}-rollback-${randomUUID().slice(0, 8)}`;
+    let oldRenamed = false;
+    let newContainer: Docker.Container | undefined;
+    try {
+      await oldContainer.rename({ name: rollbackName });
+      oldRenamed = true;
+      const target = { ...server, ...changes, status: "stopped" as const };
+      newContainer = await this.createManagedContainer(target);
+      if (wasRunning) await this.startAndConfirm(newContainer);
+
+      const updated = await this.registry.update(server.id, {
+        ...changes,
+        containerId: newContainer.id,
+        status: wasRunning ? "running" : "stopped",
+        error: undefined,
+      });
+      await oldContainer.remove().catch((error: unknown) => {
+        process.emitWarning(`Previous container ${server.containerId} needs manual cleanup: ${String(error)}`);
+      });
+      return updated;
+    } catch (error) {
+      if (newContainer) await newContainer.remove({ force: true }).catch(() => undefined);
+      let rollbackError: unknown;
+      if (createBackup && backupId) {
+        try {
+          await this.files.restoreUpdateBackup(server, backupId);
+        } catch (restoreError) {
+          rollbackError = restoreError;
+        }
+      }
+      if (oldRenamed) {
+        try {
+          await oldContainer.rename({ name: originalName });
+        } catch (renameError) {
+          rollbackError ??= renameError;
+        }
+      }
+      if (wasRunning && !rollbackError) {
+        try {
+          await this.startAndConfirm(oldContainer);
+        } catch (startError) {
+          rollbackError = startError;
+        }
+      }
+      await this.registry.update(server.id, {
+        containerId: server.containerId,
+        status: rollbackError ? "error" : wasRunning ? "running" : "stopped",
+        error: rollbackError ? `Update failed and the previous server could not be restored: ${String(rollbackError)}` : undefined,
+      });
+      if (rollbackError) {
+        throw new Error(`Update failed: ${String(error)}. Previous server rollback failed: ${String(rollbackError)}. Backup: ${backupId ?? "not created"}`);
+      }
+      throw error;
+    }
+  }
+
+  private async createManagedContainer(server: GtnhServer): Promise<Docker.Container> {
+    const serverDir = join(this.config.dataDir, server.id);
+    const heapMb = server.memoryMb - 1024;
+    return this.docker.createContainer({
+      name: `industrialis-gtnh-${server.id}`,
+      Image: server.image,
+      Labels: {
+        "dev.industrialis.managed": "true",
+        "dev.industrialis.server-id": server.id,
+      },
+      Entrypoint: ["java"],
+      Cmd: [`-Xms${heapMb}M`, `-Xmx${heapMb}M`, "-Dfml.readTimeout=180", "@java9args.txt", "-jar", "lwjgl3ify-forgePatches.jar", "nogui"],
+      WorkingDir: "/app/server",
+      ExposedPorts: { "25565/tcp": {} },
+      HostConfig: {
+        Memory: server.memoryMb * 1024 * 1024,
+        PortBindings: { "25565/tcp": [{ HostPort: String(server.port) }] },
+        RestartPolicy: { Name: "unless-stopped", MaximumRetryCount: 0 },
+        Mounts: [
+          { Type: "volume", Source: server.volumeName, Target: "/app/server" },
+          { Type: "bind", Source: join(serverDir, "world"), Target: "/app/server/World" },
+          { Type: "bind", Source: join(serverDir, "backups"), Target: "/app/server/backups" },
+          { Type: "bind", Source: join(serverDir, "logs"), Target: "/app/server/logs" },
+        ],
+      },
+    });
+  }
+
+  private async startAndConfirm(container: Docker.Container): Promise<void> {
+    const beforeStart = await container.inspect();
+    if (!beforeStart.State.Running) await container.start();
+    const inspection = await container.inspect();
+    if (!inspection.State.Running) {
+      throw new Error(`Server container did not stay running after start (Docker state: ${inspection.State.Status})`);
+    }
+    await this.waitForServerReady(container, inspection.State.StartedAt);
+  }
+
+  private async waitForServerReady(container: Docker.Container, startedAt?: string): Promise<void> {
+    const startedAtMs = startedAt ? Date.parse(startedAt) : Number.NEGATIVE_INFINITY;
+    const deadline = Date.now() + SERVER_STARTUP_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const inspection = await container.inspect();
+      if (!inspection.State.Running) {
+        throw new Error(`Server stopped before Minecraft reported ready (Docker state: ${inspection.State.Status})`);
+      }
+      const output = decodeDockerLogs(await container.logs({ stdout: true, stderr: true, tail: 5000, timestamps: true }));
+      const readyThisStart = output.split(/\r?\n/).some((line) => {
+        const timestampEnd = line.indexOf(" ");
+        if (timestampEnd < 0 || !SERVER_READY_MESSAGE.test(line)) return false;
+        return Date.parse(line.slice(0, timestampEnd)) >= startedAtMs;
+      });
+      if (readyThisStart) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, SERVER_STARTUP_POLL_INTERVAL_MS));
+    }
+    throw new Error("GTNH server did not report ready within 10 minutes");
+  }
+
+  private assertReplaceable(server: GtnhServer): void {
+    if (server.status === "missing") throw new Error("Restore the missing Docker container before changing this server");
+    if (server.status === "starting") throw new Error("Wait for the server to finish starting before changing it");
+    if (server.status === "stopping") throw new Error("Wait for the server to finish stopping before changing it");
+    if (server.status === "creating" || !server.containerId) {
+      throw new Error("Wait for server creation to finish before changing this server");
+    }
+  }
+
+  private assertStopped(server: GtnhServer): void {
+    if (server.status !== "stopped") throw new Error("Stop the server before editing its config files");
+    if (!server.containerId) throw new Error("Server has no Docker container");
+  }
+
+  private exclusiveServer<T>(id: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.serverQueues.get(id) ?? Promise.resolve();
+    const result = previous.then(operation, operation);
+    const queue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.serverQueues.set(id, queue);
+    void queue.then(() => {
+      if (this.serverQueues.get(id) === queue) this.serverQueues.delete(id);
+    });
+    return result;
+  }
+
   private requireContainer(server: GtnhServer): Docker.Container {
     if (!server.containerId) throw new Error(`Server ${server.id} has no Docker container`);
     return this.docker.getContainer(server.containerId);
@@ -209,6 +471,9 @@ export class DockerServerManager {
     try {
       const info = await this.docker.getContainer(server.containerId).inspect();
       const status = dockerStatus(info.State);
+      if ((server.status === "starting" || server.status === "stopping") && (status === "running" || status === "stopped")) {
+        return server;
+      }
       if (status === server.status && !server.error) return server;
       return this.registry.update(server.id, { status, error: undefined });
     } catch (error) {
@@ -228,21 +493,24 @@ export class DockerServerManager {
   }
 
   private async gracefulStop(container: Docker.Container): Promise<void> {
-    const exec = await container.exec({
-      AttachStdout: true,
-      AttachStderr: true,
-      Cmd: [
-        "/bin/sh",
-        "-c",
-        'for stat in /proc/[0-9]*/comm; do if [ "$(cat "$stat")" = java ]; then pid=${stat%/comm}; kill -TERM ${pid#/proc/}; exit 0; fi; done; exit 1',
-      ],
-    });
-    await exec.start({ Detach: false }).catch(() => undefined);
-    const exited = container
-      .wait()
-      .then(() => true)
-      .catch(() => false);
-    const timedOut = new Promise<false>((resolve) => setTimeout(() => resolve(false), 35_000));
-    if (!(await Promise.race([exited, timedOut]))) await container.stop({ t: 15 });
+    let stopError: unknown;
+    try {
+      await container.stop({ t: DOCKER_STOP_TIMEOUT_SECONDS });
+    } catch (error) {
+      stopError = error;
+    }
+
+    let state: Docker.ContainerInspectInfo;
+    try {
+      state = await container.inspect();
+    } catch (inspectionError) {
+      throw new Error(`Could not confirm the server stopped; operation cancelled to protect its files. ${String(stopError ?? inspectionError)}`);
+    }
+    if (state.State.Running) {
+      throw new Error(`Docker did not confirm the server stopped; operation cancelled to protect its files. ${String(stopError ?? "")}`);
+    }
+    if (state.State.ExitCode === 137 || state.State.OOMKilled) {
+      throw new Error("Docker had to kill the server forcefully; operation cancelled because the world may not have saved cleanly");
+    }
   }
 }

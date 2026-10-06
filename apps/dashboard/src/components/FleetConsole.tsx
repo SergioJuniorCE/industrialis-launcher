@@ -1,37 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import type { CreateServerInput, GtnhServer, ServerLog } from "@industrialis/server-contracts";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import type { CreateServerInput, GtnhServer, ServerLog, ServerVersionDetail } from "@industrialis/server-contracts";
+import { DEFAULT_SERVER_VERSION } from "@industrialis/server-contracts";
 import useSWR from "swr";
-import {
-  Activity,
-  Box,
-  ChevronRight,
-  CircleAlert,
-  Command,
-  FileTerminal,
-  LoaderCircle,
-  Play,
-  Plus,
-  RotateCw,
-  Server,
-  Square,
-  Trash2,
-  X,
-} from "lucide-react";
-
-const API_URL = "/api/daemon";
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "content-type": "application/json", ...init?.headers },
-  });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-}
+import { Activity, ChevronRight, CircleAlert, Command, FileTerminal, LoaderCircle, Play, Plus, RotateCw, Settings, Square, Trash2, X } from "lucide-react";
+import { dashboardApi } from "../lib/dashboard-api.js";
+import { DOCKER_ENGINE_DOCS_PATH, isDockerEngineError } from "../lib/error-hints.js";
+import Modal from "./Modal.js";
+import ServerManagementDialog from "./ServerManagementDialog.js";
+import VersionPicker, { toVersionDetails } from "./VersionPicker.js";
 
 function Status({ status }: { status: GtnhServer["status"] }) {
   const active = status === "running";
@@ -70,57 +46,29 @@ function IconButton({
   );
 }
 
-function Modal({
-  onClose,
-  label,
-  labelledBy,
-  children,
-}: {
-  onClose: () => void;
-  label?: string;
-  labelledBy?: string;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = ref.current;
-    dialog?.showModal();
-    return () => dialog?.close();
-  }, []);
-
-  return (
-    <dialog
-      ref={ref}
-      aria-label={label}
-      aria-labelledby={labelledBy}
-      onCancel={onClose}
-      className="fixed inset-0 m-auto max-h-[100dvh] w-full max-w-none border-0 bg-transparent p-3 text-copy backdrop:bg-black/70"
-    >
-      {children}
-    </dialog>
-  );
-}
-
 export default function FleetConsole() {
   const [pending, setPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [manageServer, setManageServer] = useState<GtnhServer | null>(null);
   const [logs, setLogs] = useState<{ server: GtnhServer; value: string } | null>(null);
+  const { data: servers = [], error: loadError, isLoading, isValidating, mutate } = useSWR<GtnhServer[]>("/servers", dashboardApi, { refreshInterval: 5000 });
   const {
-    data: servers = [],
-    error: loadError,
-    isLoading,
-    isValidating,
-    mutate,
-  } = useSWR<GtnhServer[]>("/api/servers", api, { refreshInterval: 5000 });
+    data: versionDetails,
+    error: versionsError,
+    isLoading: isLoadingVersions,
+  } = useSWR<ServerVersionDetail[]>("/versions/details", dashboardApi, {
+    revalidateOnFocus: true,
+  });
+  const { data: legacyVersions } = useSWR<string[]>(versionDetails ? null : "/versions", dashboardApi, { revalidateOnFocus: true });
+  const versions = versionDetails ?? (legacyVersions ? toVersionDetails(legacyVersions) : []);
   const error = actionError ?? (loadError instanceof Error ? loadError.message : null);
 
   async function run(id: string, action: "start" | "stop" | "restart" | "remove") {
     setPending(`${id}:${action}`);
     setActionError(null);
     try {
-      await api(`/api/servers/${encodeURIComponent(id)}${action === "remove" ? "" : `/${action}`}`, {
+      await dashboardApi(`/servers/${encodeURIComponent(id)}${action === "remove" ? "" : `/${action}`}`, {
         method: action === "remove" ? "DELETE" : "POST",
       });
       await mutate();
@@ -134,7 +82,7 @@ export default function FleetConsole() {
   async function showLogs(server: GtnhServer) {
     setPending(`${server.id}:logs`);
     try {
-      const result = await api<ServerLog>(`/api/servers/${encodeURIComponent(server.id)}/logs?tail=300`);
+      const result = await dashboardApi<ServerLog>(`/servers/${encodeURIComponent(server.id)}/logs?tail=300`);
       setLogs({ server, value: result.lines || "No log output yet." });
     } catch (requestError) {
       setActionError(requestError instanceof Error ? requestError.message : String(requestError));
@@ -146,38 +94,13 @@ export default function FleetConsole() {
   const online = servers.filter((server) => server.status === "running").length;
 
   return (
-    <main className="min-h-[100dvh] lg:grid lg:grid-cols-[220px_1fr]">
-      <aside className="border-b border-line bg-panel/95 px-5 py-4 lg:min-h-[100dvh] lg:border-b-0 lg:border-r lg:py-6">
-        <div className="flex items-center gap-3">
-          <div className="grid size-8 place-items-center bg-signal text-ink">
-            <Box className="size-4" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold tracking-tight">Industrialis</p>
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-dim">Server console</p>
-          </div>
-        </div>
-        <nav className="mt-5 flex gap-2 lg:mt-10 lg:block">
-          <div className="flex items-center gap-3 border-l-2 border-signal bg-signal-dark px-3 py-2 text-xs font-medium">
-            <Server className="size-4 text-signal" /> Fleet
-          </div>
-        </nav>
-        <div className="mt-6 hidden border-t border-line pt-5 lg:block">
-          <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-dim">Daemon</p>
-          <p className="mt-2 truncate font-mono text-[10px] text-copy">Authenticated local proxy</p>
-        </div>
-      </aside>
-
+    <>
       <section className="min-w-0 px-4 py-6 sm:px-7 lg:px-10 lg:py-9">
         <header className="flex flex-col gap-5 border-b border-line pb-7 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal">
-              Operations / Fleet
-            </p>
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal">Operations / Fleet</p>
             <h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">GTNH servers</h1>
-            <p className="mt-2 max-w-xl text-sm text-dim">
-              Docker-isolated worlds, controlled from one host.
-            </p>
+            <p className="mt-2 max-w-xl text-sm text-dim">Docker-isolated worlds, controlled from one host.</p>
           </div>
           <button
             type="button"
@@ -199,16 +122,21 @@ export default function FleetConsole() {
           </div>
           <div className="hidden px-5 py-5 sm:block">
             <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-dim">Allocated memory</p>
-            <p className="mt-1 text-2xl font-medium">
-              {(servers.reduce((sum, server) => sum + server.memoryMb, 0) / 1024).toFixed(1)} GB
-            </p>
+            <p className="mt-1 text-2xl font-medium">{(servers.reduce((sum, server) => sum + server.memoryMb, 0) / 1024).toFixed(1)} GB</p>
           </div>
         </div>
 
         {error && (
           <div className="mt-5 flex items-start gap-3 border border-danger/40 bg-danger/5 px-4 py-3 text-xs text-danger">
             <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            <span className="flex-1">{error}</span>
+            <span className="flex-1">
+              {error}
+              {isDockerEngineError(error) && (
+                <a href={DOCKER_ENGINE_DOCS_PATH} className="ml-2 font-medium text-signal underline underline-offset-2">
+                  How to fix
+                </a>
+              )}
+            </span>
             <button type="button" onClick={() => setActionError(null)} aria-label="Dismiss error">
               <X className="size-4" />
             </button>
@@ -218,12 +146,7 @@ export default function FleetConsole() {
         <div className="mt-7">
           <div className="mb-3 grid grid-cols-[1fr_auto] items-center">
             <h2 className="text-sm font-semibold">Managed instances</h2>
-            <button
-              type="button"
-              onClick={() => void mutate()}
-              className="text-dim transition hover:text-copy"
-              title="Refresh"
-            >
+            <button type="button" onClick={() => void mutate()} className="text-dim transition hover:text-copy" title="Refresh">
               <RotateCw className={`size-4 ${isValidating ? "animate-spin" : ""}`} />
             </button>
           </div>
@@ -240,9 +163,7 @@ export default function FleetConsole() {
             >
               <span>
                 <span className="block text-sm font-medium">No servers configured</span>
-                <span className="mt-1 block text-xs text-dim">
-                  Create the first isolated GTNH world on this host.
-                </span>
+                <span className="mt-1 block text-xs text-dim">Create the first isolated GTNH world on this host.</span>
               </span>
               <ChevronRight className="size-5 text-dim transition group-hover:translate-x-1 group-hover:text-signal" />
             </button>
@@ -251,14 +172,9 @@ export default function FleetConsole() {
               {servers.map((server) => {
                 const busy = pending?.startsWith(`${server.id}:`) ?? false;
                 return (
-                  <article
-                    key={server.id}
-                    className="grid gap-4 border-b border-line py-4 sm:grid-cols-[minmax(180px,1.5fr)_1fr_1fr_auto] sm:items-center"
-                  >
+                  <article key={server.id} className="grid gap-4 border-b border-line py-4 sm:grid-cols-[minmax(180px,1.5fr)_1fr_1fr_auto] sm:items-center">
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="grid size-9 shrink-0 place-items-center border border-line bg-panel font-mono text-xs text-signal">
-                        GT
-                      </div>
+                      <div className="grid size-9 shrink-0 place-items-center border border-line bg-panel font-mono text-xs text-signal">GT</div>
                       <div className="min-w-0">
                         <h3 className="truncate text-sm font-medium">{server.name}</h3>
                         <p className="truncate font-mono text-[10px] text-dim">{server.id}</p>
@@ -274,45 +190,28 @@ export default function FleetConsole() {
                     </div>
                     <div className="flex items-center gap-1">
                       {server.status === "running" ? (
-                        <IconButton
-                          label="Stop"
-                          disabled={busy}
-                          onClick={() => void run(server.id, "stop")}
-                        >
+                        <IconButton label="Stop" disabled={busy} onClick={() => void run(server.id, "stop")}>
                           <Square className="size-3.5" />
                         </IconButton>
                       ) : (
-                        <IconButton
-                          label="Start"
-                          disabled={busy || server.status === "missing"}
-                          onClick={() => void run(server.id, "start")}
-                        >
+                        <IconButton label="Start" disabled={busy || server.status === "missing"} onClick={() => void run(server.id, "start")}>
                           <Play className="size-3.5" />
                         </IconButton>
                       )}
-                      <IconButton
-                        label="Restart"
-                        disabled={busy || server.status !== "running"}
-                        onClick={() => void run(server.id, "restart")}
-                      >
+                      <IconButton label="Restart" disabled={busy || server.status !== "running"} onClick={() => void run(server.id, "restart")}>
                         <RotateCw className="size-3.5" />
                       </IconButton>
-                      <IconButton
-                        label="Logs"
-                        disabled={busy || !server.containerId}
-                        onClick={() => void showLogs(server)}
-                      >
+                      <IconButton label="Logs" disabled={busy || !server.containerId} onClick={() => void showLogs(server)}>
                         <FileTerminal className="size-3.5" />
+                      </IconButton>
+                      <IconButton label="Manage" disabled={busy} onClick={() => setManageServer(server)}>
+                        <Settings className="size-3.5" />
                       </IconButton>
                       <IconButton
                         label="Remove"
                         danger
                         disabled={busy}
-                        onClick={() =>
-                          window.confirm(
-                            `Remove ${server.name}? World data will remain on disk.`,
-                          ) && void run(server.id, "remove")
-                        }
+                        onClick={() => window.confirm(`Remove ${server.name}? World data will remain on disk.`) && void run(server.id, "remove")}
                       >
                         <Trash2 className="size-3.5" />
                       </IconButton>
@@ -327,12 +226,27 @@ export default function FleetConsole() {
 
       {createOpen && (
         <CreateServer
+          versions={versions}
+          versionsLoading={isLoadingVersions}
+          versionsError={versionsError instanceof Error ? versionsError.message : null}
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
             setCreateOpen(false);
             void mutate();
           }}
-          onError={setActionError}
+        />
+      )}
+      {manageServer && (
+        <ServerManagementDialog
+          server={manageServer}
+          versions={versions}
+          versionsLoading={isLoadingVersions}
+          versionsError={versionsError instanceof Error ? versionsError.message : null}
+          onClose={() => setManageServer(null)}
+          onUpdated={async () => {
+            setManageServer(null);
+            await mutate();
+          }}
         />
       )}
       {logs && (
@@ -348,42 +262,56 @@ export default function FleetConsole() {
                 <X className="size-4" />
               </button>
             </header>
-            <pre className="overflow-auto whitespace-pre-wrap p-4 font-mono text-[10px] leading-5 text-[#c7cbbf]">
-              {logs.value}
-            </pre>
+            <pre className="overflow-auto whitespace-pre-wrap p-4 font-mono text-[10px] leading-5 text-[#c7cbbf]">{logs.value}</pre>
           </section>
         </Modal>
       )}
-    </main>
+    </>
   );
 }
 
 function CreateServer({
+  versions,
+  versionsLoading,
+  versionsError,
   onClose,
   onCreated,
-  onError,
 }: {
+  versions: ServerVersionDetail[];
+  versionsLoading: boolean;
+  versionsError: string | null;
   onClose: () => void;
   onCreated: () => void;
-  onError: (error: string) => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [version, setVersion] = useState(() =>
+    versions.some((detail) => detail.tag === DEFAULT_SERVER_VERSION) ? DEFAULT_SERVER_VERSION : (versions[0]?.tag ?? ""),
+  );
+  const [memoryMb, setMemoryMb] = useState("6144");
+
+  useEffect(() => {
+    if (!version && versions.length > 0) {
+      setVersion(versions.some((detail) => detail.tag === DEFAULT_SERVER_VERSION) ? DEFAULT_SERVER_VERSION : (versions[0]?.tag ?? ""));
+    }
+  }, [version, versions]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const input: CreateServerInput = {
       name: String(data.get("name")),
-      version: String(data.get("version")),
+      version: String(data.get("version") ?? version),
       port: Number(data.get("port")),
       memoryMb: Number(data.get("memoryMb")),
     };
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      await api<GtnhServer>("/api/servers", { method: "POST", body: JSON.stringify(input) });
+      await dashboardApi<GtnhServer>("/servers", { method: "POST", body: JSON.stringify(input) });
       onCreated();
     } catch (requestError) {
-      onError(requestError instanceof Error ? requestError.message : String(requestError));
+      setSubmitError(requestError instanceof Error ? requestError.message : String(requestError));
     } finally {
       setSubmitting(false);
     }
@@ -393,15 +321,15 @@ function CreateServer({
     <Modal onClose={onClose} labelledBy="create-server-title">
       <form
         onSubmit={(event) => void submit(event)}
-        className="mx-auto w-full max-w-lg border border-line bg-panel p-5 shadow-2xl sm:p-6"
+        className="mx-auto flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden border border-line bg-panel p-5 shadow-2xl sm:p-6"
       >
-        <div className="flex items-start gap-4">
+        <div className="flex shrink-0 items-start gap-4">
           <div className="grid size-9 place-items-center bg-signal text-ink">
             <Activity className="size-4" />
           </div>
           <div className="flex-1">
             <h2 id="create-server-title" className="text-lg font-semibold tracking-tight">
-              Provision server
+              New server
             </h2>
             <p className="mt-1 text-xs text-dim">Pull a GTNH image and create an isolated world.</p>
           </div>
@@ -409,24 +337,19 @@ function CreateServer({
             <X className="size-4" />
           </button>
         </div>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid min-h-0 flex-1 gap-4 overflow-y-auto sm:grid-cols-2">
+          <label className="sm:col-span-2">
+            <span className="mb-1.5 block text-[11px] font-medium">GTNH version</span>
+            <VersionPicker versions={versions} value={version} onChange={setVersion} loading={versionsLoading} />
+          </label>
           <label className="sm:col-span-2">
             <span className="mb-1.5 block text-[11px] font-medium">Server name</span>
             <input
               name="name"
               required
               maxLength={64}
-              placeholder="Assembly Line"
+              placeholder={version ? `GTNH ${version}` : "Assembly Line"}
               className="h-10 w-full border border-line bg-ink px-3 text-sm outline-none transition placeholder:text-dim/50 focus:border-signal"
-            />
-          </label>
-          <label>
-            <span className="mb-1.5 block text-[11px] font-medium">GTNH version</span>
-            <input
-              name="version"
-              required
-              defaultValue="stable-latest"
-              className="h-10 w-full border border-line bg-ink px-3 font-mono text-xs outline-none focus:border-signal"
             />
           </label>
           <label>
@@ -441,34 +364,56 @@ function CreateServer({
               className="h-10 w-full border border-line bg-ink px-3 font-mono text-xs outline-none focus:border-signal"
             />
           </label>
-          <label className="sm:col-span-2">
-            <span className="mb-1.5 block text-[11px] font-medium">Memory limit</span>
-            <select
+          <label>
+            <span className="mb-1.5 block text-[11px] font-medium">Memory limit (MB)</span>
+            <input
               name="memoryMb"
-              defaultValue="6144"
-              className="h-10 w-full border border-line bg-ink px-3 text-xs outline-none focus:border-signal"
-            >
-              <option value="4096">4 GB</option>
-              <option value="6144">6 GB</option>
-              <option value="8192">8 GB</option>
-              <option value="12288">12 GB</option>
-              <option value="16384">16 GB</option>
-            </select>
+              type="number"
+              min={4096}
+              max={131072}
+              step={1024}
+              required
+              value={memoryMb}
+              onChange={(event) => setMemoryMb(event.currentTarget.value)}
+              className="h-10 w-full border border-line bg-ink px-3 font-mono text-xs outline-none focus:border-signal"
+            />
+            <span className="mt-1 block font-mono text-[10px] text-dim">= {formatMemoryGb(Number(memoryMb))}</span>
           </label>
         </div>
-        <div className="mt-6 flex justify-end gap-2 border-t border-line pt-4">
+        {versionsError && (
+          <p role="alert" className="mt-3 shrink-0 text-xs text-danger">
+            Could not load current GTNH releases: {versionsError}
+          </p>
+        )}
+        {submitError && (
+          <div role="alert" className="mt-3 shrink-0 border border-danger/40 bg-danger/5 px-3 py-2 text-xs leading-5 text-danger">
+            {submitError}
+            {isDockerEngineError(submitError) && (
+              <a href={DOCKER_ENGINE_DOCS_PATH} className="ml-2 font-medium text-signal underline underline-offset-2">
+                How to fix
+              </a>
+            )}
+          </div>
+        )}
+        <div className="mt-6 flex shrink-0 justify-end gap-2 border-t border-line pt-4">
           <button type="button" onClick={onClose} className="h-9 border border-line px-4 text-xs text-dim hover:text-copy">
             Cancel
           </button>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || versionsLoading || versions.length === 0 || !version}
             className="inline-flex h-9 items-center gap-2 bg-signal px-4 text-xs font-semibold text-ink disabled:opacity-50"
           >
-            {submitting && <LoaderCircle className="size-3.5 animate-spin" />} Create server
+            {submitting && <LoaderCircle className="size-3.5 animate-spin" />} Install {version}
           </button>
         </div>
       </form>
     </Modal>
   );
+}
+
+function formatMemoryGb(memoryMb: number): string {
+  if (!Number.isFinite(memoryMb)) return "—";
+  const gb = memoryMb / 1024;
+  return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`;
 }

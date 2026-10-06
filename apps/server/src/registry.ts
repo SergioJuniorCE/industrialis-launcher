@@ -36,6 +36,9 @@ export class ServerRegistry {
       const servers = await this.read();
       const index = servers.findIndex((server) => server.id === id);
       if (index < 0) throw new Error(`Server ${id} was not found`);
+      if (update.port !== undefined && servers.some((server) => server.id !== id && server.port === update.port)) {
+        throw new Error(`Port ${update.port} is already assigned`);
+      }
       const server = { ...servers[index]!, ...update };
       servers[index] = server;
       await this.write(servers);
@@ -68,7 +71,10 @@ export class ServerRegistry {
 
   private exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.queue.then(operation, operation);
-    this.queue = result.then(() => undefined, () => undefined);
+    this.queue = result.then(
+      () => undefined,
+      () => undefined,
+    );
     return result;
   }
 }

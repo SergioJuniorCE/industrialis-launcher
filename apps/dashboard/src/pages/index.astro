@@ -1,8 +1,12 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import Sidebar from "../components/Sidebar.astro";
 import FleetConsole from "../components/FleetConsole";
 ---
 
 <BaseLayout>
-  <FleetConsole client:load />
+  <main class="min-h-[100dvh] lg:grid lg:grid-cols-[220px_1fr]">
+    <Sidebar current="fleet" />
+    <FleetConsole client:load />
+  </main>
 </BaseLayout>

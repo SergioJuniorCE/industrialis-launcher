@@ -1,0 +1,66 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Sidebar from "../components/Sidebar.astro";
+---
+
+<BaseLayout title="Docs — Industrialis Server Console" description="Troubleshooting guides for hosting GTNH servers with Industrialis.">
+  <main class="min-h-[100dvh] lg:grid lg:grid-cols-[220px_1fr]">
+    <Sidebar current="docs" />
+
+    <section class="min-w-0 px-4 py-6 sm:px-7 lg:px-10 lg:py-9">
+      <header class="border-b border-line pb-7">
+        <p class="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal">Operations / Docs</p>
+        <h1 class="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">Troubleshooting</h1>
+        <p class="mt-2 max-w-xl text-sm text-dim">Fixes for the errors the console can report. Error messages link here.</p>
+      </header>
+
+      <article id="docker-engine-unavailable" class="mt-7 max-w-3xl scroll-mt-6">
+        <h2 class="text-lg font-semibold tracking-tight">Docker Engine is unavailable</h2>
+        <div class="mt-2 border border-line bg-panel p-4 font-mono text-[11px] leading-5 text-dim">
+          Docker Engine is unavailable at <span class="text-copy">/var/run/docker.sock</span>. Verify the daemon is running and this user can access the socket.
+        </div>
+
+        <h3 class="mt-6 text-sm font-semibold">What this means</h3>
+        <p class="mt-2 text-sm leading-6 text-dim">
+          The Industrialis daemon could not reach Docker Engine through its socket (shown in the message; default
+          <span class="font-mono text-[12px] text-copy">/var/run/docker.sock</span>). Every server operation — create, start, stop,
+          update, image pulls — goes through that socket, so they all fail until the connection is fixed.
+          Nothing is uninstalled or lost; retry the action once Docker responds.
+        </p>
+
+        <h3 class="mt-6 text-sm font-semibold">Why it happens</h3>
+        <ol class="mt-2 list-decimal space-y-2 pl-5 text-sm leading-6 text-dim">
+          <li><span class="text-copy">Docker Engine is not running</span> — fresh VPS reboot, crashed service, or Docker Desktop is closed on a dev machine.</li>
+          <li><span class="text-copy">The daemon user lacks socket permission</span> — on Linux the user running Industrialis must be in the <span class="font-mono text-[12px] text-copy">docker</span> group or otherwise able to read/write the socket.</li>
+          <li><span class="text-copy">Wrong socket path</span> — rootless Docker listens on <span class="font-mono text-[12px] text-copy">$XDG_RUNTIME_DIR/docker.sock</span>, not <span class="font-mono text-[12px] text-copy">/var/run/docker.sock</span>. Custom setups move it elsewhere.</li>
+        </ol>
+
+        <h3 class="mt-6 text-sm font-semibold">Diagnose on the host</h3>
+        <pre class="mt-2 overflow-x-auto border border-line bg-ink p-4 font-mono text-[11px] leading-5 text-copy">ls -l /var/run/docker.sock
+sudo systemctl status docker
+docker info</pre>
+        <p class="mt-2 text-sm leading-6 text-dim">
+          If <span class="font-mono text-[12px] text-copy">docker info</span> works only with <span class="font-mono text-[12px] text-copy">sudo</span>, it is cause 2.
+          If the socket file is missing entirely, it is cause 1 or 3.
+        </p>
+
+        <h3 class="mt-6 text-sm font-semibold">Fix</h3>
+        <pre class="mt-2 overflow-x-auto border border-line bg-ink p-4 font-mono text-[11px] leading-5 text-copy"># Cause 1 — start (and auto-start) the engine:
+sudo systemctl enable --now docker
+
+# Cause 2 — grant socket access, then log out and back in:
+sudo usermod -aG docker $USER
+# For the systemd service user instead:
+sudo usermod --append --groups docker industrialis
+sudo systemctl restart industrialis-server
+
+# Cause 3 — point the daemon at a non-default socket:
+INDUSTRIALIS_DOCKER_SOCKET=/run/user/1000/docker.sock industrialis up</pre>
+        <p class="mt-2 text-sm leading-6 text-dim">
+          Then confirm <span class="font-mono text-[12px] text-copy">docker info</span> succeeds
+          <span class="text-copy">as the user running Industrialis</span> and retry the dashboard action.
+        </p>
+      </article>
+    </section>
+  </main>
+</BaseLayout>

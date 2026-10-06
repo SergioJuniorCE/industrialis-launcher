@@ -1,10 +1,17 @@
-import type { CreateServerInput, GtnhServer, ServerLog } from "@industrialis/server-contracts";
+import type { CreateServerInput, GtnhServer, ServerLog, UpdateServerInput, UpdateServerResourcesInput } from "@industrialis/server-contracts";
 
 export class ServerApiClient {
-  constructor(private readonly baseUrl: string, private readonly apiToken: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly apiToken: string,
+  ) {}
 
   list(): Promise<GtnhServer[]> {
     return this.request("/api/servers");
+  }
+
+  versions(): Promise<string[]> {
+    return this.request("/api/versions");
   }
 
   create(input: CreateServerInput): Promise<GtnhServer> {
@@ -13,6 +20,20 @@ export class ServerApiClient {
 
   action(id: string, action: "start" | "stop" | "restart"): Promise<GtnhServer> {
     return this.request(`/api/servers/${encodeURIComponent(id)}/${action}`, { method: "POST" });
+  }
+
+  update(id: string, input: UpdateServerInput): Promise<GtnhServer> {
+    return this.request(`/api/servers/${encodeURIComponent(id)}/update`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateResources(id: string, input: UpdateServerResourcesInput): Promise<GtnhServer> {
+    return this.request(`/api/servers/${encodeURIComponent(id)}/resources`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
   }
 
   remove(id: string): Promise<void> {
