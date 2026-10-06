@@ -37,9 +37,13 @@ asset, installs under `~/.local/share/industrialis`, and links
 ## Current scope
 
 - Pull a versioned GTNH server image.
+- Browse current image releases, including stable and release-candidate tags.
 - Create isolated Docker containers and persistent world, backup, and log directories.
 - Start, stop, restart, inspect, and remove managed servers.
+- Update a server's image and change its published game port or memory limit.
+- Read and edit supported text files in the server root and `config/` directory while the server is stopped.
 - View recent server logs from the CLI or dashboard.
+- Back up the world and server volume before an update, and restore them if the replacement does not start.
 - Retain server files when a container is removed.
 
 The daemon uses a generated bearer token and listens on `127.0.0.1` by default.
@@ -60,18 +64,21 @@ or have equivalent access to the configured socket.
 
 ## CLI
 
-| Command | Description |
-| --- | --- |
-| `industrialis` | Show help |
-| `industrialis up` | Start daemon + dashboard (background) |
-| `industrialis status` | Process health + server summary |
-| `industrialis down` | Stop daemon + dashboard |
-| `industrialis list` | List managed servers |
-| `industrialis create <name>` | Create a GTNH server (`--port`, `--memory`, `--version`) |
-| `industrialis start\|stop\|restart <id>` | Control a server |
-| `industrialis remove <id> --yes` | Remove container (world retained) |
-| `industrialis logs <id>` | Recent container logs |
-| `industrialis daemon` | Run API only in the foreground (systemd) |
+| Command                                                       | Description                                                       |
+| ------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `industrialis`                                                | Show help                                                         |
+| `industrialis up`                                             | Start daemon + dashboard (background)                             |
+| `industrialis status`                                         | Process health + server summary                                   |
+| `industrialis down`                                           | Stop daemon + dashboard                                           |
+| `industrialis list`                                           | List managed servers                                              |
+| `industrialis versions`                                       | List available GTNH image tags                                    |
+| `industrialis create <name>`                                  | Create a GTNH server (`--port`, `--memory`, `--version`)          |
+| `industrialis start\|stop\|restart <id>`                      | Control a server                                                  |
+| `industrialis update <id> --version <tag>`                    | Update the image (pre-update backup enabled unless `--no-backup`) |
+| `industrialis resources <id> [--port <port>] [--memory <MB>]` | Change the game port or memory limit                              |
+| `industrialis remove <id> --yes`                              | Remove container (world retained)                                 |
+| `industrialis logs <id>`                                      | Recent container logs                                             |
+| `industrialis daemon`                                         | Run API only in the foreground (systemd)                          |
 
 Set `INDUSTRIALIS_API_URL` or pass `--api-url` before the command to target a
 different daemon.
@@ -204,26 +211,88 @@ mutable pack files that are not stored in the three host directories above.
 
 The default image repository is the community-maintained
 `ghcr.io/debuas/gtnhserverdocker`, using the `stable-latest` tag for new
-servers. Pin a release with `--version`, or set `INDUSTRIALIS_GTNH_IMAGE` to use
-a different compatible image repository. Existing servers retain their image
-and version until an explicit upgrade workflow is added.
+servers. The dashboard and `industrialis versions` list current registry tags,
+including release candidates. Set `INDUSTRIALIS_GTNH_IMAGE` to use a different
+compatible registry repository. Updating replaces the container while reusing
+the named server volume and host world directory. By default, the daemon backs
+up both before changing the image and restores the files if the new container
+cannot start. Updates can be run without that backup using `--no-backup`.
+
+The dashboard's **Resources** panel updates the game port and memory limit by
+replacing the container with the same image and persistent data. The **Config
+files** panel supports text files in the server root (`server.properties`) and
+the `config/` directory; it only allows edits while the server is stopped and
+limits files to 1 MiB.
 
 Removing a server deletes its Docker container and registry entry, but does not
 delete its directory or named Docker volume. This is intentional protection
 against accidental world loss.
 
+## Troubleshooting
+
+### Docker Engine is unavailable
+
+The dashboard reports `Docker Engine is unavailable at <socket>. Verify the
+daemon is running and this user can access the socket.` when the Industrialis
+daemon cannot reach Docker Engine. Every server operation (create, start, stop,
+update, image pulls) goes through that socket, so they all fail until the
+connection is fixed. Nothing is uninstalled or lost; retry the action once
+Docker responds.
+
+Common causes, in order of likelihood:
+
+1. **Docker Engine is not running.** Fresh VPS reboot, crashed service, or (on
+   a dev machine) Docker Desktop is closed.
+2. **The daemon user lacks socket permission.** On Linux the user running
+   Industrialis must be in the `docker` group or otherwise able to
+   read/write the socket.
+3. **Wrong socket path.** Rootless Docker listens on
+   `$XDG_RUNTIME_DIR/docker.sock`, not `/var/run/docker.sock`. Custom setups
+   move it elsewhere.
+
+Diagnose on the host:
+
+```bash
+ls -l /var/run/docker.sock
+sudo systemctl status docker
+docker info
+```
+
+If `docker info` works only with `sudo`, it is cause 2. If the socket file is
+missing entirely, it is cause 1 or 3.
+
+Fixes:
+
+```bash
+# Cause 1 — start (and auto-start) the engine:
+sudo systemctl enable --now docker
+
+# Cause 2 — grant socket access, then log out and back in:
+sudo usermod -aG docker $USER
+# For the systemd service user instead:
+sudo usermod --append --groups docker industrialis
+sudo systemctl restart industrialis-server
+
+# Cause 3 — point the daemon at a non-default socket:
+INDUSTRIALIS_DOCKER_SOCKET=/run/user/1000/docker.sock industrialis up
+```
+
+Then confirm `docker info` succeeds **as the user running Industrialis** and
+retry the dashboard action. The dashboard's error message links to its own
+copy of this guide at `/docs#docker-engine-unavailable`.
+
 ## Configuration
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `INDUSTRIALIS_HOST` | `127.0.0.1` | Daemon listen address |
-| `INDUSTRIALIS_PORT` | `4310` | Daemon listen port |
-| `INDUSTRIALIS_API_URL` | `http://127.0.0.1:4310` | CLI / dashboard API target |
-| `INDUSTRIALIS_SERVER_DATA` | `~/.industrialis/servers` | Persistent server root |
-| `INDUSTRIALIS_STATE_DIR` | `~/.industrialis` | PID/log state root |
-| `INDUSTRIALIS_DASHBOARD_DIR` | install `dashboard/` | Built Astro dashboard directory |
-| `INDUSTRIALIS_DASHBOARD_HOST` | `127.0.0.1` | Dashboard bind host |
-| `INDUSTRIALIS_DASHBOARD_PORT` | `3001` | Dashboard bind port |
-| `INDUSTRIALIS_GTNH_IMAGE` | `ghcr.io/debuas/gtnhserverdocker` | GTNH image repository |
-| `INDUSTRIALIS_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker Engine socket |
-| `INDUSTRIALIS_API_TOKEN` | generated in the data root | Shared daemon/dashboard token |
+| Variable                      | Default                           | Purpose                         |
+| ----------------------------- | --------------------------------- | ------------------------------- |
+| `INDUSTRIALIS_HOST`           | `127.0.0.1`                       | Daemon listen address           |
+| `INDUSTRIALIS_PORT`           | `4310`                            | Daemon listen port              |
+| `INDUSTRIALIS_API_URL`        | `http://127.0.0.1:4310`           | CLI / dashboard API target      |
+| `INDUSTRIALIS_SERVER_DATA`    | `~/.industrialis/servers`         | Persistent server root          |
+| `INDUSTRIALIS_STATE_DIR`      | `~/.industrialis`                 | PID/log state root              |
+| `INDUSTRIALIS_DASHBOARD_DIR`  | install `dashboard/`              | Built Astro dashboard directory |
+| `INDUSTRIALIS_DASHBOARD_HOST` | `127.0.0.1`                       | Dashboard bind host             |
+| `INDUSTRIALIS_DASHBOARD_PORT` | `3001`                            | Dashboard bind port             |
+| `INDUSTRIALIS_GTNH_IMAGE`     | `ghcr.io/debuas/gtnhserverdocker` | GTNH image repository           |
+| `INDUSTRIALIS_DOCKER_SOCKET`  | `/var/run/docker.sock`            | Docker Engine socket            |
+| `INDUSTRIALIS_API_TOKEN`      | generated in the data root        | Shared daemon/dashboard token   |

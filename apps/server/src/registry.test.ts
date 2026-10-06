@@ -34,10 +34,7 @@ describe("ServerRegistry", () => {
     await registry.add(server("alpha", 25565));
     await registry.add(server("beta", 25566));
 
-    await Promise.all([
-      registry.update("alpha", { status: "running" }),
-      registry.update("beta", { status: "error", error: "failed" }),
-    ]);
+    await Promise.all([registry.update("alpha", { status: "running" }), registry.update("beta", { status: "error", error: "failed" })]);
 
     const servers = await registry.list();
     expect(servers.find(({ id }) => id === "alpha")?.status).toBe("running");
@@ -50,5 +47,16 @@ describe("ServerRegistry", () => {
     const registry = new ServerRegistry(directory);
     await registry.add(server("alpha", 25565));
     await expect(registry.add(server("beta", 25565))).rejects.toThrow("already assigned");
+  });
+
+  it("keeps host ports unique when a resource edit races with server creation", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "industrialis-registry-"));
+    directories.push(directory);
+    const registry = new ServerRegistry(directory);
+    await registry.add(server("alpha", 25565));
+    await registry.add(server("beta", 25566));
+
+    await expect(registry.update("alpha", { port: 25566 })).rejects.toThrow("already assigned");
+    expect((await registry.list()).find(({ id }) => id === "alpha")?.port).toBe(25565);
   });
 });
