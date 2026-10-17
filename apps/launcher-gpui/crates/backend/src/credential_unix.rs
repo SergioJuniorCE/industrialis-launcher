@@ -282,23 +282,43 @@ fn kwallet_password(app: &str, create: bool) -> anyhow::Result<Option<Vec<u8>>> 
                     return Ok(Some(password.into_bytes()));
                 }
             }
-            if !create { return Ok(None); }
-            let folder="Chromium Keys";
-            let exists:bool=proxy.call("hasFolder", &(handle,folder,app))?;
+            if !create {
+                return Ok(None);
+            }
+            let folder = "Chromium Keys";
+            let exists: bool = proxy.call("hasFolder", &(handle, folder, app))?;
             if !exists {
-                let made:bool=proxy.call("createFolder", &(handle,folder,app))?;
-                ensure!(made,"Could not create the launcher credential folder in KWallet");
+                let made: bool = proxy.call("createFolder", &(handle, folder, app))?;
+                ensure!(
+                    made,
+                    "Could not create the launcher credential folder in KWallet"
+                );
             }
             use ring::rand::SecureRandom;
-            let mut random=[0;16];
-            ring::rand::SystemRandom::new().fill(&mut random).map_err(|_|anyhow::anyhow!("Secure random generation failed"))?;
-            let password=STANDARD.encode(random);
+            let mut random = [0; 16];
+            ring::rand::SystemRandom::new()
+                .fill(&mut random)
+                .map_err(|_| anyhow::anyhow!("Secure random generation failed"))?;
+            let password = STANDARD.encode(random);
             // The profile owner excludes other launcher writers. Recheck before
             // creating an item so an existing OS credential is never reset.
-            let exists:bool=proxy.call("hasEntry", &(handle,folder,"Chromium Safe Storage",app))?;
-            ensure!(!exists,"A credential was created concurrently; retry to reuse it");
-            let status:i32=proxy.call("writePassword", &(handle,folder,"Chromium Safe Storage",password.as_str(),app))?;
-            ensure!(status==0,"Could not save the launcher key in KWallet");
+            let exists: bool =
+                proxy.call("hasEntry", &(handle, folder, "Chromium Safe Storage", app))?;
+            ensure!(
+                !exists,
+                "A credential was created concurrently; retry to reuse it"
+            );
+            let status: i32 = proxy.call(
+                "writePassword",
+                &(
+                    handle,
+                    folder,
+                    "Chromium Safe Storage",
+                    password.as_str(),
+                    app,
+                ),
+            )?;
+            ensure!(status == 0, "Could not save the launcher key in KWallet");
             Ok::<_, anyhow::Error>(Some(password.into_bytes()))
         })();
         let _: Result<i32, _> = proxy.call("close", &(handle, false, app));
@@ -329,8 +349,10 @@ pub(super) fn decrypt(value: &str) -> anyhow::Result<String> {
         #[cfg(target_os = "macos")]
         let candidates = vec![mac_password(app, false)];
         #[cfg(target_os = "linux")]
-        let lookups: [fn(&str,bool)->anyhow::Result<Option<Vec<u8>>>;2]=[libsecret_password,kwallet_password];
-        let candidates=lookups.into_iter().map(|lookup|lookup(app,false));
+        let lookups: [fn(&str, bool) -> anyhow::Result<Option<Vec<u8>>>; 2] =
+            [libsecret_password, kwallet_password];
+        #[cfg(target_os = "linux")]
+        let candidates = lookups.into_iter().map(|lookup| lookup(app, false));
         for candidate in candidates {
             match candidate {
                 Ok(Some(password)) => match open(&raw, &password, iterations) {
@@ -356,8 +378,10 @@ pub(super) fn encrypt(value: &str, existing: Option<&str>) -> anyhow::Result<Str
             #[cfg(target_os = "macos")]
             let candidates = vec![mac_password(app, false)];
             #[cfg(target_os = "linux")]
-            let lookups: [fn(&str,bool)->anyhow::Result<Option<Vec<u8>>>;2]=[libsecret_password,kwallet_password];
-        let candidates=lookups.into_iter().map(|lookup|lookup(app,false));
+            let lookups: [fn(&str, bool) -> anyhow::Result<Option<Vec<u8>>>; 2] =
+                [libsecret_password, kwallet_password];
+            #[cfg(target_os = "linux")]
+            let candidates = lookups.into_iter().map(|lookup| lookup(app, false));
             for candidate in candidates {
                 if let Ok(Some(password)) = candidate {
                     if open(&raw, &password, iterations).is_ok() {
@@ -390,7 +414,12 @@ pub(super) fn encrypt(value: &str, existing: Option<&str>) -> anyhow::Result<Str
                 return Ok(seal(value, &password, 1, b"v11"));
             }
         }
-        let password=match libsecret_password(APPS[0],true){Ok(Some(secret))=>secret,secret_result=>kwallet_password(APPS[0],true)?.or_else(||secret_result.ok().flatten()).context("Secure credential storage is unavailable")?};
+        let password = match libsecret_password(APPS[0], true) {
+            Ok(Some(secret)) => secret,
+            secret_result => kwallet_password(APPS[0], true)?
+                .or_else(|| secret_result.ok().flatten())
+                .context("Secure credential storage is unavailable")?,
+        };
         Ok(seal(value, &password, 1, b"v11"))
     }
 }
