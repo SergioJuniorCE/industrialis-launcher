@@ -68,59 +68,7 @@ fn days_from_civil(year: i64, month: u32, day: i64) -> i64 {
     era * 146097 + doe - 719468
 }
 
-fn is_digit_char(c: char) -> bool {
-    c.is_ascii_digit()
-}
-
-/// Approximation of `String.localeCompare(other, undefined, { numeric: true })`
-/// for version keys (digits, dots, hyphens, ascii letters): digit runs compare
-/// numerically, other runs compare by code point.
-fn compare_natural(left: &str, right: &str) -> std::cmp::Ordering {
-    use std::cmp::Ordering;
-    let mut l = left.chars().peekable();
-    let mut r = right.chars().peekable();
-    loop {
-        match (l.peek(), r.peek()) {
-            (None, None) => return Ordering::Equal,
-            (None, _) => return Ordering::Less,
-            (_, None) => return Ordering::Greater,
-            (Some(&lc), Some(&rc)) => {
-                if is_digit_char(lc) && is_digit_char(rc) {
-                    let mut lnum = String::new();
-                    let mut rnum = String::new();
-                    while let Some(&c) = l.peek() {
-                        if !is_digit_char(c) {
-                            break;
-                        }
-                        lnum.push(c);
-                        l.next();
-                    }
-                    while let Some(&c) = r.peek() {
-                        if !is_digit_char(c) {
-                            break;
-                        }
-                        rnum.push(c);
-                        r.next();
-                    }
-                    let ltrim = lnum.trim_start_matches('0');
-                    let rtrim = rnum.trim_start_matches('0');
-                    match ltrim.len().cmp(&rtrim.len()).then(ltrim.cmp(rtrim)) {
-                        Ordering::Equal => continue,
-                        ord => return ord,
-                    }
-                } else {
-                    match lc.cmp(&rc) {
-                        Ordering::Equal => {
-                            l.next();
-                            r.next();
-                        }
-                        ord => return ord,
-                    }
-                }
-            }
-        }
-    }
-}
+use crate::natural::compare_natural;
 
 /// Mirrors `compareVersionsByReleaseDate`: newest-first ordering value.
 /// Positive means `right` is newer than `left`.
@@ -129,8 +77,18 @@ pub fn compare_versions_by_release_date(
     right_key: &str,
     versions: Option<&HashMap<String, PackVersionMeta>>,
 ) -> i64 {
-    let left_date = parse_release_date_ms(versions.and_then(|v| v.get(left_key)).map(|m| m.release_date.as_str()).unwrap_or(""));
-    let right_date = parse_release_date_ms(versions.and_then(|v| v.get(right_key)).map(|m| m.release_date.as_str()).unwrap_or(""));
+    let left_date = parse_release_date_ms(
+        versions
+            .and_then(|v| v.get(left_key))
+            .map(|m| m.release_date.as_str())
+            .unwrap_or(""),
+    );
+    let right_date = parse_release_date_ms(
+        versions
+            .and_then(|v| v.get(right_key))
+            .map(|m| m.release_date.as_str())
+            .unwrap_or(""),
+    );
     if left_date != right_date {
         return right_date - left_date;
     }
@@ -143,10 +101,17 @@ pub fn compare_versions_by_release_date(
 }
 
 fn release_date_of(key: &str, versions: &HashMap<String, PackVersionMeta>) -> i64 {
-    parse_release_date_ms(versions.get(key).map(|m| m.release_date.as_str()).unwrap_or(""))
+    parse_release_date_ms(
+        versions
+            .get(key)
+            .map(|m| m.release_date.as_str())
+            .unwrap_or(""),
+    )
 }
 
-pub fn get_latest_pack_version(versions: Option<&HashMap<String, PackVersionMeta>>) -> Option<String> {
+pub fn get_latest_pack_version(
+    versions: Option<&HashMap<String, PackVersionMeta>>,
+) -> Option<String> {
     let versions = versions?;
     let mut keys: Vec<&String> = versions.keys().collect();
     if keys.is_empty() {
@@ -162,9 +127,16 @@ pub fn get_latest_pack_version(versions: Option<&HashMap<String, PackVersionMeta
     keys.into_iter().next().cloned()
 }
 
-pub fn get_pack_version_info(current_version: &str, versions: Option<&HashMap<String, PackVersionMeta>>) -> PackVersionInfo {
+pub fn get_pack_version_info(
+    current_version: &str,
+    versions: Option<&HashMap<String, PackVersionMeta>>,
+) -> PackVersionInfo {
     let Some(latest) = get_latest_pack_version(versions) else {
-        return PackVersionInfo { status: PackUpdateStatus::Unknown, current_version: current_version.to_string(), latest_version: None };
+        return PackVersionInfo {
+            status: PackUpdateStatus::Unknown,
+            current_version: current_version.to_string(),
+            latest_version: None,
+        };
     };
     if compare_versions_by_release_date(current_version, &latest, versions) > 0 {
         PackVersionInfo {
@@ -195,7 +167,11 @@ mod tests {
         .map(|(k, d)| {
             (
                 k.to_string(),
-                PackVersionMeta { title: "r".to_string(), release_date: d.to_string(), max_java_version: 25 },
+                PackVersionMeta {
+                    title: "r".to_string(),
+                    release_date: d.to_string(),
+                    max_java_version: 25,
+                },
             )
         })
         .collect()
@@ -204,7 +180,10 @@ mod tests {
     #[test]
     fn picks_newest_pack_as_latest() {
         let versions = catalog();
-        assert_eq!(get_latest_pack_version(Some(&versions)).as_deref(), Some("2.9.0-beta-1"));
+        assert_eq!(
+            get_latest_pack_version(Some(&versions)).as_deref(),
+            Some("2.9.0-beta-1")
+        );
     }
 
     #[test]
@@ -246,9 +225,16 @@ mod tests {
         for key in ["2.8.9", "2.8.10"] {
             versions.insert(
                 key.to_string(),
-                PackVersionMeta { title: "r".to_string(), release_date: "2025/01/01".to_string(), max_java_version: 25 },
+                PackVersionMeta {
+                    title: "r".to_string(),
+                    release_date: "2025/01/01".to_string(),
+                    max_java_version: 25,
+                },
             );
         }
-        assert_eq!(get_latest_pack_version(Some(&versions)).as_deref(), Some("2.8.10"));
+        assert_eq!(
+            get_latest_pack_version(Some(&versions)).as_deref(),
+            Some("2.8.10")
+        );
     }
 }

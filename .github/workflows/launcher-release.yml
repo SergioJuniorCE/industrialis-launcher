@@ -1,96 +1,201 @@
-name: Build and release launcher
+name: Build and release native launcher
 
 on:
   push:
     tags:
       - "launcher-v*"
+      - "launcher-gpui-v*"
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "major.minor.patch (build artifacts only; does not publish)"
+        required: true
+        default: "0.4.0"
+      channel:
+        description: "Build-only channel; tag pushes publish releases"
+        type: choice
+        options: [preview, stable]
+        default: stable
 
 concurrency:
-  group: launcher-release-${{ github.ref }}
+  group: launcher-gpui-release-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  BUILD_CHANNEL: ${{ startsWith(github.ref_name, 'launcher-gpui-v') && 'preview' || inputs.channel || 'stable' }}
 
 jobs:
   build:
-    name: ${{ matrix.name }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux x64
-            platform: ubuntu-22.04
-            target: linux
-            arch: x64
-          - name: Windows x64
-            platform: windows-latest
-            target: win32
-            arch: x64
-          - name: macOS Apple Silicon
-            platform: macos-14
-            target: darwin
-            arch: arm64
-
-    runs-on: ${{ matrix.platform }}
+          - os: windows-latest
+            artifact: windows-x64
+          - os: ubuntu-22.04
+            artifact: linux-x64
+          - os: macos-15
+            artifact: macos-arm64
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-
-      - name: Install Linux packaging dependencies
-        if: matrix.target == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fakeroot dpkg rpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Set release version
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/launcher-gpui
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libfontconfig1-dev libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev libvulkan-dev mesa-vulkan-drivers xvfb xauth openbox dbus xdg-utils fonts-dejavu-core python3 libxres1
+      - name: Windows installer compiler
+        if: runner.os == 'Windows'
+        run: choco install nsis --version=3.11 --yes --no-progress
+      - name: Stamp GPUI version
         shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          BUILD_VERSION: ${{ inputs.version }}
         run: |
-          version="${RELEASE_TAG#launcher-v}"
-          node scripts/set-launcher-version.mjs "$version"
-
-      - name: Build Electron artifacts
-        run: pnpm --dir apps/launcher exec electron-forge make --platform ${{ matrix.target }} --arch ${{ matrix.arch }}
-
-      - name: Upload platform artifacts
+          cargo fetch --locked --manifest-path apps/launcher-gpui/Cargo.toml
+          if [[ "$RELEASE_TAG" == launcher-gpui-v* ]]; then
+            version="${RELEASE_TAG#launcher-gpui-v}"
+          elif [[ "$RELEASE_TAG" == launcher-v* ]]; then
+            version="${RELEASE_TAG#launcher-v}"
+          else
+            version="${BUILD_VERSION:-0.4.0}"
+          fi
+          node scripts/set-gpui-launcher-version.mjs "$version"
+          cargo update --workspace --offline --manifest-path apps/launcher-gpui/Cargo.toml
+      - name: Test macOS backend and core
+        if: runner.os == 'macOS'
+        working-directory: apps/launcher-gpui
+        run: cargo test -p industrialis-core -p industrialis-backend --lib --tests --jobs 1 --locked
+      - name: Test backend, core and GPUI interactions
+        if: runner.os != 'macOS'
+        working-directory: apps/launcher-gpui
+        run: cargo test --workspace --lib --bins --tests --jobs 1 --features industrialis-app/packaged-updates --locked -- --test-threads=1
+      - name: Build native process fixtures
+        if: runner.os == 'Windows'
+        working-directory: apps/launcher-gpui
+        run: cargo build -p industrialis-app -p industrialis-backend -p industrialis-cli --examples --bin industrialis-cli --jobs 1 --locked
+      - name: Test cross-runtime ownership and detached game lifetime
+        if: runner.os == 'Windows'
+        run: node --test scripts/gpui-profile-owner.test.mjs scripts/gpui-game-broker.test.mjs
+      - name: Build Linux credential interoperability fixture
+        if: runner.os == 'Linux'
+        working-directory: apps/launcher-gpui
+        run: cargo build --workspace --example credential_compat --jobs 1 --locked --features industrialis-app/packaged-updates
+      - name: Test original Electron and native Linux credential interoperability
+        if: runner.os == 'Linux'
+        run: |
+          docker build -f apps/launcher-gpui/packaging/acceptance/linux-credentials.Dockerfile -t industrialis-gpui-credential-acceptance:local apps/launcher-gpui/packaging/acceptance
+          mkdir -p apps/launcher-gpui/target/credential-acceptance
+          docker run --rm --network none --name industrialis-gpui-credential-acceptance \
+            --mount "type=bind,source=$PWD,target=/repo,readonly" \
+            --mount "type=bind,source=$PWD/apps/launcher-gpui/target,target=/target,readonly" \
+            --mount "type=bind,source=$PWD/apps/launcher-gpui/target/credential-acceptance,target=/receipt" \
+            -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
+            industrialis-gpui-credential-acceptance:local \
+            sh scripts/test-gpui-linux-credentials.sh /opt/electron-fixture/electron /target/debug/examples/credential_compat /receipt/verification.json
+          docker run --rm --network none --name industrialis-gpui-kwallet-acceptance \
+            --mount "type=bind,source=$PWD,target=/repo,readonly" \
+            --mount "type=bind,source=$PWD/apps/launcher-gpui/target,target=/target,readonly" \
+            --mount "type=bind,source=$PWD/apps/launcher-gpui/target/credential-acceptance,target=/receipt" \
+            -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
+            industrialis-gpui-credential-acceptance:local \
+            sh scripts/test-gpui-linux-kwallet.sh /opt/electron-fixture/electron /target/debug/examples/credential_compat /receipt/kwallet-verification.json
+      - name: Retain Linux credential interoperability evidence
+        if: always() && runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: launcher-${{ matrix.target }}-${{ matrix.arch }}
-          path: apps/launcher/out/make/**
+          name: launcher-gpui-linux-credentials
+          path: apps/launcher-gpui/target/credential-acceptance/*verification.json
+          if-no-files-found: warn
+      - name: Linux native renderer startup and shutdown
+        if: runner.os == 'Linux'
+        run: sh scripts/test-gpui-linux-render.sh
+      - name: Test version and artifact contracts
+        run: node --test scripts/gpui-packaging.test.mjs scripts/gpui-notices.test.mjs scripts/gpui-windows-runtime.test.mjs
+      - name: Test Windows installer wait and guest interop declarations
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -File scripts/test-gpui-windows-process-exit.ps1
+      - name: Test Linux portable extraction guards
+        if: runner.os == 'Linux'
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 scripts/gpui-linux-portable-smoke.test.py
+      - name: Test prepared stable update channel
+        working-directory: apps/launcher-gpui
+        run: cargo test -p industrialis-backend --lib release_updater::tests --features stable-updates --jobs 1 --locked
+      - name: Build and package
+        shell: bash
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+        run: node scripts/build-launcher-gpui.mjs --channel "$BUILD_CHANNEL"
+      - name: Verify and boot the actual Linux portable
+        if: runner.os == 'Linux'
+        env:
+          GPUI_PACKAGE_CHANNEL: ${{ env.BUILD_CHANNEL }}
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: sh scripts/test-gpui-linux-portable.sh "$PWD/apps/launcher-gpui/dist/IndustrialisGPUI-linux-x64.tar.gz" "$PWD/apps/launcher-gpui/target/release/industrialis" "$PWD/apps/launcher-gpui/dist"
+      - name: Retain Linux packaged acceptance evidence
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-gpui-linux-acceptance
+          path: |
+            apps/launcher-gpui/dist/verification.json
+            apps/launcher-gpui/dist/portable-render.png
+            apps/launcher-gpui/dist/portable-native.log
+          if-no-files-found: warn
+      - name: Verify Windows artifact bytes, metadata and notices
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+        run: powershell -NoProfile -File scripts/verify-gpui-windows-artifacts.ps1 -Channel $env:BUILD_CHANNEL
+      - name: Windows installer handoff smoke test
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -File scripts/test-gpui-windows-updater.ps1 -MakeNSIS "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+      - name: Windows old-installer retirement guards
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -File scripts/test-gpui-windows-retirement.ps1 -MakeNSIS "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-gpui-${{ matrix.artifact }}
+          path: |
+            apps/launcher-gpui/dist/*.exe
+            apps/launcher-gpui/dist/*.zip
+            apps/launcher-gpui/dist/*.dmg
+            apps/launcher-gpui/dist/*.tar.gz
           if-no-files-found: error
 
   release:
-    name: Publish launcher release
     needs: build
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/launcher-v')
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/launcher-v') || startsWith(github.ref, 'refs/tags/launcher-gpui-v'))
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
-      - name: Download platform artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          pattern: launcher-*
+          pattern: launcher-gpui-*-*64
           path: release-assets
           merge-multiple: true
-
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          body: Automated build for ${{ github.ref_name }} at commit ${{ github.sha }}.
+          prerelease: ${{ startsWith(github.ref_name, 'launcher-gpui-v') }}
+          make_latest: ${{ startsWith(github.ref_name, 'launcher-v') }}
           generate_release_notes: true
-          files: release-assets/**/*
+          body_path: apps/launcher-gpui/RELEASE_NOTES.md
+          files: release-assets/*

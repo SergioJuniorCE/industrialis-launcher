@@ -1,14 +1,15 @@
 //! Port of `apps/launcher/src/lib/instance-settings.ts`.
 //!
-//! Note: the Electron backend's `types.ts` variant carries two extra fields
-//! (`cached_size_bytes`, `custom_icon`); the frontend shape ported here is the
-//! canonical settings document. Backend-only fields arrive in Phase 2.
+//! Includes backend-owned size/icon fields and unknown-field preservation for
+//! documents authored by other launcher versions.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InstanceSettings {
+    #[serde(flatten)]
+    pub extra_fields: serde_json::Map<String, serde_json::Value>,
     pub name: String,
     pub pack_version: String,
     pub pack_java_type: String,
@@ -54,11 +55,16 @@ pub struct InstanceSettings {
     pub env_vars: HashMap<String, String>,
     #[serde(default)]
     pub custom_icon: Option<String>,
+    /// Maintained by the backend (`refreshSizes`); absent from the TS frontend
+    /// shape but present in backend `types.ts` and on-disk documents.
+    #[serde(default)]
+    pub cached_size_bytes: u64,
 }
 
 impl Default for InstanceSettings {
     fn default() -> Self {
         Self {
+            extra_fields: Default::default(),
             name: String::new(),
             pack_version: String::new(),
             pack_java_type: "java17+".to_string(),
@@ -101,6 +107,7 @@ impl Default for InstanceSettings {
             override_env: false,
             env_vars: HashMap::new(),
             custom_icon: None,
+            cached_size_bytes: 0,
         }
     }
 }
@@ -113,6 +120,7 @@ pub fn merge_instance_settings(disk: Option<InstanceSettings>) -> InstanceSettin
         return InstanceSettings::default();
     };
     let mut merged = InstanceSettings::default();
+    merged.extra_fields = disk.extra_fields;
     merged.name = disk.name;
     merged.pack_version = disk.pack_version;
     merged.pack_java_type = disk.pack_java_type;
@@ -155,6 +163,7 @@ pub fn merge_instance_settings(disk: Option<InstanceSettings>) -> InstanceSettin
     merged.override_env = disk.override_env;
     merged.env_vars.extend(disk.env_vars);
     merged.custom_icon = disk.custom_icon;
+    merged.cached_size_bytes = disk.cached_size_bytes;
     merged
 }
 
@@ -184,9 +193,26 @@ struct PartialInstanceSettings {
 impl PartialInstanceSettings {
     fn into_full(self) -> InstanceSettings {
         let mut full = InstanceSettings::default();
-        let get_str = |key: &str| self.inner.get(key).and_then(|v| v.as_str()).map(str::to_string);
+        let known = serde_json::to_value(&full).unwrap();
+        full.extra_fields = self
+            .inner
+            .iter()
+            .filter(|(key, _)| known.get(*key).is_none())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let get_str = |key: &str| {
+            self.inner
+                .get(key)
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+        };
         let get_bool = |key: &str| self.inner.get(key).and_then(|v| v.as_bool());
-        let get_u32 = |key: &str| self.inner.get(key).and_then(|v| v.as_u64()).and_then(|v| u32::try_from(v).ok());
+        let get_u32 = |key: &str| {
+            self.inner
+                .get(key)
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok())
+        };
         let get_u64 = |key: &str| self.inner.get(key).and_then(|v| v.as_u64());
         if let Some(v) = get_str("name") {
             full.name = v;
@@ -200,7 +226,12 @@ impl PartialInstanceSettings {
         if let Some(v) = get_bool("backups_enabled") {
             full.backups_enabled = v;
         }
-        if let Some(v) = self.inner.get("backup_retention_override").and_then(|v| v.as_u64()).and_then(|v| u32::try_from(v).ok()) {
+        if let Some(v) = self
+            .inner
+            .get("backup_retention_override")
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok())
+        {
             full.backup_retention_override = Some(v);
         }
         if let Some(v) = get_str("java_path") {
@@ -286,6 +317,9 @@ impl PartialInstanceSettings {
         if let Some(v) = get_str("custom_icon") {
             full.custom_icon = Some(v);
         }
+        if let Some(v) = get_u64("cached_size_bytes") {
+            full.cached_size_bytes = v;
+        }
         full
     }
 }
@@ -314,7 +348,9 @@ mod tests {
 
     #[test]
     fn partial_json_merges_over_defaults() {
-        let parsed = parse_instance_settings_json(r#"{"name":"GTNH","max_ram_mb":8192,"env_vars":{"A":"1"}}"#);
+        let parsed = parse_instance_settings_json(
+            r#"{"name":"GTNH","max_ram_mb":8192,"env_vars":{"A":"1"}}"#,
+        );
         assert_eq!(parsed.name, "GTNH");
         assert_eq!(parsed.max_ram_mb, 8192);
         // Untouched keys keep defaults.
@@ -325,7 +361,10 @@ mod tests {
 
     #[test]
     fn invalid_json_yields_defaults() {
-        assert_eq!(parse_instance_settings_json("not json"), InstanceSettings::default());
+        assert_eq!(
+            parse_instance_settings_json("not json"),
+            InstanceSettings::default()
+        );
     }
 
     #[test]

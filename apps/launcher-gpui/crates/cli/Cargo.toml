@@ -1,0 +1,17 @@
+[package]
+name = "industrialis-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "industrialis-cli"
+path = "src/main.rs"
+
+[dependencies]
+industrialis-core.workspace = true
+industrialis-backend.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

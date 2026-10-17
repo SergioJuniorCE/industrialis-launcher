@@ -37,3 +37,4 @@ terminals/
 *.njsproj
 *.sln
 *.sw?
+apps/launcher-gpui/dist/
