@@ -5,6 +5,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location("portable", Path(__file__).with_name("gpui-linux-portable-smoke.py"))
 portable = importlib.util.module_from_spec(spec)
@@ -53,6 +54,40 @@ class ArchiveAcceptance(unittest.TestCase):
                     portable.unpack_archive(self.archive(root, entry), root / "output")
                 self.assertFalse((root / "output").exists())
                 self.assertFalse((root / "escaped").exists())
+
+
+class RenderAcceptance(unittest.TestCase):
+    def xlib(self, pixel):
+        xlib = mock.Mock()
+        xlib.XOpenDisplay.return_value = 1
+        xlib.XGetImage.return_value = 2
+        xlib.XGetPixel.side_effect = pixel
+        return xlib
+
+    def test_sparse_rendered_pixels_are_counted_and_saved(self):
+        # A small rendered label can fall entirely between the old ten-pixel
+        # sample points, particularly now that the empty details pane is gone.
+        xlib = self.xlib(lambda image, x, y: x if y == 17 and 17 <= x <= 25 else 0)
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(portable.c, "CDLL", return_value=xlib):
+            image = Path(temporary) / "render.png"
+            self.assertEqual(portable.capture(3, 45, 45, image), 10)
+            self.assertTrue(image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
+
+    def test_waits_for_a_presented_frame(self):
+        child = mock.Mock()
+        child.poll.return_value = None
+        with mock.patch.object(portable, "capture", side_effect=[1, 10]) as capture, mock.patch.object(portable.time, "sleep"):
+            self.assertEqual(portable.wait_for_render(child, 3, 45, 45, Path("render.png")), 10)
+            self.assertEqual(capture.call_count, 2)
+
+    def test_blank_frame_is_rejected_and_retained_as_evidence(self):
+        child = mock.Mock()
+        child.poll.return_value = None
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(portable.c, "CDLL", return_value=self.xlib(lambda *args: 0)):
+            image = Path(temporary) / "blank.png"
+            with self.assertRaisesRegex(AssertionError, "1 distinct colors"):
+                portable.wait_for_render(child, 3, 45, 45, image, timeout=0)
+            self.assertTrue(image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
 
 
 if __name__ == "__main__":

@@ -119,14 +119,13 @@ def capture(window, width, height, destination):
     image = x.XGetImage(display, window, 0, 0, width, height, c.c_ulong(-1), 2)
     try:
         assert image, "Could not read the owned window"
-        colors = {x.XGetPixel(image, px, py) & 0xffffff
-                  for py in range(16, height - 16, 10) for px in range(16, width - 16, 10)}
-        assert len(colors) >= 8, "Portable window has not rendered its UI"
+        colors = set()
         pixels = bytearray()
         for py in range(height):
             pixels.append(0)
             for px in range(width):
-                pixel = x.XGetPixel(image, px, py)
+                pixel = x.XGetPixel(image, px, py) & 0xffffff
+                colors.add(pixel)
                 pixels.extend(((pixel >> 16) & 255, (pixel >> 8) & 255, pixel & 255))
         def chunk(kind, data):
             return struct.pack("!I", len(data)) + kind + data + struct.pack("!I", zlib.crc32(kind + data))
@@ -138,6 +137,22 @@ def capture(window, width, height, destination):
         if image:
             x.XDestroyImage(image)
         x.XCloseDisplay(display)
+
+
+def wait_for_render(child, window, width, height, destination, timeout=60):
+    # Mapping the window does not mean its first GPU frame has been presented.
+    # Keep the same nonblank-frame requirement, but inspect all pixels and keep
+    # the last PNG even on failure so CI can distinguish delay from broken paint.
+    deadline = time.monotonic() + timeout
+    while True:
+        assert child.poll() is None, "Portable launcher exited before rendering"
+        colors = capture(window, width, height, destination)
+        if colors >= 8:
+            return colors
+        assert time.monotonic() < deadline, (
+            f"Portable window has not rendered its UI: {colors} distinct colors; see {destination}"
+        )
+        time.sleep(0.2)
 
 
 def main():
@@ -204,9 +219,8 @@ def main():
                         break
                     time.sleep(0.2)
                 assert len(matches) == 1, "Portable launcher has no unique visible owned window"
-                time.sleep(3)
                 window, _, _, width, height = matches[0]
-                colors = capture(window, width, height, output / "portable-render.png")
+                colors = wait_for_render(child, window, width, height, output / "portable-render.png")
                 activation = verify_second_launch_activation(helper, child, binary, folder, env, window)
                 protocol = (verify_second_launch_activation(helper, child, binary, folder, env, window,
                             ["xdg-open", "industrialislauncher://owned-acceptance"])
