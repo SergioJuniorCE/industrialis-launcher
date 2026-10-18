@@ -45,7 +45,7 @@ if ($metadata.ProductVersion -ne $expectedVersion -or $metadata.FileVersion -ne 
 }
 $installerMetadata = (Get-Item -LiteralPath $installer).VersionInfo
 if ($installerMetadata.FileVersion -ne $expectedVersion) { throw 'Installer version differs from the package version' }
-[ordered]@{
+$report = [ordered]@{
   version = $expectedVersion
   channel = $Channel
   portableEntries = $actualNames
@@ -56,3 +56,6 @@ if ($installerMetadata.FileVersion -ne $expectedVersion) { throw 'Installer vers
   externalMsvcRuntime = $runtime.externalMsvcRuntime
   importedLibraries = $runtime.imports
 } | ConvertTo-Json -Depth 3
+
+[IO.File]::WriteAllText((Join-Path $artifactRoot "verification.json"), $report)
+$report

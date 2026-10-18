@@ -9,7 +9,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
-    time::SystemTime,
+    time::{Duration, Instant, SystemTime},
 };
 
 pub const MAX_RESULTS: usize = 2000;
@@ -33,6 +33,7 @@ struct IndexedPath {
 struct Snapshot {
     root: PathBuf,
     revision: u64,
+    built_at: Instant,
     folders: Vec<(PathBuf, Option<SystemTime>)>,
     files: Vec<IndexedPath>,
     unreadable: usize,
@@ -69,6 +70,10 @@ impl FileIndex {
             let fresh = cache.as_ref().is_some_and(|s| {
                 s.root == root
                     && s.revision == revision
+                    // Directory timestamps may share a tick with a rename, or
+                    // be coarse on network filesystems. Never keep such a
+                    // snapshot indefinitely while the user keeps searching.
+                    && s.built_at.elapsed() < Duration::from_secs(5)
                     && s.folders.iter().all(|(dir, stamp)| {
                         !stopped()
                             && std::fs::symlink_metadata(dir)
@@ -83,6 +88,7 @@ impl FileIndex {
                 let mut snapshot = Snapshot {
                     root: root.clone(),
                     revision,
+                    built_at: Instant::now(),
                     folders: Vec::new(),
                     files: Vec::new(),
                     unreadable: 0,
@@ -130,6 +136,7 @@ impl FileIndex {
                 }
                 #[cfg(test)]
                 index.scans.fetch_add(1, Ordering::Relaxed);
+                snapshot.built_at = Instant::now();
                 *cache = Some(snapshot);
             }
             let snapshot = cache.as_ref().unwrap();
@@ -167,11 +174,17 @@ impl FileIndex {
                 // indicators cannot be served from stale per-file metadata.
                 let path = match scoped(&paths, &id, ".minecraft", &file.rel, false) {
                     Ok(p) => p,
-                    Err(_) => continue,
+                    Err(_) => {
+                        index.invalidate();
+                        continue;
+                    }
                 };
                 let meta = match std::fs::symlink_metadata(path) {
                     Ok(m) if m.is_file() && !linked(&m) => m,
-                    _ => continue,
+                    _ => {
+                        index.invalidate();
+                        continue;
+                    }
                 };
                 let editable = is_path_editable(&file.rel);
                 let persistent = scoped(&paths, &id, "persistent-minecraft", &file.rel, false)
@@ -305,6 +318,11 @@ mod tests {
             "Typing must reuse the existing index"
         );
         std::fs::rename(game.join("ranks.txt"), game.join("permissions.txt")).unwrap();
+        // Reproduce a filesystem timestamp tick shared by the scan and rename.
+        // Validation sees unchanged stamps even though a cached file has moved.
+        for (folder, stamp) in &mut index.snapshot.lock().unwrap().as_mut().unwrap().folders {
+            *stamp = std::fs::metadata(folder).unwrap().modified().ok();
+        }
         assert!(index
             .search(&paths, "pack", "ranks.txt", Arc::new(false.into()))
             .await
@@ -328,6 +346,30 @@ mod tests {
             .unwrap()
             .entries
             .is_empty());
+        // Clear the removal invalidation, then add a file without an observable
+        // timestamp change. The safety refresh must also discover pure additions.
+        index
+            .search(&paths, "pack", "added", Arc::new(false.into()))
+            .await
+            .unwrap();
+        std::fs::write(game.join("added.cfg"), "new").unwrap();
+        {
+            let mut cache = index.snapshot.lock().unwrap();
+            let snapshot = cache.as_mut().unwrap();
+            for (folder, stamp) in &mut snapshot.folders {
+                *stamp = std::fs::metadata(folder).unwrap().modified().ok();
+            }
+            snapshot.built_at = Instant::now() - Duration::from_secs(6);
+        }
+        assert_eq!(
+            index
+                .search(&paths, "pack", "added", Arc::new(false.into()))
+                .await
+                .unwrap()
+                .entries
+                .len(),
+            1
+        );
         std::fs::remove_dir_all(paths.base()).unwrap();
     }
     #[tokio::test]

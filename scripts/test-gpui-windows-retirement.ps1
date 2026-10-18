@@ -82,8 +82,11 @@ if ($MakeNSIS) {
     $installed = Join-Path $destination 'industrialis.exe'
     if ($previous) { [IO.File]::WriteAllText($installed, 'previous GPUI bytes') }
     $process = Start-Process -FilePath $setup -ArgumentList @('/S', "/D=$destination") -WindowStyle Hidden -PassThru
+    # Retain the native handle before waiting; Windows PowerShell can otherwise
+    # lose a short-lived redirected child's exit code.
+    $ownedHandle = $process.Handle
     if (-not $process.WaitForExit(30000)) { throw 'Retirement failure fixture did not finish' }
-    if ($process.ExitCode -eq 0) { throw 'Failed retirement was reported as successful' }
+    if ($null -eq $process.ExitCode -or $process.ExitCode -eq 0) { throw 'Failed retirement did not report a nonzero exit code' }
     if ($previous) {
       if ([IO.File]::ReadAllText($installed) -ne 'previous GPUI bytes') { throw 'Previous GPUI executable was not restored' }
     } elseif (Test-Path -LiteralPath $installed) { throw 'Failed first cutover kept its replacement executable' }

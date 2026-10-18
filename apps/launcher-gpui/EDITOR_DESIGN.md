@@ -24,7 +24,9 @@ above weaker subsequences; this is not a file-content search or typo correction.
 
 The first query builds a per-instance, in-memory path index on a backend worker.
 Later queries reuse that index, checking directory modification timestamps for
-added, removed, or renamed entries. Refresh explicitly invalidates it. Matched-file
+added, removed, or renamed entries. A missing cached file invalidates the next
+query immediately; a five-second safety refresh bounds staleness when a filesystem
+timestamp does not change. Refresh explicitly invalidates it. Matched-file
 metadata is checked at query time for deletions, current sizes, and persistent
 override indicators. Nothing is indexed on disk and file contents are not read.
 The debounce is 60 ms; superseded requests are cancelled. The 2,001-file regression

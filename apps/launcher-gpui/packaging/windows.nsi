@@ -47,18 +47,18 @@ Function .onInit
     SetSilent silent
     ${GetOptions} $R0 "/READYFILE=" $ReadyFile
     ${If} $ReadyFile == ""
-      MessageBox MB_ICONSTOP "The update readiness path is missing. The launcher was kept open."
+      MessageBox MB_ICONSTOP "The update readiness path is missing. The launcher was kept open." /SD IDOK
       SetErrorLevel 1
       Abort
     ${EndIf}
     IfFileExists "$INSTDIR\gpui-install.json" +4 0
-      MessageBox MB_ICONSTOP "This is not a GPUI installation. Use the normal installer."
+      MessageBox MB_ICONSTOP "This is not a GPUI installation. Use the normal installer." /SD IDOK
       SetErrorLevel 1
       Abort
     System::Call 'kernel32::OpenProcess(i 0x00100000, i 0, i $UpdatePID) p .r0'
     StrCpy $ProcessHandle $0
     ${If} $ProcessHandle == 0
-      MessageBox MB_ICONSTOP "Could not wait for the launcher to exit. It was kept open."
+      MessageBox MB_ICONSTOP "Could not wait for the launcher to exit. It was kept open." /SD IDOK
       SetErrorLevel 1
       Abort
     ${EndIf}
@@ -75,7 +75,7 @@ Function .onInit
     System::Call 'kernel32::CloseHandle(p $ProcessHandle)'
     Delete "$ReadyFile"
     ${If} $1 != 0
-      MessageBox MB_ICONSTOP "The launcher is still open. Close it and retry the update."
+      MessageBox MB_ICONSTOP "The launcher is still open. Close it and retry the update." /SD IDOK
       SetErrorLevel 1
       Abort
     ${EndIf}
@@ -90,7 +90,7 @@ Section "Launcher"
   ClearErrors
   Rename "$INSTDIR\industrialis.exe" "$INSTDIR\industrialis.exe.previous"
   ${If} ${Errors}
-    MessageBox MB_ICONSTOP "Close other launcher windows and retry. No files were replaced."
+    MessageBox MB_ICONSTOP "Close other launcher windows and retry. No files were replaced." /SD IDOK
     SetErrorLevel 1
     Abort
   ${EndIf}
@@ -100,7 +100,7 @@ extract:
   ${If} ${Errors}
     Delete "$INSTDIR\industrialis.exe"
     Rename "$INSTDIR\industrialis.exe.previous" "$INSTDIR\industrialis.exe"
-    MessageBox MB_ICONSTOP "Could not install the launcher. The previous executable was restored."
+    MessageBox MB_ICONSTOP "Could not install the launcher. The previous executable was restored." /SD IDOK
     SetErrorLevel 1
     Abort
   ${EndIf}
@@ -113,7 +113,7 @@ extract:
   ${If} $R4 != 0
     Delete "$INSTDIR\industrialis.exe"
     Rename "$INSTDIR\industrialis.exe.previous" "$INSTDIR\industrialis.exe"
-    MessageBox MB_ICONSTOP "Could not retire the original launcher. Close launcher windows and retry, or review the old installation. GPUI was not started and your profile has not been moved or deleted."
+    MessageBox MB_ICONSTOP "Could not retire the original launcher. Close launcher windows and retry, or review the old installation. GPUI was not started and your profile has not been moved or deleted." /SD IDOK
     SetErrorLevel 1
     Abort
   ${EndIf}
@@ -167,7 +167,7 @@ Section "Uninstall"
   ClearErrors
   Delete "$INSTDIR\industrialis.exe"
   ${If} ${Errors}
-    MessageBox MB_ICONSTOP "Close the launcher before uninstalling. Your data has not been removed."
+    MessageBox MB_ICONSTOP "Close the launcher before uninstalling. Your data has not been removed." /SD IDOK
     SetErrorLevel 1
     Abort
   ${EndIf}
