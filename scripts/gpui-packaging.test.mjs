@@ -23,6 +23,18 @@ test("GPUI version stamping keeps package, Cargo, About and Windows metadata on 
   assert.equal(readCargoVersion('[package]\nversion = "1.0.0"\n[dependencies]\nversion = "2.0.0"\n'), "1.0.0");
 });
 
+test("Windows packaging exposes the public product name without the migration codename", async () => {
+  const installer = await readFile(path.join(app, "packaging/windows.nsi"), "utf8");
+  const build = await readFile(path.join(app, "crates/app/build.rs"), "utf8");
+  assert.match(installer, /^Name "Industrialis Launcher"$/m);
+  assert.match(installer, /^InstallDir "\$LOCALAPPDATA\\Programs\\Industrialis Launcher"$/m);
+  assert.match(installer, /"ProductName" "Industrialis Launcher"/);
+  assert.match(installer, /"FileDescription" "Industrialis Launcher Installer"/);
+  assert.match(installer, /"DisplayName" "Industrialis Launcher"/);
+  assert.match(installer, /CreateShortcut "\$SMPROGRAMS\\Industrialis Launcher\.lnk"/);
+  assert.match(build, /"FileDescription", "Industrialis Launcher\\0"/);
+});
+
 test("stable native release and optional previews use the correct update channels", async () => {
   const workflow = await readFile(path.join(app, "../../.github/workflows/launcher-release.yml"), "utf8");
   const updater = await readFile(path.join(app, "crates/backend/src/release_updater.rs"), "utf8");

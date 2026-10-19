@@ -81,7 +81,7 @@ if (process.platform === "win32") {
     await copyFile(license, path.join(portable, "LICENSE"));
     await writeFile(
       path.join(portable, "README.txt"),
-      `Industrialis GPUI ${version}\r\nPortable builds use manual launcher updates. Instances/settings use the normal app-data directory.\r\n`,
+      `Industrialis Launcher ${version}\r\nPortable builds use manual launcher updates. Instances/settings use the normal app-data directory.\r\n`,
     );
     run("powershell.exe", [
       "-NoProfile",
@@ -107,7 +107,7 @@ if (process.platform === "win32") {
     ]);
   }
 } else if (process.platform === "darwin") {
-  const bundle = path.join(staging, "Industrialis GPUI.app/Contents");
+  const bundle = path.join(staging, "Industrialis Launcher.app/Contents");
   await mkdir(path.join(bundle, "MacOS"), { recursive: true });
   await mkdir(path.join(bundle, "Resources"));
   await copyFile(binary, path.join(bundle, "MacOS/industrialis"));
@@ -117,13 +117,13 @@ if (process.platform === "win32") {
   await copyFile(license, path.join(bundle, "Resources/LICENSE"));
   await writeFile(
     path.join(bundle, "Info.plist"),
-    `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.industrialis.launcher.gpui</string><key>CFBundleName</key><string>Industrialis GPUI</string><key>CFBundleExecutable</key><string>industrialis</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleIconFile</key><string>icon.icns</string><key>CFBundleShortVersionString</key><string>${version}</string><key>CFBundleVersion</key><string>${version}</string><key>NSHighResolutionCapable</key><true/>${replacement ? "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>Industrialis Launcher</string><key>CFBundleURLSchemes</key><array><string>industrialislauncher</string></array></dict></array>" : ""}</dict></plist>\n`,
+    `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.industrialis.launcher.gpui</string><key>CFBundleName</key><string>Industrialis Launcher</string><key>CFBundleExecutable</key><string>industrialis</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleIconFile</key><string>icon.icns</string><key>CFBundleShortVersionString</key><string>${version}</string><key>CFBundleVersion</key><string>${version}</string><key>NSHighResolutionCapable</key><true/>${replacement ? "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>Industrialis Launcher</string><key>CFBundleURLSchemes</key><array><string>industrialislauncher</string></array></dict></array>" : ""}</dict></plist>\n`,
   );
   run("codesign", ["--force", "--deep", "--sign", "-", path.dirname(bundle)]);
   run("hdiutil", [
     "create",
     "-volname",
-    "Industrialis GPUI",
+    "Industrialis Launcher",
     "-srcfolder",
     staging,
     "-ov",
@@ -141,11 +141,11 @@ if (process.platform === "win32") {
   await copyFile(path.join(app, "crates/app/assets/brand.png"), path.join(folder, "icon.png"));
   await writeFile(
     path.join(folder, "industrialis-gpui.desktop"),
-    `[Desktop Entry]\nType=Application\nName=Industrialis GPUI\nExec=industrialis %u\nIcon=industrialis-gpui\nCategories=Game;\nTerminal=false\n${replacement ? "MimeType=x-scheme-handler/industrialislauncher;\n" : ""}`,
+    `[Desktop Entry]\nType=Application\nName=Industrialis Launcher\nExec=industrialis %u\nIcon=industrialis-gpui\nCategories=Game;\nTerminal=false\n${replacement ? "MimeType=x-scheme-handler/industrialislauncher;\n" : ""}`,
   );
   await writeFile(
     path.join(folder, "README.txt"),
-    `Industrialis GPUI ${version}\nRun ./industrialis. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig, X11 or Wayland libraries. Launcher updates are manual.\nIf an older Mesa software driver shows a black window, try: VK_DRIVER_FILES=/dev/null VK_ICD_FILENAMES=/dev/null LIBGL_ALWAYS_SOFTWARE=1 ./industrialis\nDesktop installation: put this directory on PATH, install icon.png as industrialis-gpui, and copy industrialis-gpui.desktop to ~/.local/share/applications/. ${replacement ? "Register it with: xdg-mime default industrialis-gpui.desktop x-scheme-handler/industrialislauncher" : "Preview desktop files do not register the original launcher protocol."}\n`,
+    `Industrialis Launcher ${version}\nRun ./industrialis. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig, X11 or Wayland libraries. Launcher updates are manual.\nIf an older Mesa software driver shows a black window, try: VK_DRIVER_FILES=/dev/null VK_ICD_FILENAMES=/dev/null LIBGL_ALWAYS_SOFTWARE=1 ./industrialis\nDesktop installation: put this directory on PATH, install icon.png as industrialis-gpui, and copy industrialis-gpui.desktop to ~/.local/share/applications/. ${replacement ? "Register it with: xdg-mime default industrialis-gpui.desktop x-scheme-handler/industrialislauncher" : "Preview desktop files do not register the original launcher protocol."}\n`,
   );
   run("tar", ["-czf", path.join(out, "IndustrialisGPUI-linux-x64.tar.gz"), "-C", staging, "industrialis-gpui"]);
 }

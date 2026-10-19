@@ -232,7 +232,7 @@ try {
   } else {
     Run-Installer (Join-Path $inputRoot 'gpui-setup.exe') @('/S')
   }
-  $installed = Join-Path $local 'Programs/Industrialis GPUI/industrialis.exe'
+  $installed = Join-Path $local 'Programs/Industrialis Launcher/industrialis.exe'
   if ((Get-FileHash -LiteralPath $installed).Hash -ne $marker.gpuiExecutableSha256) { throw 'Installed GPUI bytes differ from compiled input' }
   foreach ($exe in $oldExecutables) { if (Test-Path -LiteralPath $exe) { throw 'Actual legacy executable survived retirement' } }
   foreach ($shortcut in $oldShortcuts) { if (Test-Path -LiteralPath $shortcut) { throw 'Actual legacy shortcut survived retirement' } }
@@ -334,7 +334,7 @@ public static class GpuiGuestActivation {
   $report.nativeNormalClose = $true
   $afterBoot = Snapshot $dataDirectory
   Progress 'Uninstalling actual GPUI package and checking profile and dead-protocol cleanup'
-  Run-Installer (Join-Path $local 'Programs/Industrialis GPUI/Uninstall.exe') @('/S')
+  Run-Installer (Join-Path $local 'Programs/Industrialis Launcher/Uninstall.exe') @('/S')
   $deadline = [DateTime]::UtcNow.AddSeconds(30)
   while (Test-Path -LiteralPath $installed) {
     if ([DateTime]::UtcNow -gt $deadline) { throw 'GPUI executable survived uninstall' }

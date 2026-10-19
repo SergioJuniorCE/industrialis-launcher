@@ -47,5 +47,5 @@ export async function collectNotices(metadata, rootName = "industrialis-app") {
     });
   }
   entries.sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
-  return `Industrialis GPUI dependency notices\n\nGenerated from the locked Cargo app dependency graph. Declared license expressions and supplied notices are reproduced below. This inventory does not determine redistribution obligations.\n\n${entries.map((entry) => entry.text).join("\n\n" + "=".repeat(72) + "\n\n")}\n`;
+  return `Industrialis Launcher dependency notices\n\nGenerated from the locked Cargo app dependency graph. Declared license expressions and supplied notices are reproduced below. This inventory does not determine redistribution obligations.\n\n${entries.map((entry) => entry.text).join("\n\n" + "=".repeat(72) + "\n\n")}\n`;
 }

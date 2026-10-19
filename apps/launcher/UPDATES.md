@@ -32,10 +32,12 @@ still check versions, but open the release page for manual replacement.
 ## Windows installation
 
 The per-user NSIS installer installs `industrialis.exe` and `gpui-install.json`
-in `%LOCALAPPDATA%\Programs\Industrialis GPUI` by default. The marker identifies
-an installation that the updater may replace; it is omitted from portable ZIPs.
-The preview uses a separate install directory, shortcut, and uninstall entry.
-It does not remove the Electron installation or migrate encrypted accounts.
+in `%LOCALAPPDATA%\Programs\Industrialis Launcher` by default. Existing native
+installations keep their registered install directory when upgraded. The marker
+identifies an installation that the updater may replace; it is omitted from
+portable ZIPs. The preview uses a separate install directory, shortcut, and
+uninstall entry. It does not remove the Electron installation or migrate
+encrypted accounts.
 
 `node scripts/build-launcher-gpui.mjs --replacement` also registers the retained
 `industrialislauncher:` scheme. Default preview artifacts omit that registration.
