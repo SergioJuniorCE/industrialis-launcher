@@ -7,7 +7,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$app = Join-Path $repo 'apps/launcher-gpui'
+$app = Join-Path $repo 'apps/launcher'
 $legacy = (Resolve-Path -LiteralPath $LegacyInstaller).Path
 $stable = (Resolve-Path -LiteralPath $StableArtifactDirectory).Path
 $receipt = Get-Content -LiteralPath (Join-Path $stable 'verification.json') -Raw | ConvertFrom-Json

@@ -1,4 +1,4 @@
-// Kept in sync with launcher-gpui/backend/profile_owner.rs. This is an
+// Kept in sync with crates/backend/src/profile_owner.rs. This is an
 // ownership/activation endpoint only: no credentials or profile payloads cross it.
 import { createHash } from "node:crypto";
 import { mkdir, realpath } from "node:fs/promises";

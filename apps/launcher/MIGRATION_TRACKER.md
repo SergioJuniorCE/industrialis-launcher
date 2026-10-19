@@ -9,8 +9,13 @@ the production launcher tag workflow. Electron source/build dependencies are
 removed; the original profile path and installer retirement safeguards remain.
 The immutable last-Electron release is launcher-v0.3.0.
 
-Audit date: 2026-10-06. Goal: replace the Electron launcher, then delete
-`apps/launcher` without losing existing workflows or user data.
+The native [0.4.0 stable release](https://github.com/SergioJuniorCE/industrialis-launcher/releases/tag/launcher-v0.4.0)
+was published and its public downloads/updater feed verified on 2026-10-19.
+See [published cutover evidence](CUTOVER.md#public-stable-release-verified-2026-10-19).
+
+Audit date: 2026-10-06. The goal was to replace the Electron launcher without
+losing existing workflows or user data. `apps/launcher` now contains the native
+application; the former Electron source has been removed.
 
 Latest local baseline: 2026-10-17, 272 Windows Rust tests passed (63 app,
 152 backend, 7 profile persistence, 50 core; two external opt-in tests ignored).
@@ -106,7 +111,7 @@ GPUI now exposes Info, Settings, Logs, Files and Mods for an instance.
       Repaired 2026-10-12: persistent Easy/Advanced tabs, syntax highlighting, readable editor surfaces and a visible focused Find bar. Earlier checks did not cover large lists or the missing search presentation; new regressions and isolated native dark/light checks cover both. Physical/platform acceptance remains F20/F38.
 
       **Accept:** edit a scalar and list in Easy mode, edit raw text, save both game
-                                  file and overlay, restart, then update the pack and verify the override survives.
+                                                  file and overlay, restart, then update the pack and verify the override survives.
 
 - [x] **F03 — P1 · Done · Open a file in the OS editor.**
       Verified 2026-10-11: the installed Windows app dispatches the default editor, observes its actual atomic save and mirrors the bytes into the original overlay. Native override removal stops mirroring and does not recreate the removed override after another external edit. Shutdown/maintenance guards pass in backend tests; recorded actual GTNH pack maintenance preserves paired config overrides. Physical and other-platform editor behavior remains F38.
@@ -117,7 +122,7 @@ GPUI now exposes Info, Settings, Logs, Files and Mods for an instance.
       Verified 2026-10-11: the installed app opens a native editor window, repeated file opening foregrounds that same window without a duplicate, and normal editor close leaves the launcher and saved override intact. GPUI multi-window paired saves, independent close/reuse, shared drafts and launch-time detached-draft saves pass. Physical and other-platform lifecycle checks remain F31/F38.
 
       **Accept:** pop out a file, focus the existing matching window on repeat,
-                                  synchronize edits, and close either window without losing saved data.
+                                                  synchronize edits, and close either window without losing saved data.
 
 - [x] **F05 — P1 · Done · Custom-mod management.**
       Verified 2026-10-11: actual installed native picker Cancel and two-file .jar/.zip import pass byte checks in game/overlay copies; confirmed removal retains the other custom mod and pack-owned file. The OS folder action opens the original persistent mods directory. GPUI/backend disk reload, failed removal and running/busy guards pass; real GTNH copy/update/reinstall preservation is recorded below.
@@ -162,10 +167,10 @@ Reference: [App.tsx](https://github.com/SergioJuniorCE/industrialis-launcher/blo
       Verified: complete searchable catalogs and All/Stable/Beta filters serve install and maintenance. GPUI tests exercise filtering, unavailable variants and selections beyond the former eight-row limit. Error/reload controls remain reachable. Actual supported Java 8/17+ archives install in expendable instances.
 
       **Accept:** select any supported catalog version, search/filter releases, see
-                                  available Java variants, reject unavailable variants before installation, and
-                                  retry a failed catalog fetch. The maintenance picker already has a full list
-                                  and archive-availability checks; do not replace that with the limited picker.
-                                  Actual 2.9.0-RC-2 Java 8/17+ and 2.8.4 Java 17+ archive installation passes in expendable instances.
+                                                  available Java variants, reject unavailable variants before installation, and
+                                                  retry a failed catalog fetch. The maintenance picker already has a full list
+                                                  and archive-availability checks; do not replace that with the limited picker.
+                                                  Actual 2.9.0-RC-2 Java 8/17+ and 2.8.4 Java 17+ archive installation passes in expendable instances.
 
 - [x] **F12 — P1 · Done · Pack update status.**
       Updated 2026-10-12: one shared catalog checks at startup and every hour. Manual checks live in the instance context menu; ordinary library/detail check buttons are removed. Unknown/current status is informational; available updates open the matching maintenance workflow. The root owns the polling task and duplicate starts/in-flight requests are guarded. Fake-clock tests verify the hourly boundaries, repeated ticks and cancellation; actual native menu dispatch passes in dark/light. Failed checks retain cached versions and cannot turn unknown status into Up to date. Real catalogs and maintenance were exercised in the earlier GTNH acceptance fixtures.
@@ -206,31 +211,31 @@ Backup services, provider and durable manager now have reachable GPUI workflows.
       Implemented: OAuth PKCE loopback authorization, encrypted refresh-token reuse, paginated Drive folder operations and resumable uploads are implemented. Actual Electron 43.3.0/Rust Windows DPAPI, isolated Linux GNOME Secret Service and native KWallet 6 interoperability pass in both directions with the original generated key unchanged. The native Linux regression caught and fixed libsecret unloading between calls. macOS Keychain support compiles; CBC vectors match independent Node crypto. Live Google and Keychain acceptance remain open; older KWallet versions are not certified by the KWallet 6 fixture.
 
       **Accept:** connect,
-                                  restart, refresh, disconnect and handle denied/expired authorization without
-                                  exposing credentials or falsely displaying Connected.
+                                                  restart, refresh, disconnect and handle denied/expired authorization without
+                                                  exposing credentials or falsely displaying Connected.
 
 - [ ] **F17 — P1 · Verify · Manual backup management.**
       Implemented: Local/cloud lists, manifest-last verified uploads, verified collision-safe restores into the existing backups folder, confirmed cloud deletion, folder actions and transfer errors/progress are reachable in GPUI. Synthetic integrity/collision/failure tests pass. Live Drive transfer acceptance remains open.
 
       **Accept:** upload/download a real archive byte-for-byte, reject a corrupt
-                                  remote artifact, handle an interrupted upload and delete only the selected
-                                  snapshot. Electron's Restore action downloads an archive into the backups
-                                  directory; it does not unpack or replace a running world's saves.
+                                                  remote artifact, handle an interrupted upload and delete only the selected
+                                                  snapshot. Electron's Restore action downloads an archive into the backups
+                                                  directory; it does not unpack or replace a running world's saves.
 
 - [x] **F18 — P1 · Done · Automatic backup manager.**
       Implemented: Automatic settling/deduplication, original backup-state.json queue, retry/backoff/restart recovery, manual retry/scan, deletion tombstones and cloud-only retention are implemented. At most two instances upload concurrently; same-instance retention is serialized. Settling, bounded concurrency, durable delivery and empty-progress completion regressions pass.
 
       **Accept:** new completed archives upload automatically, partial files do not,
-                                  failures survive restart and can retry, deleted snapshots do not reappear, and
-                                  retention never deletes local archives.
+                                                  failures survive restart and can retry, deleted snapshots do not reappear, and
+                                                  retention never deletes local archives.
 
 - [x] **F19 — P1 · Done · Backup controls and health.**
       Verified: global/per-instance policy, inheritance and retention edits round-trip through native GPUI fields into the original settings files without losing extensions. The panel reads existing archives; manager tests cover queued/failed/retried/healthy progress. Retry/scan, transfer progress and the local OAuth setup guide are reachable. Actual Google authorization/transfers remain independently gated by F16/F17.
 
       **Accept:** enable/disable one instance, inherit/override retention, observe
-                                  queued/failed/healthy states and transfer progress, retry, and open the guide.
-                                  Planned provider cards in Electron are not implementations: SFTP or other
-                                  providers need not be invented to complete this port.
+                                                  queued/failed/healthy states and transfer progress, retry, and open the guide.
+                                                  Planned provider cards in Electron are not implementations: SFTP or other
+                                                  providers need not be invented to complete this port.
 
 ### Input and settings features
 
@@ -265,8 +270,8 @@ Reference: [GPUI input](crates/app/src/input.rs),
       Verified: an Electron-shaped custom preset loads, edits/saves all supported tokens and overrides, reloads from disk and can be selected again. GPUI pointer reset/delete/fallback preserves unknown root/token/override fields. Platform rendering remains in F38 and visual matching in UI_PARITY.
 
       **Accept:** load an Electron custom preset, edit/save it and its overrides,
-                                  restart and select it again, then reset/delete safely. Visual matching can wait;
-                                  preserve user-authored settings now (F25).
+                                                  restart and select it again, then reset/delete safely. Visual matching can wait;
+                                                  preserve user-authored settings now (F25).
 
 ### Persistence, process lifetime, and desktop behavior
 
@@ -411,14 +416,20 @@ Reference: [release updater](https://github.com/SergioJuniorCE/industrialis-laun
       icons/version metadata and required resources, document runtime requirements
       and signing/notarization policy, and publish the assets expected by downloads
       and F32. Verify upgrade from the old Windows installer and preserve user data.
-- [ ] **F34 ? P0 ? Partial ? Repository/distribution cutover.** Stable replacement
+- [x] **F34 — P0 · Done · Repository/distribution cutover.** Stable replacement
       was authorized on 2026-10-17 with the recorded acceptance gaps retained as
       follow-ups. Electron source/build wrappers and workspace dependencies are
       removed. Root commands and version stamping target GPUI; launcher-v* tags
       now select the stable native workflow and the existing Windows download
-      filename. Historical source references point at launcher-v0.3.0. PR #65,
-      successful remote checks, merge and actual publication remain the final
-      integration evidence. Server/dashboard/website packages are preserved.
+      filename. Historical source references point at launcher-v0.3.0. PR #65
+      merged as 5a864376e2acd521535a0ca31e985bab4d3ba9d8; launcher-v0.4.0
+      published successfully on 2026-10-19 after all three platform jobs passed.
+      All four public artifacts match their GitHub SHA256 digests, and the existing
+      latest Windows installer URL returns the same bytes. The public stable feed
+      offers 0.4.0 to 0.3.0 and reports 0.4.0 up to date. See the
+      [published cutover evidence](CUTOVER.md#public-stable-release-verified-2026-10-19).
+      Server/dashboard/website packages are preserved. Accepted provider/platform
+      follow-ups and the published native N-to-N+1 cycle remain separate checks.
       **Accept:** the native production workflow and download links publish the
       synchronized version, Electron-only dependencies are absent, and root checks
       plus packaged smoke tests pass.
@@ -601,7 +612,7 @@ F20-F22, F26-F28, F31 and F39.
 
 | Date       | Evidence                                                                                          | Result / boundary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ---------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-06 | Windows: `cargo test --workspace --locked` in `apps/launcher-gpui`                                | 131 passed; offline/local baseline, not live providers or packaged cross-platform tests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-10-06 | Windows: `cargo test --workspace --locked` in `apps/launcher`                                     | 131 passed; offline/local baseline, not live providers or packaged cross-platform tests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 2026-10-06 | Source comparison of both apps, all 69 command cases, desktop hooks, scripts and release workflow | Functional inventory established; unchecked items remain open                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 2026-10-06 | Windows hidden-window `window_move_bench`, real Instances/Info layout at 1600 by 900              | Unoptimized GPUI: median 21.0 ms / p95 25.3 ms; dev GPUI optimized: median 4.4 ms / p95 6.0 ms. Fixes measured layout bottleneck in F31; excludes GPU presentation and actual drag cadence. Physical drag verification stopped when the user stopped UI automation.                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 2026-10-06 | Native window materials: workspace tests, actual DWM attribute checks, isolated visible profile   | 136 tests passed. Frosted/Mica/Opaque switch correctly in both themes, including native dark tint and clearing the material. Disabled Direct Composition falls back to opaque. Final CPU layout p95: opaque 5.8 ms, frosted 7.0 ms, Mica 5.7 ms. Appearance controls and frosted rendering inspected; user changes persisted in the isolated profile. No actual drag-FPS measurement or older-OS hardware test.                                                                                                                                                                                                                                                                             |
@@ -1189,8 +1200,8 @@ The final complete host command exits 0 with guest `passed: true`:
 
 ```powershell
 & scripts/test-gpui-windows-squirrel-sandbox.ps1 `
-  -LegacyInstaller apps/launcher-gpui/target/live-acceptance/public-electron-0.3.0/IndustrialisLauncherSetup.exe `
-  -StableArtifactDirectory apps/launcher-gpui/target/live-acceptance/rebuilt-stable-20261009-static-runtime -Run
+  -LegacyInstaller apps/launcher/target/live-acceptance/public-electron-0.3.0/IndustrialisLauncherSetup.exe `
+  -StableArtifactDirectory apps/launcher/target/live-acceptance/rebuilt-stable-20261009-static-runtime -Run
 ```
 
 Evidence is `target/live-acceptance/squirrel-sandbox-316020654051469eb7294aff32fdeb31/output/`:
@@ -1251,7 +1262,7 @@ The full Rust workspace passes 218 tests on Windows and 215 on Debian 13 x64:
 29 app interactions, 133/130 backend tests, seven profile-persistence tests and
 49 core tests. The Windows-only opt-in NSIS integration is separately ignored
 by the ordinary suite and has its own native installer evidence. Commands from
-`apps/launcher-gpui` are:
+`apps/launcher` are:
 
 ```text
 cargo test --workspace --lib --bins --tests --locked --jobs 1 --features industrialis-app/packaged-updates
@@ -1384,8 +1395,8 @@ The complete host and guest run exits **0**, with `passed: true`, on Windows
 
 ```powershell
 & scripts/test-gpui-windows-squirrel-sandbox.ps1 `
-  -LegacyInstaller apps/launcher-gpui/target/live-acceptance/public-electron-0.3.0/IndustrialisLauncherSetup.exe `
-  -StableArtifactDirectory apps/launcher-gpui/target/live-acceptance/rebuilt-stable-20261011-native-focus-fixed `
+  -LegacyInstaller apps/launcher/target/live-acceptance/public-electron-0.3.0/IndustrialisLauncherSetup.exe `
+  -StableArtifactDirectory apps/launcher/target/live-acceptance/rebuilt-stable-20261011-native-focus-fixed `
   -RunningLegacy -NativeUi -Run
 ```
 
@@ -1957,3 +1968,17 @@ The exact extracted CI bootstrap step passes locally, as do the actual NSIS
 retirement/failure/rollback/profile guards, updater install/restart/uninstall
 smoke and three packaging contracts. The
 fresh full remote platform checks remain required before release.
+
+## 2026-10-19 canonical launcher workspace
+
+The native workspace now lives at `apps/launcher` with package name
+`@industrialis/launcher`. The Electron source was removed in PR #65. Root commands,
+CI, packaging, acceptance scripts, lockfile importers and agent source maps now
+use the canonical path. Existing release tags, asset names and profile locations
+retain their compatibility contracts. The local build cache moved with the source.
+
+Validation: Cargo workspace check passed offline from the new directory; ten Node
+watcher, packaging, notice and Windows-runtime tests passed; five Linux portable
+archive tests passed in the owned Linux container. Frozen offline pnpm lockfile
+validation, lint and the canonical development command help dispatch passed.
+This source-path change does not close the accepted provider/platform follow-ups.

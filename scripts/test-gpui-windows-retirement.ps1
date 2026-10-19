@@ -1,6 +1,6 @@
 param([string]$MakeNSIS)
 $ErrorActionPreference = 'Stop'
-$appRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'apps/launcher-gpui'
+$appRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'apps/launcher'
 . (Join-Path $appRoot 'packaging/retire-electron.ps1')
 $fixture = Join-Path $appRoot ('target/retirement-test-' + [guid]::NewGuid().ToString('N'))
 $local = Join-Path $fixture 'Local'

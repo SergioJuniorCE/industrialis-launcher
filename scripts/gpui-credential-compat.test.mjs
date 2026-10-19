@@ -8,7 +8,7 @@ import os from "node:os";
 const isolatedLinux = process.platform === "linux" && process.env.GPUI_ISOLATED_CREDENTIAL_SESSION === "1";
 const linuxStore = process.env.GPUI_ACCEPTANCE_PASSWORD_STORE ?? "gnome-libsecret";
 const electron = process.env.GPUI_ACCEPTANCE_ELECTRON;
-const rust = path.resolve(process.env.GPUI_ACCEPTANCE_RUST ?? "apps/launcher-gpui/target/debug/examples/credential_compat.exe");
+const rust = path.resolve(process.env.GPUI_ACCEPTANCE_RUST ?? "apps/launcher/target/debug/examples/credential_compat.exe");
 async function run(executable, args, input = "", signal) {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;

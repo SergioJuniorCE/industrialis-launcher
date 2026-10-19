@@ -9,6 +9,28 @@ the production launcher tag workflow. Electron source/build dependencies are
 removed; the original profile path and installer retirement safeguards remain.
 The immutable last-Electron release is launcher-v0.3.0.
 
+## Public stable release verified 2026-10-19
+
+[PR #65](https://github.com/SergioJuniorCE/industrialis-launcher/pull/65) merged as
+`5a864376e2acd521535a0ca31e985bab4d3ba9d8`. Its immutable
+[`launcher-v0.4.0` release](https://github.com/SergioJuniorCE/industrialis-launcher/releases/tag/launcher-v0.4.0)
+passed all three platform builds and publication in
+[workflow 39288215919](https://github.com/SergioJuniorCE/industrialis-launcher/actions/runs/39288215919).
+It is the public latest stable release, with the native updater marker.
+
+All four public artifacts were downloaded and matched their GitHub SHA256 digests
+and sizes: Windows installer and portable ZIP, macOS arm64 DMG and Linux x64 archive.
+The existing `releases/latest/download/IndustrialisLauncherSetup.exe` URL returns
+the same installer bytes. A stable-channel CLI check against the public feed
+offers 0.4.0 to version 0.3.0 and reports version 0.4.0 up to date. These checks
+do not install an update or establish a published native N-to-N+1 update cycle.
+
+Electron source and build dependencies were removed in #65. Root launcher
+commands and the production workflow select GPUI; server, dashboard and website
+packages remain. The canonical source directory is now `apps/launcher`; the old
+Electron source is available at the immutable `launcher-v0.3.0` tag. The original
+profile path and documented rollback safeguards remain in place.
+
 The functional port reads and writes the original profile in place. There is no
 profile import, relocation, migration wizard or mandatory reconnect. The tracker
 is [MIGRATION_TRACKER.md](MIGRATION_TRACKER.md); this file lists the remaining
@@ -196,18 +218,6 @@ Node, or supplied with `GPUI_REHEARSAL_COREPACK` pointing to its `dist/corepack.
    Windows update with digest verification, busy/close/save guards, failure
    recovery and preserved profile. Verify documented manual updates elsewhere.
    Publishing is a separate action; local packaging does not publish anything.
-6. **Repository/distribution switch (F34).** Root launcher dev/build/installer/
-   portable commands select GPUI; `pnpm dev` excludes Electron and explicit
-   legacy aliases remain for reference checks. Switch production version scripts,
-   release assets, website download targets and stable update policy together. Keep
-   server/dashboard/website packages intact. The GPUI preview feed intentionally
-   remains separate from Electron's current stable feed until this step.
-7. **Remove Electron (F35).** Keep a last-Electron release/tag and a documented
-   binary rollback path using the same untouched profile. Run the source-removal
-   rehearsal, then remove `apps/launcher` and Electron-only scripts/dependencies,
-   regenerate the monorepo lockfile and run root checks plus packaged smoke tests.
-   Replace live reference links in GPUI docs/skills with GPUI-owned descriptions
-   or fixed historical links. Removing source never removes user data.
 
 Each scenario needs platform, OS/build version, artifact provenance, exact result
 and failure/recovery evidence recorded in the tracker. Do not mark a native/live

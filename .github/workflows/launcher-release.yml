@@ -49,7 +49,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/launcher-gpui
+          workspaces: apps/launcher
           cache-on-failure: true
       - name: Linux build dependencies
         if: runner.os == 'Linux'
@@ -75,7 +75,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           BUILD_VERSION: ${{ inputs.version }}
         run: |
-          cargo fetch --locked --manifest-path apps/launcher-gpui/Cargo.toml
+          cargo fetch --locked --manifest-path apps/launcher/Cargo.toml
           if [[ "$RELEASE_TAG" == launcher-gpui-v* ]]; then
             version="${RELEASE_TAG#launcher-gpui-v}"
           elif [[ "$RELEASE_TAG" == launcher-v* ]]; then
@@ -84,42 +84,42 @@ jobs:
             version="${BUILD_VERSION:-0.4.0}"
           fi
           node scripts/set-gpui-launcher-version.mjs "$version"
-          cargo update --workspace --offline --manifest-path apps/launcher-gpui/Cargo.toml
+          cargo update --workspace --offline --manifest-path apps/launcher/Cargo.toml
       - name: Test macOS backend and core
         if: runner.os == 'macOS'
-        working-directory: apps/launcher-gpui
+        working-directory: apps/launcher
         run: cargo test -p industrialis-core -p industrialis-backend --lib --tests --jobs 1 --locked
       - name: Test backend, core and GPUI interactions
         if: runner.os != 'macOS'
-        working-directory: apps/launcher-gpui
+        working-directory: apps/launcher
         run: cargo test --workspace --lib --bins --tests --jobs 1 --features industrialis-app/packaged-updates --locked -- --test-threads=1
       - name: Build native process fixtures
         if: runner.os == 'Windows'
-        working-directory: apps/launcher-gpui
+        working-directory: apps/launcher
         run: cargo build -p industrialis-app -p industrialis-backend -p industrialis-cli --examples --bin industrialis-cli --jobs 1 --locked
       - name: Test cross-runtime ownership and detached game lifetime
         if: runner.os == 'Windows'
         run: node --test scripts/gpui-profile-owner.test.mjs scripts/gpui-game-broker.test.mjs
       - name: Build Linux credential interoperability fixture
         if: runner.os == 'Linux'
-        working-directory: apps/launcher-gpui
+        working-directory: apps/launcher
         run: cargo build --workspace --example credential_compat --jobs 1 --locked --features industrialis-app/packaged-updates
       - name: Test original Electron and native Linux credential interoperability
         if: runner.os == 'Linux'
         run: |
-          docker build -f apps/launcher-gpui/packaging/acceptance/linux-credentials.Dockerfile -t industrialis-gpui-credential-acceptance:local apps/launcher-gpui/packaging/acceptance
-          mkdir -p apps/launcher-gpui/target/credential-acceptance
+          docker build -f apps/launcher/packaging/acceptance/linux-credentials.Dockerfile -t industrialis-gpui-credential-acceptance:local apps/launcher/packaging/acceptance
+          mkdir -p apps/launcher/target/credential-acceptance
           docker run --rm --network none --name industrialis-gpui-credential-acceptance \
             --mount "type=bind,source=$PWD,target=/repo,readonly" \
-            --mount "type=bind,source=$PWD/apps/launcher-gpui/target,target=/target,readonly" \
-            --mount "type=bind,source=$PWD/apps/launcher-gpui/target/credential-acceptance,target=/receipt" \
+            --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
+            --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
             -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
             industrialis-gpui-credential-acceptance:local \
             sh scripts/test-gpui-linux-credentials.sh /opt/electron-fixture/electron /target/debug/examples/credential_compat /receipt/verification.json
           docker run --rm --network none --name industrialis-gpui-kwallet-acceptance \
             --mount "type=bind,source=$PWD,target=/repo,readonly" \
-            --mount "type=bind,source=$PWD/apps/launcher-gpui/target,target=/target,readonly" \
-            --mount "type=bind,source=$PWD/apps/launcher-gpui/target/credential-acceptance,target=/receipt" \
+            --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
+            --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
             -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
             industrialis-gpui-credential-acceptance:local \
             sh scripts/test-gpui-linux-kwallet.sh /opt/electron-fixture/electron /target/debug/examples/credential_compat /receipt/kwallet-verification.json
@@ -128,7 +128,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: launcher-gpui-linux-credentials
-          path: apps/launcher-gpui/target/credential-acceptance/*verification.json
+          path: apps/launcher/target/credential-acceptance/*verification.json
           if-no-files-found: warn
       - name: Linux native renderer startup and shutdown
         if: runner.os == 'Linux'
@@ -145,7 +145,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python3 scripts/gpui-linux-portable-smoke.test.py
       - name: Test prepared stable update channel
-        working-directory: apps/launcher-gpui
+        working-directory: apps/launcher
         run: cargo test -p industrialis-backend --lib release_updater::tests --features stable-updates --jobs 1 --locked
       - name: Build and package
         shell: bash
@@ -157,16 +157,16 @@ jobs:
         env:
           GPUI_PACKAGE_CHANNEL: ${{ env.BUILD_CHANNEL }}
           LIBGL_ALWAYS_SOFTWARE: "1"
-        run: sh scripts/test-gpui-linux-portable.sh "$PWD/apps/launcher-gpui/dist/IndustrialisGPUI-linux-x64.tar.gz" "$PWD/apps/launcher-gpui/target/release/industrialis" "$PWD/apps/launcher-gpui/dist"
+        run: sh scripts/test-gpui-linux-portable.sh "$PWD/apps/launcher/dist/IndustrialisGPUI-linux-x64.tar.gz" "$PWD/apps/launcher/target/release/industrialis" "$PWD/apps/launcher/dist"
       - name: Retain Linux packaged acceptance evidence
         if: always() && runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: launcher-gpui-linux-acceptance
           path: |
-            apps/launcher-gpui/dist/verification.json
-            apps/launcher-gpui/dist/portable-render.png
-            apps/launcher-gpui/dist/portable-native.log
+            apps/launcher/dist/verification.json
+            apps/launcher/dist/portable-render.png
+            apps/launcher/dist/portable-native.log
           if-no-files-found: warn
       - name: Retain failed Linux executable for diagnosis
         if: failure() && runner.os == 'Linux'
@@ -174,8 +174,8 @@ jobs:
         with:
           name: launcher-gpui-linux-diagnostics
           path: |
-            apps/launcher-gpui/target/release/industrialis
-            apps/launcher-gpui/dist/IndustrialisGPUI-linux-x64.tar.gz
+            apps/launcher/target/release/industrialis
+            apps/launcher/dist/IndustrialisGPUI-linux-x64.tar.gz
           retention-days: 3
           if-no-files-found: warn
       - name: Verify Windows artifact bytes, metadata and notices
@@ -196,10 +196,10 @@ jobs:
         with:
           name: launcher-gpui-${{ matrix.artifact }}
           path: |
-            apps/launcher-gpui/dist/*.exe
-            apps/launcher-gpui/dist/*.zip
-            apps/launcher-gpui/dist/*.dmg
-            apps/launcher-gpui/dist/*.tar.gz
+            apps/launcher/dist/*.exe
+            apps/launcher/dist/*.zip
+            apps/launcher/dist/*.dmg
+            apps/launcher/dist/*.tar.gz
           if-no-files-found: error
 
   release:
@@ -220,5 +220,5 @@ jobs:
           prerelease: ${{ startsWith(github.ref_name, 'launcher-gpui-v') }}
           make_latest: ${{ startsWith(github.ref_name, 'launcher-v') }}
           generate_release_notes: true
-          body_path: apps/launcher-gpui/RELEASE_NOTES.md
+          body_path: apps/launcher/RELEASE_NOTES.md
           files: release-assets/*

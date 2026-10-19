@@ -17,7 +17,7 @@ if [ "$#" -eq 4 ]; then
   esac
 fi
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-app=${GPUI_APP_DIR:-"$repo/apps/launcher-gpui"}
+app=${GPUI_APP_DIR:-"$repo/apps/launcher"}
 if [ -n "${GPUI_LIVE_GAME_BINARY:-}" ]; then
   binary=$GPUI_LIVE_GAME_BINARY
 else

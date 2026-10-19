@@ -31,7 +31,7 @@ export async function setVersion(directory, version) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../apps/launcher-gpui");
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../apps/launcher");
   await setVersion(root, process.argv[2] ?? "");
   console.log(`GPUI launcher version set to ${process.argv[2]}. Run cargo update --workspace --offline to sync Cargo.lock.`);
 }

@@ -1,10 +1,11 @@
-# Industrialis Launcher (GPUI port)
+# Industrialis Launcher
 
 Native production launcher as of 0.4.0. See [release notes](RELEASE_NOTES.md)
 for downloads, accepted limitations and rollback.
 
-Rust + [GPUI](https://gpui.rs/) rewrite of `@industrialis/launcher`
-(Electron + React). Single native binary, no Chromium, no Node runtime.
+`@industrialis/launcher` is the Rust + [GPUI](https://gpui.rs/) desktop app,
+replacing the former Electron + React launcher. Single native binary, no Chromium,
+no Node runtime.
 
 The Files panel uses the native gpui-base code editor with Syntect syntax
 highlighting, line numbers, search, wrapping, selection and undo. Forge configs
@@ -77,7 +78,7 @@ cargo run -p industrialis-app --config profile.dev.debug=2
 ## Layout
 
 ```
-apps/launcher-gpui/
+apps/launcher/
   crates/
     core/   # Pure logic ported from apps/launcher TS (no GPUI dep)
     backend/ # Tokio services: accounts, Java, install, launch, instances
@@ -123,10 +124,10 @@ snapshots may change the API.
 ## Commands
 
 ```bash
-pnpm --filter @industrialis/launcher-gpui dev    # watch, rebuild and restart GPUI
-pnpm --filter @industrialis/launcher-gpui dev:once # single run, without watching
-pnpm --filter @industrialis/launcher-gpui build
-pnpm --filter @industrialis/launcher-gpui test
+pnpm --filter @industrialis/launcher dev    # watch, rebuild and restart GPUI
+pnpm --filter @industrialis/launcher dev:once # single run, without watching
+pnpm --filter @industrialis/launcher build
+pnpm --filter @industrialis/launcher test
 ```
 
 Dev watches Rust source, embedded assets, Cargo manifests/lockfile and workspace

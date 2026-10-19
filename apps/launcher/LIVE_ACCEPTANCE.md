@@ -106,7 +106,7 @@ than waiting an hour on a desktop; physical/platform checks remain separate.
 
 ## Automated real-pack maintenance
 
-From `apps/launcher-gpui`, build the opt-in harness with one compiler job:
+From `apps/launcher`, build the opt-in harness with one compiler job:
 
 ```powershell
 cargo build -p industrialis-backend --example live_pack_acceptance --locked --jobs 1
@@ -347,15 +347,15 @@ unchanged native key bytes without printing them. It does not authorize Google,
 touch a user's keyring or certify macOS Keychain/KWallet.
 
 ```sh
-cargo build --manifest-path apps/launcher-gpui/Cargo.toml --workspace \
+cargo build --manifest-path apps/launcher/Cargo.toml --workspace \
   --example credential_compat --locked --jobs 1 --features industrialis-app/packaged-updates
-docker build -f apps/launcher-gpui/packaging/acceptance/linux-credentials.Dockerfile \
-  -t industrialis-gpui-credential-acceptance:local apps/launcher-gpui/packaging/acceptance
-mkdir -p apps/launcher-gpui/target/credential-acceptance
+docker build -f apps/launcher/packaging/acceptance/linux-credentials.Dockerfile \
+  -t industrialis-gpui-credential-acceptance:local apps/launcher/packaging/acceptance
+mkdir -p apps/launcher/target/credential-acceptance
 docker run --rm --network none \
   --mount "type=bind,source=$PWD,target=/repo,readonly" \
-  --mount "type=bind,source=$PWD/apps/launcher-gpui/target,target=/target,readonly" \
-  --mount "type=bind,source=$PWD/apps/launcher-gpui/target/credential-acceptance,target=/receipt" \
+  --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
+  --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
   -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
   industrialis-gpui-credential-acceptance:local \
   sh scripts/test-gpui-linux-credentials.sh /opt/electron-fixture/electron \
@@ -384,7 +384,7 @@ Reports contain outcomes only; never display or commit the saved account/credent
 files. These tests do not import or move existing user accounts.
 
 ```powershell
-# From apps/launcher-gpui:
+# From apps/launcher:
 cargo build -p industrialis-backend --example live_provider_acceptance --locked --jobs 1
 # First authorize Microsoft using industrialis-cli --data-dir <profile> ms-login.
 target/debug/examples/live_provider_acceptance.exe <absolute-marked-profile> microsoft

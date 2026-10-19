@@ -6,12 +6,12 @@ Turborepo monorepo for the Industrialis GT New Horizons launcher and website.
 
 ## Apps
 
-| App                            | Package                       | Description                                        |
-| ------------------------------ | ----------------------------- | -------------------------------------------------- |
-| [Launcher](apps/launcher-gpui) | `@industrialis/launcher-gpui` | Native Rust/GPUI desktop launcher                  |
-| [Website](apps/website)        | `@industrialis/website`       | Next.js marketing site                             |
-| [Server](apps/server)          | `@industrialis/server`        | Linux CLI + Docker daemon for hosting GTNH servers |
-| [Dashboard](apps/dashboard)    | `@industrialis/dashboard`     | Astro UI for managing hosted servers               |
+| App                         | Package                   | Description                                        |
+| --------------------------- | ------------------------- | -------------------------------------------------- |
+| [Launcher](apps/launcher)   | `@industrialis/launcher`  | Native Rust/GPUI desktop launcher                  |
+| [Website](apps/website)     | `@industrialis/website`   | Next.js marketing site                             |
+| [Server](apps/server)       | `@industrialis/server`    | Linux CLI + Docker daemon for hosting GTNH servers |
+| [Dashboard](apps/dashboard) | `@industrialis/dashboard` | Astro UI for managing hosted servers               |
 
 ### Host a GTNH server (Linux)
 
@@ -35,7 +35,7 @@ See [docs/server-hosting.md](docs/server-hosting.md) for Docker, systemd, and co
 Launcher release packaging requires Node.js 24.x, matching the GitHub Actions
 release environment. Development, builds, and tests can use the current LTS.
 GPUI packaging needs NSIS 3.11 on Windows and native platform build libraries on
-Linux/macOS; see [GPUI updates and packaging](apps/launcher-gpui/UPDATES.md).
+Linux/macOS; see [GPUI updates and packaging](apps/launcher/UPDATES.md).
 
 ## Development
 
@@ -68,8 +68,8 @@ Launcher-only:
 
 ```bash
 pnpm build:launcher
-pnpm test --filter=@industrialis/launcher-gpui
-pnpm --filter=@industrialis/launcher-gpui build
+pnpm test --filter=@industrialis/launcher
+pnpm --filter=@industrialis/launcher build
 ```
 
 Create release artifacts for the current OS (installers + portable):
@@ -78,7 +78,7 @@ Create release artifacts for the current OS (installers + portable):
 pnpm build:launcher:release
 ```
 
-Artifacts are written to `apps/launcher-gpui/dist`. The native launcher reads
+Artifacts are written to `apps/launcher/dist`. The native launcher reads
 the existing profile in place; users need no data migration.
 
 | Platform | Installer       | Portable                  |
@@ -94,8 +94,8 @@ single native distribution format.
 Stable `launcher-v*` tags build the native launcher on Windows x64, macOS arm64
 and Linux x64 and publish the production release. `launcher-gpui-v*` tags remain
 optional prereleases; ordinary master pushes do not publish.
-See [release notes and known limitations](apps/launcher-gpui/RELEASE_NOTES.md) and
-[cutover and rollback](apps/launcher-gpui/CUTOVER.md).
+See [release notes and known limitations](apps/launcher/RELEASE_NOTES.md) and
+[cutover and rollback](apps/launcher/CUTOVER.md).
 
 ## Microsoft login
 
@@ -123,8 +123,7 @@ for an individual pack under **Instance Settings > General > Cloud backups**.
 ```
 industrialis/
 |-- apps/
-|   |-- launcher-gpui/     # Rust + GPUI desktop app
-|   |-- launcher/          # Retained Electron reference until accepted cutover
+|   |-- launcher/          # Rust + GPUI desktop app
 |   |-- website/           # Next.js marketing site
 |   |-- server/            # industrialis CLI + Docker daemon
 |   `-- dashboard/         # Astro server console
@@ -141,7 +140,7 @@ industrialis/
 ## Tech stack
 
 - **Monorepo:** pnpm workspaces, Turborepo
-- **Launcher:** Electron, React 19, TypeScript, Vite, Tailwind CSS 4, Electron Forge
+- **Launcher:** Rust, GPUI, Tokio, native gpui-base editor and Syntect
 - **Website:** Next.js 16, React 19
 - **Server:** Node, Fastify, Dockerode, Commander
 - **Dashboard:** Astro 5, React islands, Tailwind CSS 4

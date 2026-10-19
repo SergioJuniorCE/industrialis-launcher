@@ -1,7 +1,7 @@
 param([Parameter(Mandatory = $true)][string]$MakeNSIS)
 $ErrorActionPreference = 'Stop'
 $taskRepo = Split-Path -Parent $PSScriptRoot
-$taskApp = Join-Path $taskRepo 'apps/launcher-gpui'
+$taskApp = Join-Path $taskRepo 'apps/launcher'
 $taskFixture = Join-Path $taskApp ('target/updater-smoke-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $taskFixture | Out-Null
 $taskSource = @'

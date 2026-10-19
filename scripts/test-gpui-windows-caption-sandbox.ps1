@@ -1,4 +1,4 @@
-param([string]$Executable = 'apps/launcher-gpui/target/debug/industrialis-dev.exe',
+param([string]$Executable = 'apps/launcher/target/debug/industrialis-dev.exe',
   [ValidateSet('caption','appearance','about','explorer','easy','files')][string]$Scenario = 'caption')
 $ErrorActionPreference = 'Stop'
 $binary = (Resolve-Path -LiteralPath $Executable).Path
@@ -6,7 +6,7 @@ $feature = Get-CimInstance Win32_OptionalFeature -Filter "Name = 'Containers-Dis
 if ($feature.InstallState -ne 1) { throw 'Windows Sandbox must already be enabled' }
 if (@(Get-Process -Name 'WindowsSandbox*' -ErrorAction SilentlyContinue).Count -ne 0) { throw 'An existing Sandbox is in use; nothing was started' }
 $nonce = [guid]::NewGuid().ToString('N')
-$fixture = Join-Path (Resolve-Path -LiteralPath 'apps/launcher-gpui/target').Path "caption-acceptance-$nonce"
+$fixture = Join-Path (Resolve-Path -LiteralPath 'apps/launcher/target').Path "caption-acceptance-$nonce"
 $inputRoot = Join-Path $fixture 'input'
 $outputRoot = Join-Path $fixture 'output'
 New-Item -ItemType Directory -Path $inputRoot,$outputRoot | Out-Null

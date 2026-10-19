@@ -6,8 +6,8 @@ Reviewed 2026-10-06; upstream main can differ from the installed snapshot.
 - [Zed crates](https://github.com/zed-industries/zed/tree/main/crates): navigate to the crate owning the behavior before adopting a pattern. Check its manifest for framework, theme, and application dependencies.
 - [Zed UI source](https://github.com/zed-industries/zed/tree/main/crates/ui/src): component composition, style helpers, and traits. ui.rs exports components and styles and identifies ui_input as the separate single-line input component.
 
-In Industrialis, reuse crates/app/src/theme.rs and ui.rs. Compare against
-apps/launcher/src/components and App.tsx; the top toolbar and tab selection
+In Industrialis, reuse apps/launcher/crates/app/src/theme.rs and ui.rs. Compare
+layouts against apps/launcher/UI_PARITY.md; the top toolbar and tab selection
 colors are accepted product requirements. Put each functional panel in a
 focused views module rather than growing one render function indefinitely.
 

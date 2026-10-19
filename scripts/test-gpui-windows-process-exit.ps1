@@ -38,7 +38,7 @@ foreach ($name in @('Progress','Run-Installer')) {
   # Import only these two functions, never the guest installer/profile/shutdown body.
   . ([scriptblock]::Create($function[0].Extent.Text))
 }
-$outputRoot = Join-Path (Split-Path -Parent $PSScriptRoot) ('apps/launcher-gpui/target/live-acceptance/process-exit-' + [guid]::NewGuid().ToString('N'))
+$outputRoot = Join-Path (Split-Path -Parent $PSScriptRoot) ('apps/launcher/target/live-acceptance/process-exit-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $outputRoot | Out-Null
 Run-Installer $env:ComSpec @('/d','/c','exit','0')
 $rejected = $false
