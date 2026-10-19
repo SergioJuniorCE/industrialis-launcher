@@ -33,8 +33,10 @@ async function capture(t, request) {
 test("native broker survives its parent, captures both streams and runs the hook once", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "industrialis-native-parent-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
+  // Keep the fixture alive long enough for the Windows process-start check
+  // below; PowerShell startup on loaded CI runners can exceed 2.5 seconds.
   const script =
-    "process.stdout.write('before\\n');setTimeout(()=>{process.stdout.write('after \\u00f1\\n');process.stderr.write('error\\n');process.exit(7)},2500);";
+    "process.stdout.write('before\\n');setTimeout(()=>{process.stdout.write('after \\u00f1\\n');process.stderr.write('error\\n');process.exit(7)},10000);";
   const parent = spawn(fixture, [directory, process.execPath, script], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   const parentExit = new Promise((resolve) => parent.once("exit", resolve));
   let output = "",
