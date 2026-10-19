@@ -13,15 +13,16 @@ Unicode true
   !error "OUTFILE is required"
 !endif
 
-Name "Industrialis Launcher (GPUI)"
+Name "Industrialis Launcher"
 OutFile "${OUTFILE}"
-InstallDir "$LOCALAPPDATA\Programs\Industrialis GPUI"
+; The registry identity stays "GPUI" so existing installations keep updating in place.
+InstallDir "$LOCALAPPDATA\Programs\Industrialis Launcher"
 InstallDirRegKey HKCU "Software\Industrialis\GPUI" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 VIProductVersion "${APPVERSION}.0"
-VIAddVersionKey /LANG=1033 "ProductName" "Industrialis Launcher (GPUI)"
-VIAddVersionKey /LANG=1033 "FileDescription" "Industrialis GPUI Installer"
+VIAddVersionKey /LANG=1033 "ProductName" "Industrialis Launcher"
+VIAddVersionKey /LANG=1033 "FileDescription" "Industrialis Launcher Installer"
 VIAddVersionKey /LANG=1033 "FileVersion" "${APPVERSION}"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "Industrialis"
 !define MUI_ABORTWARNING
@@ -52,7 +53,7 @@ Function .onInit
       Abort
     ${EndIf}
     IfFileExists "$INSTDIR\gpui-install.json" +4 0
-      MessageBox MB_ICONSTOP "This is not a GPUI installation. Use the normal installer." /SD IDOK
+      MessageBox MB_ICONSTOP "This is not an existing launcher installation. Use the normal installer." /SD IDOK
       SetErrorLevel 1
       Abort
     System::Call 'kernel32::OpenProcess(i 0x00100000, i 0, i $UpdatePID) p .r0'
@@ -113,7 +114,7 @@ extract:
   ${If} $R4 != 0
     Delete "$INSTDIR\industrialis.exe"
     Rename "$INSTDIR\industrialis.exe.previous" "$INSTDIR\industrialis.exe"
-    MessageBox MB_ICONSTOP "Could not retire the original launcher. Close launcher windows and retry, or review the old installation. GPUI was not started and your profile has not been moved or deleted." /SD IDOK
+    MessageBox MB_ICONSTOP "Could not retire the original launcher. Close launcher windows and retry, or review the old installation. The new launcher was not started and your profile has not been moved or deleted." /SD IDOK
     SetErrorLevel 1
     Abort
   ${EndIf}
@@ -130,7 +131,7 @@ extract:
 !endif
 !ifndef SMOKE_TEST
   WriteRegStr HKCU "Software\Industrialis\GPUI" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "DisplayName" "Industrialis Launcher (GPUI)"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "DisplayName" "Industrialis Launcher"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "DisplayVersion" "${APPVERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
@@ -150,7 +151,9 @@ extract:
   WriteRegStr HKCU "Software\Classes\industrialislauncher" "URL Protocol" ""
   WriteRegStr HKCU "Software\Classes\industrialislauncher\shell\open\command" "" "$R3"
 !endif
-  CreateShortcut "$SMPROGRAMS\Industrialis GPUI.lnk" "$INSTDIR\industrialis.exe"
+  ; Remove the shortcut name used by older builds so upgrades do not leave duplicates.
+  Delete "$SMPROGRAMS\Industrialis GPUI.lnk"
+  CreateShortcut "$SMPROGRAMS\Industrialis Launcher.lnk" "$INSTDIR\industrialis.exe"
 !endif
   Delete "$INSTDIR\industrialis.exe.previous"
 SectionEnd
@@ -202,6 +205,7 @@ app_already_removed:
         DeleteRegKey /ifempty HKCU "Software\Classes\industrialislauncher"
       ${EndIf}
     ${EndIf}
+    Delete "$SMPROGRAMS\Industrialis Launcher.lnk"
     Delete "$SMPROGRAMS\Industrialis GPUI.lnk"
     DeleteRegKey HKCU "Software\Industrialis\GPUI"
     DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI"

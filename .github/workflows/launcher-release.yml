@@ -12,7 +12,7 @@ on:
       version:
         description: "major.minor.patch (build artifacts only; does not publish)"
         required: true
-        default: "0.4.0"
+        default: "0.4.1"
       channel:
         description: "Build-only channel; tag pushes publish releases"
         type: choice

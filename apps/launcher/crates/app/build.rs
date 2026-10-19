@@ -36,7 +36,7 @@ BEGIN
   BLOCK "040904b0"
   BEGIN
    VALUE "CompanyName", "Industrialis\0"
-   VALUE "FileDescription", "Industrialis Launcher (GPUI)\0"
+   VALUE "FileDescription", "Industrialis Launcher\0"
    VALUE "FileVersion", "{version}\0"
    VALUE "ProductName", "Industrialis Launcher\0"
    VALUE "ProductVersion", "{version}\0"
