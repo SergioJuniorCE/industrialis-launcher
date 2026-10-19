@@ -53,7 +53,7 @@ jobs:
           cache-on-failure: true
       - name: Linux build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libfontconfig1-dev libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev libvulkan-dev mesa-vulkan-drivers xvfb xauth openbox dbus xdg-utils fonts-dejavu-core python3 libxres1
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libfontconfig1-dev libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev libvulkan-dev mesa-vulkan-drivers libegl1 libegl-mesa0 libgl1-mesa-dri xvfb xauth openbox dbus xdg-utils fonts-dejavu-core python3 libxres1
       - name: Windows installer compiler
         if: runner.os == 'Windows'
         run: |
@@ -163,6 +163,16 @@ jobs:
             apps/launcher-gpui/dist/verification.json
             apps/launcher-gpui/dist/portable-render.png
             apps/launcher-gpui/dist/portable-native.log
+          if-no-files-found: warn
+      - name: Retain failed Linux executable for diagnosis
+        if: failure() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-gpui-linux-diagnostics
+          path: |
+            apps/launcher-gpui/target/release/industrialis
+            apps/launcher-gpui/dist/IndustrialisGPUI-linux-x64.tar.gz
+          retention-days: 3
           if-no-files-found: warn
       - name: Verify Windows artifact bytes, metadata and notices
         if: runner.os == 'Windows'

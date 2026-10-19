@@ -42,6 +42,16 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def require_opengl_runtime():
+    # EGL is loaded dynamically by wgpu, so ldd cannot detect its absence.
+    try:
+        c.CDLL("libEGL.so.1")
+    except OSError as error:
+        raise RuntimeError(
+            "OpenGL acceptance needs libEGL.so.1; install libegl1, libegl-mesa0 and Mesa DRI drivers"
+        ) from error
+
+
 def verify_second_launch_activation(helper, child, binary, folder, env, owned_window, command=None):
     if sys.platform != "linux" or os.environ.get("GPUI_ISOLATED_VIRTUAL_DESKTOP") != "1":
         raise RuntimeError("Requires the owned virtual desktop")
@@ -185,6 +195,7 @@ def main():
         assert registers_protocol == (channel == "stable" or os.environ.get("GPUI_PACKAGE_REPLACEMENT") == "1"), "Desktop protocol registration differs from package options"
         dependencies = subprocess.run(["ldd", str(binary)], capture_output=True, text=True, check=True)
         assert "not found" not in dependencies.stdout + dependencies.stderr
+        require_opengl_runtime()
         # Verify the actual normal Linux data path, without a profile override,
         # while keeping HOME/XDG and desktop registration inside this fixture.
         home = root / "home"
@@ -242,6 +253,7 @@ def main():
                   "files": sorted(FILES), "noticesAndLicense": True, "dependenciesPresent": True,
                   "nativeWindow": {"width": width, "height": height, "sampledColors": colors},
                   "rendererFixture": "OpenGL software on Xvfb; Vulkan driver discovery disabled",
+                  "eglRuntimePresent": True,
                   "normalCloseExitCode": 0, "unknownSettingsPreserved": True, "updates": "manual",
                   "activation": activation,
                   "defaultLinuxProfilePath": True, "registeredProtocolActivation": protocol,
