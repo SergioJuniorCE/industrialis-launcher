@@ -57,14 +57,18 @@ jobs:
       - name: Windows installer compiler
         if: runner.os == 'Windows'
         run: |
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            choco install nsis --version=3.11 --yes --no-progress
-            $installExit = $LASTEXITCODE
-            if ($installExit -eq 0) { exit 0 }
-            if ($attempt -eq 3) { exit $installExit }
-            Write-Warning "NSIS download failed (attempt $attempt of 3); retrying in 15 seconds."
-            Start-Sleep -Seconds 15
-          }
+          $tools = Join-Path $env:RUNNER_TEMP 'gpui-nsis'
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          $archive = Join-Path $tools 'nsis-3.11.zip'
+          curl.exe --fail --location --retry 3 --retry-all-errors --connect-timeout 10 --max-time 120 --output $archive https://downloads.sourceforge.net/project/nsis/NSIS%203/3.11/nsis-3.11.zip
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS portable download failed' }
+          $expected = 'C7D27F780DDB6CFFB4730138CD1591E841F4B7EDB155856901CDF5F214394FA1'
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) { throw 'NSIS archive checksum mismatch' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $tools -Force
+          $compiler = Join-Path $tools 'nsis-3.11/makensis.exe'
+          $version = (& $compiler /VERSION | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -ne 'v3.11') { throw 'Unexpected NSIS compiler version' }
+          "MAKENSIS=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Stamp GPUI version
         shell: bash
         env:
@@ -183,11 +187,11 @@ jobs:
       - name: Windows installer handoff smoke test
         if: runner.os == 'Windows'
         shell: powershell
-        run: powershell -NoProfile -File scripts/test-gpui-windows-updater.ps1 -MakeNSIS "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+        run: powershell -NoProfile -File scripts/test-gpui-windows-updater.ps1 -MakeNSIS "$env:MAKENSIS"
       - name: Windows old-installer retirement guards
         if: runner.os == 'Windows'
         shell: powershell
-        run: powershell -NoProfile -File scripts/test-gpui-windows-retirement.ps1 -MakeNSIS "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+        run: powershell -NoProfile -File scripts/test-gpui-windows-retirement.ps1 -MakeNSIS "$env:MAKENSIS"
       - uses: actions/upload-artifact@v4
         with:
           name: launcher-gpui-${{ matrix.artifact }}
