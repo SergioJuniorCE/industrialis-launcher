@@ -37,4 +37,4 @@ window. Verify the focused native node after Tab/Shift+Tab, not just its presenc
 Accessible value replacement goes through `replace_text_in_range` with UTF-16
 ranges so form Change events and Undo survive. Reserve `set_value` for model
 synchronization. Current native evidence and physical input/disabled-announcement
-limits live in [the migration tracker](../../../apps/launcher-gpui/MIGRATION_TRACKER.md).
+limits live in [the migration tracker](../../../apps/launcher/MIGRATION_TRACKER.md).

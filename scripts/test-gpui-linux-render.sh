@@ -2,7 +2,7 @@
 # Synthetic instances only. Uses a virtual desktop, never the user's display.
 set -eu
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-cd "${GPUI_APP_DIR:-$repo_dir/apps/launcher-gpui}"
+cd "${GPUI_APP_DIR:-$repo_dir/apps/launcher}"
 cargo build -p industrialis-app --example window_move_bench --jobs 1 --locked
 target_dir=${CARGO_TARGET_DIR:-target}
 benchmark=$(CDPATH= cd -- "$target_dir/debug/examples" && pwd)/window_move_bench

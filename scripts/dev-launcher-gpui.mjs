@@ -4,7 +4,7 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-const workspace = fileURLToPath(new URL("../apps/launcher-gpui/", import.meta.url));
+const workspace = fileURLToPath(new URL("../apps/launcher/", import.meta.url));
 const prefix = "[gpui dev]";
 const ignored = new Set(["target", "node_modules", ".git", "dist"]);
 

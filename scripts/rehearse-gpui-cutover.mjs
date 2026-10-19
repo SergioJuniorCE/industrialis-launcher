@@ -6,11 +6,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const source = path.join(repo, "apps/launcher-gpui");
+const source = path.join(repo, "apps/launcher");
 const cache = path.join(source, "target");
 await mkdir(cache, { recursive: true });
 const snapshot = await mkdtemp(path.join(cache, "source-removal-"));
-const app = path.join(snapshot, "apps/launcher-gpui");
+const app = path.join(snapshot, "apps/launcher");
 await mkdir(app, { recursive: true });
 await mkdir(path.join(snapshot, "scripts"));
 const inventory = [];
@@ -49,7 +49,7 @@ function run(command, args, cwd = app) {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Rehearsal failed with exit ${result.status}`);
 }
-console.log(`Source-only snapshot (no apps/launcher): ${snapshot}`);
+console.log(`Native source-only snapshot: ${snapshot}`);
 const cargo = ["--locked", "--offline", "--jobs", "1"];
 run("cargo", ["test", "--workspace", "--lib", "--bins", "--tests", ...cargo, "--quiet"]);
 run("cargo", [

@@ -10,11 +10,11 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { test } from "node:test";
 // Frozen cross-runtime compatibility contract; Electron is no longer a workspace app.
-import { acquireProfileOwnership, profileEndpoint } from "../apps/launcher-gpui/compatibility/electron-profile-owner.mjs";
+import { acquireProfileOwnership, profileEndpoint } from "../apps/launcher/compatibility/electron-profile-owner.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const extension = process.platform === "win32" ? ".exe" : "";
-const target = process.env.CARGO_TARGET_DIR ?? path.join(root, "apps/launcher-gpui/target");
+const target = process.env.CARGO_TARGET_DIR ?? path.join(root, "apps/launcher/target");
 const cli = path.join(target, "debug", `industrialis-cli${extension}`);
 const native = path.join(target, "debug/examples", `profile_ownership_smoke${extension}`);
 const fixture = path.join(target, "debug/examples", `profile_owner${extension}`);

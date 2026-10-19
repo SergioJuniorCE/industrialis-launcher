@@ -173,7 +173,7 @@ def main():
     channel = os.environ.get("GPUI_PACKAGE_CHANNEL", "preview")
     assert channel in ("preview", "stable"), "Unknown package channel"
     repo = Path(__file__).resolve().parent.parent
-    app = repo / "apps/launcher-gpui"
+    app = repo / "apps/launcher"
     version = json.loads((app / "package.json").read_text())["version"]
     spec = importlib.util.spec_from_file_location("virtual_window", repo / "scripts/gpui-virtual-game-window.py")
     helper = importlib.util.module_from_spec(spec)

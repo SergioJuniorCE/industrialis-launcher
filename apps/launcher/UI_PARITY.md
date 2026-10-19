@@ -11,8 +11,9 @@ isolated fictional instance data. Native screenshot comparison remains pending.
 
 ## Reference
 
-Use `../launcher/src/App.tsx`, the final overrides in `App.css`, and the shared
-components in `../launcher/src/components/`. The relevant components include
+Use the frozen [Electron 0.3.0 source](https://github.com/SergioJuniorCE/industrialis-launcher/tree/launcher-v0.3.0/apps/launcher/src):
+`App.tsx`, the final overrides in `App.css`, and the shared `components/` directory.
+The relevant components include
 `InstanceGridCard`, `InstanceAvatar`, `AccountsTab`, `AccountSwitcher`,
 `InstanceSettingsPanel`, `InstanceSettingsTabs`, `ProcessesTab`,
 `ProcessesDropdown`, `VirtualizedLogList`, `WindowControls`, and `ui/button`.

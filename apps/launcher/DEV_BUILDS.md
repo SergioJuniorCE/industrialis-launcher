@@ -1,7 +1,7 @@
 # GPUI development builds
 
 The reported delay occurs while Cargo says Compiling, before application startup.
-`pnpm --filter @industrialis/launcher-gpui dev` runs the dependency-free Node
+`pnpm --filter @industrialis/launcher dev` runs the dependency-free Node
 watcher in `scripts/dev-launcher-gpui.mjs`. It builds with Cargo, launches the
 reported executable and automatically rebuilds/restarts on source or asset saves.
 Watch mode builds `industrialis-dev` with the `dev-watch` feature, so a running
@@ -21,8 +21,8 @@ build. pnpm may verify/install workspace dependencies when package manifests
 change: it performed a 33.5-second one-time verification install after the dev
 script update. A warm pnpm-to-Cargo help dispatch then took 0.23 seconds. For Rust
 iteration without pnpm workspace verification, run `node
-../../scripts/dev-launcher-gpui.mjs` from `apps/launcher-gpui`. For a single run,
-use `pnpm --filter @industrialis/launcher-gpui dev:once` or `cargo run -p
+../../scripts/dev-launcher-gpui.mjs` from `apps/launcher`. For a single run,
+use `pnpm --filter @industrialis/launcher dev:once` or `cargo run -p
 industrialis-app --locked --jobs 2` from that directory.
 
 ## Automatic rebuild and restart

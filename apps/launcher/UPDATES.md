@@ -129,7 +129,7 @@ Stamp versions using:
 
 ```powershell
 node scripts/set-gpui-launcher-version.mjs 0.1.1
-cargo update --workspace --offline --manifest-path apps/launcher-gpui/Cargo.toml
+cargo update --workspace --offline --manifest-path apps/launcher/Cargo.toml
 ```
 
 The script synchronizes the GPUI package and app Cargo versions. About and
@@ -147,35 +147,39 @@ pnpm build:launcher:gpui:portable
 Windows needs NSIS 3.11 or later. Use `MAKENSIS` or `--makensis <absolute path>`
 with `node scripts/build-launcher-gpui.mjs` for a portable compiler. The build
 uses `cargo build --release --locked --features packaged-updates`; outputs go
-to `apps/launcher-gpui/dist`. `--skip-build --binary <path>` is only for packaging
+to `apps/launcher/dist`. `--skip-build --binary <path>` is only for packaging
 smoke fixtures, not release builds. The packager supports native Windows x64,
 macOS arm64 and Linux x64 hosts.
 
 Build-only stable preparation, after reviewing the retirement behavior:
 
 ```powershell
-node scripts/build-launcher-gpui.mjs --channel stable --out apps/launcher-gpui/target/stable-review
+node scripts/build-launcher-gpui.mjs --channel stable --out apps/launcher/target/stable-review
 ```
 
 Do not install that stable artifact over an existing installation until the actual
 old-installer acceptance scenario is ready. Merely building it does not retire any
 application. `--replacement` alone continues to register only the protocol.
 
-The dedicated `.github/workflows/launcher-gpui-release.yml` tests and builds all
-three platforms on `launcher-gpui-v*` tags. It publishes the isolated preview
-release after all builds succeed. `workflow_dispatch` builds downloadable CI
-artifacts without publishing a release. Root launcher development and local
-packaging commands now select GPUI; explicit `:electron` aliases retain the
-reference app. Root `pnpm dev` excludes Electron. The production `launcher-v*`
-workflow/download feed stays Electron until accepted cutover. Creating a
-tag/publishing is a separate authorized action.
+The canonical `.github/workflows/launcher-release.yml` tests and builds all
+three native platforms. `launcher-v*` tags publish stable releases and
+`launcher-gpui-v*` tags publish optional isolated previews after every build
+succeeds. `workflow_dispatch` builds CI artifacts without publishing a release.
+Root launcher development, packaging and version commands select GPUI;
+Electron source, aliases and build dependencies have been removed. The last
+Electron source and binary remain available under `launcher-v0.3.0` for rollback.
+
+Windows CI downloads the official NSIS 3.11 portable ZIP, verifies its pinned
+SHA-256 before extraction and checks the compiler version. `MAKENSIS` selects
+that same compiler for packaging and updater/retirement smoke checks. It does
+not depend on the Chocolatey feed or install a global compiler.
 
 ## Verification
 
 ```powershell
-# From apps/launcher-gpui:
+# From apps/launcher:
 cargo test --workspace --lib --bins --tests --jobs 1 --features industrialis-app/packaged-updates --locked
-cargo run -p industrialis-cli --locked -- check-launcher-update --current-version 0.1.0
+cargo run -p industrialis-cli --locked --features industrialis-backend/stable-updates -- check-launcher-update --current-version 0.3.0
 
 # From the repository root:
 node --test scripts/gpui-packaging.test.mjs scripts/gpui-notices.test.mjs scripts/gpui-windows-runtime.test.mjs

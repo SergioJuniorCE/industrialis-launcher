@@ -1,5 +1,5 @@
 param(
-  [string]$AppDirectory = (Join-Path $PSScriptRoot '../apps/launcher-gpui'),
+  [string]$AppDirectory = (Join-Path $PSScriptRoot '../apps/launcher'),
   [ValidateSet('preview', 'stable')][string]$Channel = 'preview',
   [string]$ArtifactDirectory
 )

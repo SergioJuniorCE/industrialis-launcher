@@ -7,7 +7,7 @@ import { collectDistributionNotices } from "./gpui-notices.mjs";
 import { verifyWindowsRuntime, windowsPackageEnvironment } from "./gpui-windows-runtime.mjs";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const app = path.join(repo, "apps/launcher-gpui");
+const app = path.join(repo, "apps/launcher");
 const args = process.argv.slice(2);
 const target = args[0] && !args[0].startsWith("--") ? args.shift() : "all";
 if (!["all", "installer", "portable"].includes(target)) throw new Error("Target must be all, installer, or portable");

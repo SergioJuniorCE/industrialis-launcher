@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cache = path.join(repo, "apps/launcher-gpui/target");
+const cache = path.join(repo, "apps/launcher/target");
 const verify = process.argv.includes("--verify");
 const online = process.argv.includes("--online");
 if (process.argv.slice(2).some((arg) => !["--verify", "--online"].includes(arg)))
@@ -32,7 +32,7 @@ function run(command, args, cwd = snapshot, capture = false) {
   return result.stdout;
 }
 // Explicit source roots exclude profiles, attachments, tool state and generated outputs.
-const roots = ["apps/launcher-gpui/", "apps/server/", "apps/dashboard/", "apps/website/", "packages/", "scripts/", "docs/", ".github/"];
+const roots = ["apps/launcher/", "apps/server/", "apps/dashboard/", "apps/website/", "packages/", "scripts/", "docs/", ".github/"];
 const rootFiles = new Set([
   "package.json",
   "pnpm-lock.yaml",
@@ -85,7 +85,7 @@ const workspace = (await readFile(workspaceFile, "utf8"))
 await writeFile(workspaceFile, workspace);
 await writeFile(
   path.join(snapshot, "scripts/set-launcher-version.mjs"),
-  'import { setVersion } from "./set-gpui-launcher-version.mjs";\nimport { fileURLToPath } from "node:url";\nawait setVersion(fileURLToPath(new URL("../apps/launcher-gpui", import.meta.url)), process.argv[2] ?? "");\n',
+  'import { setVersion } from "./set-gpui-launcher-version.mjs";\nimport { fileURLToPath } from "node:url";\nawait setVersion(fileURLToPath(new URL("../apps/launcher", import.meta.url)), process.argv[2] ?? "");\n',
 );
 await writeFile(path.join(snapshot, "source-inventory.json"), `${JSON.stringify(inventory, null, 2)}\n`);
 console.log(`Isolated workspace without Electron: ${snapshot}`);
@@ -100,7 +100,7 @@ const pnpm = (...args) => run(process.execPath, [corepack, "pnpm", ...args]);
 const network = online ? [] : ["--offline"];
 pnpm("install", "--lockfile-only", ...network, "--ignore-scripts");
 const lock = await readFile(path.join(snapshot, "pnpm-lock.yaml"), "utf8");
-if (/^  apps\/launcher:\s*$/m.test(lock) || /^  ['"]?(?:@electron\/[^:'"\n]+|electron|electron-winstaller|electron-packager|electron-forge)@/m.test(lock)) {
+if (/^  ['"]?(?:@electron\/[^:'"\n]+|electron|electron-winstaller|electron-packager|electron-forge)@/m.test(lock)) {
   throw new Error("Electron importer/runtime/build dependencies remain in the pruned lockfile");
 }
 if (verify) {

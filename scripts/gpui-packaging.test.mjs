@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { readCargoVersion, setVersion, validateVersion } from "./set-gpui-launcher-version.mjs";
 
-const app = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../apps/launcher-gpui");
+const app = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../apps/launcher");
 test("GPUI version stamping keeps package, Cargo, About and Windows metadata on one version", async () => {
   await mkdir(path.join(app, "target"), { recursive: true });
   const fixture = await mkdtemp(path.join(app, "target/version-test-"));
@@ -36,6 +36,12 @@ test("stable native release and optional previews use the correct update channel
   const notes = await readFile(path.join(app, "RELEASE_NOTES.md"), "utf8");
   assert.ok(notes.includes("<!-- industrialis-gpui-release-v1 -->"));
   const manifest = JSON.parse(await readFile(path.join(app, "../../package.json"), "utf8"));
+  const launcher = JSON.parse(await readFile(path.join(app, "package.json"), "utf8"));
+  const lockfile = await readFile(path.join(app, "../../pnpm-lock.yaml"), "utf8");
+  assert.equal(launcher.name, "@industrialis/launcher");
+  assert.match(manifest.scripts["dev:launcher"], /--filter @industrialis\/launcher dev$/);
+  assert.match(lockfile, /^  apps\/launcher: \{\}$/m);
+  assert.ok(!workflow.includes("apps/launcher-gpui"));
   assert.match(manifest.scripts["build:launcher:release"], /--channel stable/);
   for (const asset of ["IndustrialisGPUISetup-x64.exe", "IndustrialisGPUI-macos-arm64.dmg", "IndustrialisGPUI-linux-x64.tar.gz"]) {
     assert.ok(updater.includes(asset));

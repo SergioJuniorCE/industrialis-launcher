@@ -174,7 +174,7 @@ failed account-default writes. Backend tests exercise simultaneous readers,
 read-only and Windows sharing failures, retry and caller cancellation. A GPUI
 pointer/close test exercises failure retention, the Retry button and saved values.
 
-Run from `apps/launcher-gpui`:
+Run from `apps/launcher`:
 
 ```sh
 cargo test --workspace --locked --offline

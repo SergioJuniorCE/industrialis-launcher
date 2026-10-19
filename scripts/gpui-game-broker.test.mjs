@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 const root = fileURLToPath(new URL("../", import.meta.url));
-const target = process.env.CARGO_TARGET_DIR ?? path.join(root, "apps/launcher-gpui/target");
+const target = process.env.CARGO_TARGET_DIR ?? path.join(root, "apps/launcher/target");
 const app = path.join(target, "debug/examples", `profile_ownership_smoke${process.platform === "win32" ? ".exe" : ""}`);
 const fixture = path.join(target, "debug/examples", `game_lifecycle${process.platform === "win32" ? ".exe" : ""}`);
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
