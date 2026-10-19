@@ -36,6 +36,7 @@ path = "src/main.rs"
 industrialis-core.workspace = true
 industrialis-backend.workspace = true
 anyhow.workspace = true
+log = "0.4"
 base64.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

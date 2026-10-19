@@ -241,6 +241,7 @@ def main():
                   "artifactSha256": sha(archive.read_bytes()), "executableSha256": sha(contents),
                   "files": sorted(FILES), "noticesAndLicense": True, "dependenciesPresent": True,
                   "nativeWindow": {"width": width, "height": height, "sampledColors": colors},
+                  "rendererFixture": "OpenGL software on Xvfb; Vulkan driver discovery disabled",
                   "normalCloseExitCode": 0, "unknownSettingsPreserved": True, "updates": "manual",
                   "activation": activation,
                   "defaultLinuxProfilePath": True, "registeredProtocolActivation": protocol,

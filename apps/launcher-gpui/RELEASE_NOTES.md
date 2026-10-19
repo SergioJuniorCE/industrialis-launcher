@@ -14,7 +14,7 @@ The native Rust/GPUI launcher replaces the Electron launcher.
 
 - Windows x64 installer: **IndustrialisLauncherSetup.exe**. Windows portable: **IndustrialisGPUI-windows-x64.zip**.
 - macOS Apple Silicon: **IndustrialisGPUI-macos-arm64.dmg**.
-- Linux x64: **IndustrialisGPUI-linux-x64.tar.gz**. Requires a graphical desktop, Vulkan drivers, Fontconfig and X11/Wayland libraries.
+- Linux x64: **IndustrialisGPUI-linux-x64.tar.gz**. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig and X11/Wayland libraries.
 - Windows installed builds support in-app updates. Portable, Linux and macOS updates are manual.
 
 ## Known limitations accepted for this release
@@ -23,6 +23,7 @@ The native Rust/GPUI launcher replaces the Electron launcher.
 - Microsoft sign-in and refresh passed with a newly authorized test account; existing original-account refresh and macOS Keychain acceptance are not fully verified.
 - Immediate Forge server auto-join failed in the software-rendered test fixture. Manual joining remains the alternative; general server/gameplay acceptance is incomplete.
 - Physical IME/accessibility, macOS lifecycle, Wayland and older supported OS acceptance are incomplete. Linux launcher hiding uses minimize.
+- Mesa 23's Vulkan software renderer showed a black window on Xvfb. OpenGL software rendering passed the same reproduction. For an affected Linux setup, try `VK_DRIVER_FILES=/dev/null VK_ICD_FILENAMES=/dev/null LIBGL_ALWAYS_SOFTWARE=1 ./industrialis`. Physical GPU/Vulkan acceptance remains incomplete.
 - This is the first native stable release. An actual published native N-to-N+1 self-update has not yet been certified.
 - Windows binaries are not publisher-signed. macOS is ad-hoc signed and not notarized; operating-system trust prompts may appear.
 - The copy completion cue uses the OS sound; choosing a custom sound is a follow-up feature.

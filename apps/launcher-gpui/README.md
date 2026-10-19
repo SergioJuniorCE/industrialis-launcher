@@ -35,6 +35,21 @@ then apply one of its variants to the launcher and highlighted file editor.
 Variants are saved in the existing settings and work offline. See
 [Open VSX themes](OPEN_VSX_THEMES.md).
 
+## Linux rendering
+
+The native backend selects Vulkan or OpenGL. If an older Mesa software driver
+opens a black window, select OpenGL software rendering for that launch:
+
+```sh
+VK_DRIVER_FILES=/dev/null VK_ICD_FILENAMES=/dev/null LIBGL_ALWAYS_SOFTWARE=1 ./industrialis
+```
+
+This was reproduced with Mesa 23 on an owned Ubuntu 22.04 Xvfb desktop. The
+portable acceptance fixture explicitly uses OpenGL there and still requires a
+nonblank native frame, activation and normal closure. It does not certify
+physical GPU/Vulkan or Wayland behavior. Renderer selection and GPU errors are
+written to stderr for troubleshooting.
+
 ## Development storage
 
 Development and test builds use limited debug information. Incremental caching

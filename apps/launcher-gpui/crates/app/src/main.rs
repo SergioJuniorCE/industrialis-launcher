@@ -12,6 +12,7 @@ mod appearance;
 mod assets;
 mod code_highlighting;
 mod desktop_window;
+mod diagnostics;
 #[cfg(debug_assertions)]
 mod dev_control;
 mod input;
@@ -34,6 +35,7 @@ use crate::state::AppData;
 use crate::views::LauncherRoot;
 
 fn main() {
+    diagnostics::init();
     if industrialis_backend::game_broker::run_if_requested() {
         return;
     }

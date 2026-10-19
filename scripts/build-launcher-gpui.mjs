@@ -145,7 +145,7 @@ if (process.platform === "win32") {
   );
   await writeFile(
     path.join(folder, "README.txt"),
-    `Industrialis GPUI ${version}\nRun ./industrialis. Requires a graphical desktop, Vulkan drivers, Fontconfig, X11 or Wayland libraries. Launcher updates are manual.\nDesktop installation: put this directory on PATH, install icon.png as industrialis-gpui, and copy industrialis-gpui.desktop to ~/.local/share/applications/. ${replacement ? "Register it with: xdg-mime default industrialis-gpui.desktop x-scheme-handler/industrialislauncher" : "Preview desktop files do not register the original launcher protocol."}\n`,
+    `Industrialis GPUI ${version}\nRun ./industrialis. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig, X11 or Wayland libraries. Launcher updates are manual.\nIf an older Mesa software driver shows a black window, try: VK_DRIVER_FILES=/dev/null VK_ICD_FILENAMES=/dev/null LIBGL_ALWAYS_SOFTWARE=1 ./industrialis\nDesktop installation: put this directory on PATH, install icon.png as industrialis-gpui, and copy industrialis-gpui.desktop to ~/.local/share/applications/. ${replacement ? "Register it with: xdg-mime default industrialis-gpui.desktop x-scheme-handler/industrialislauncher" : "Preview desktop files do not register the original launcher protocol."}\n`,
   );
   run("tar", ["-czf", path.join(out, "IndustrialisGPUI-linux-x64.tar.gz"), "-C", staging, "industrialis-gpui"]);
 }

@@ -3193,6 +3193,7 @@ dependencies = [
  "gpui-pre-platform",
  "industrialis-backend",
  "industrialis-core",
+ "log",
  "objc",
  "raw-window-handle",
  "serde_json",
