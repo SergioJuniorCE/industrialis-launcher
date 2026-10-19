@@ -1,0 +1,13 @@
+{
+  "name": "@industrialis/launcher-gpui",
+  "private": true,
+  "version": "0.4.0",
+  "description": "Industrialis launcher (Rust + GPUI port)",
+  "scripts": {
+    "dev": "node ../../scripts/dev-launcher-gpui.mjs",
+    "dev:once": "cargo run -p industrialis-app --locked --jobs 2",
+    "build": "cargo build --workspace --locked --jobs 1",
+    "package": "node ../../scripts/build-launcher-gpui.mjs",
+    "test": "cargo test --workspace --lib --bins --tests --locked --jobs 1"
+  }
+}

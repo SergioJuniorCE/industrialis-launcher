@@ -1,0 +1,40 @@
+[package]
+name = "industrialis-backend"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[features]
+stable-updates = []
+
+[dependencies]
+industrialis-core.workspace = true
+anyhow.workspace = true
+aes = "0.8.4"
+cbc = { version = "0.1.2", features = ["alloc", "block-padding"] }
+async-trait = "0.1"
+base64.workspace = true
+directories.workspace = true
+md5.workspace = true
+open.workspace = true
+regex.workspace = true
+ring = "0.17.14"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+json5 = "0.4"
+plist = "1"
+semver.workspace = true
+sha2.workspace = true
+sha1.workspace = true
+sysinfo.workspace = true
+tokio.workspace = true
+zip.workspace = true
+flate2.workspace = true
+uuid.workspace = true
+walkdir.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libloading = "0.8.9"
+zbus = { version = "5.19.0", default-features = false, features = ["async-io", "blocking-api"] }

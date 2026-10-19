@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPUI Layout and Components"
+  short_description: "GPUI layouts, controls, lists, and UI parity"
+  default_prompt: "Use $gpui-layout-and-components to port this interface to GPUI while preserving its behavior and appearance."

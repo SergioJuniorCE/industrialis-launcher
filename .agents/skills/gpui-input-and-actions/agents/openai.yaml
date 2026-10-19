@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPUI Input and Actions"
+  short_description: "GPUI keyboard dispatch, focus, and text editing"
+  default_prompt: "Use $gpui-input-and-actions to implement or diagnose this GPUI keyboard and text-input behavior."

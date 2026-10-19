@@ -1,0 +1,2 @@
+# Keep GPUI acceptance runners executable in Linux containers after Windows checkouts.
+scripts/test-gpui-*.sh text eol=lf

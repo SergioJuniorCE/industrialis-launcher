@@ -6,12 +6,12 @@ Turborepo monorepo for the Industrialis GT New Horizons launcher and website.
 
 ## Apps
 
-| App                         | Package                   | Description                                                              |
-| --------------------------- | ------------------------- | ------------------------------------------------------------------------ |
-| [Launcher](apps/launcher)   | `@industrialis/launcher`  | Electron desktop app - install GTNH, manage Java, Microsoft auth, launch |
-| [Website](apps/website)     | `@industrialis/website`   | Next.js marketing site                                                   |
-| [Server](apps/server)       | `@industrialis/server`    | Linux CLI + Docker daemon for hosting GTNH servers                       |
-| [Dashboard](apps/dashboard) | `@industrialis/dashboard` | Astro UI for managing hosted servers                                     |
+| App                            | Package                       | Description                                        |
+| ------------------------------ | ----------------------------- | -------------------------------------------------- |
+| [Launcher](apps/launcher-gpui) | `@industrialis/launcher-gpui` | Native Rust/GPUI desktop launcher                  |
+| [Website](apps/website)        | `@industrialis/website`       | Next.js marketing site                             |
+| [Server](apps/server)          | `@industrialis/server`        | Linux CLI + Docker daemon for hosting GTNH servers |
+| [Dashboard](apps/dashboard)    | `@industrialis/dashboard`     | Astro UI for managing hosted servers               |
 
 ### Host a GTNH server (Linux)
 
@@ -25,15 +25,17 @@ See [docs/server-hosting.md](docs/server-hosting.md) for Docker, systemd, and co
 
 ## Prerequisites
 
-| Tool                                    | Notes                                   |
-| --------------------------------------- | --------------------------------------- |
-| [Node.js](https://nodejs.org/)          | LTS recommended                         |
-| [pnpm](https://pnpm.io/)                | Package manager (`npm install -g pnpm`) |
-| [Electron](https://www.electronjs.org/) | Desktop runtime bundled by the launcher |
-| Java 17+                                | Required to run GTNH instances          |
+| Tool                           | Notes                                               |
+| ------------------------------ | --------------------------------------------------- |
+| [Node.js](https://nodejs.org/) | LTS recommended                                     |
+| [pnpm](https://pnpm.io/)       | Package manager (`npm install -g pnpm`)             |
+| Rust 1.96+                     | Native launcher compiler; pinned Cargo dependencies |
+| Java 17+                       | Required to run GTNH instances                      |
 
 Launcher release packaging requires Node.js 24.x, matching the GitHub Actions
 release environment. Development, builds, and tests can use the current LTS.
+GPUI packaging needs NSIS 3.11 on Windows and native platform build libraries on
+Linux/macOS; see [GPUI updates and packaging](apps/launcher-gpui/UPDATES.md).
 
 ## Development
 
@@ -50,7 +52,7 @@ pnpm dev
 Or run a single app:
 
 ```bash
-pnpm dev:launcher    # Electron desktop app (Vite renderer on :5173, override with VITE_PORT=5197 or PORT=5197; VITE_PORT wins)
+pnpm dev:launcher    # Native GPUI desktop app
 pnpm dev:website     # Next.js site on :3000
 pnpm dev:server      # GTNH server daemon on :4310
 pnpm dev:dashboard   # Astro server console on :3001
@@ -66,8 +68,8 @@ Launcher-only:
 
 ```bash
 pnpm build:launcher
-pnpm test --filter=@industrialis/launcher
-pnpm --filter=@industrialis/launcher build
+pnpm test --filter=@industrialis/launcher-gpui
+pnpm --filter=@industrialis/launcher-gpui build
 ```
 
 Create release artifacts for the current OS (installers + portable):
@@ -76,28 +78,24 @@ Create release artifacts for the current OS (installers + portable):
 pnpm build:launcher:release
 ```
 
-The artifacts are written to `artifacts/launcher`.
+Artifacts are written to `apps/launcher-gpui/dist`. The native launcher reads
+the existing profile in place; users need no data migration.
 
-| Platform | Installer         | Portable            |
-| -------- | ----------------- | ------------------- |
-| Windows  | Squirrel (`.exe`) | ZIP of packaged app |
-| macOS    | DMG               | ZIP of `.app`       |
-| Linux    | DEB/RPM           | ZIP of packaged app |
+| Platform | Installer       | Portable                  |
+| -------- | --------------- | ------------------------- |
+| Windows  | NSIS (`.exe`)   | Native executable ZIP     |
+| macOS    | DMG with `.app` | Manual update via DMG     |
+| Linux    | tar.gz archive  | Native executable archive |
 
 Build only one format with `pnpm build:launcher:installer` or
-`pnpm build:launcher:portable`. On Windows you can target the installer with
-`powershell -File scripts/build-launcher.ps1 -Target installer`.
+`pnpm build:launcher:portable`. On macOS/Linux the packager produces the platform's
+single native distribution format.
 
-The launcher release workflow runs when a `launcher-v*` tag is pushed. It runs
-the Windows, macOS, and Linux packaging jobs and publishes a GitHub Release
-with all artifacts. Ordinary pushes to `master` do not build the launcher.
-
-To publish a launcher release from a chosen commit:
-
-```bash
-git tag launcher-v0.1.56
-git push origin launcher-v0.1.56
-```
+Stable `launcher-v*` tags build the native launcher on Windows x64, macOS arm64
+and Linux x64 and publish the production release. `launcher-gpui-v*` tags remain
+optional prereleases; ordinary master pushes do not publish.
+See [release notes and known limitations](apps/launcher-gpui/RELEASE_NOTES.md) and
+[cutover and rollback](apps/launcher-gpui/CUTOVER.md).
 
 ## Microsoft login
 
@@ -125,7 +123,8 @@ for an individual pack under **Instance Settings > General > Cloud backups**.
 ```
 industrialis/
 |-- apps/
-|   |-- launcher/          # Electron + React desktop app
+|   |-- launcher-gpui/     # Rust + GPUI desktop app
+|   |-- launcher/          # Retained Electron reference until accepted cutover
 |   |-- website/           # Next.js marketing site
 |   |-- server/            # industrialis CLI + Docker daemon
 |   `-- dashboard/         # Astro server console
