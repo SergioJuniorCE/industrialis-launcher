@@ -215,7 +215,7 @@ checks real Squirrel retirement and installed lifecycle without replacing the
 personal installation. Results and exact artifact hashes are recorded in the
 [migration tracker](MIGRATION_TRACKER.md).
 
-Still verify before production cutover: an actual published N → N+1 GPUI update,
+Accepted follow-ups after the 0.4.0 production cutover: an actual published N → N+1 GPUI update,
 cross-platform artifact launch/install behavior, signing/notarization, physical
 replacement, running-user handoff and older Windows compatibility. The actual
 Electron 0.3.0 replacement, installed native lifecycle and same-owner protocol
