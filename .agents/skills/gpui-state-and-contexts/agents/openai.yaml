@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPUI State and Contexts"
+  short_description: "GPUI entities, context lifetimes, and async state"
+  default_prompt: "Use $gpui-state-and-contexts to implement this GPUI state change against the pinned framework version."
