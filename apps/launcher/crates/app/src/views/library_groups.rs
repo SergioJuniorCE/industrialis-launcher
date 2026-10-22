@@ -211,6 +211,7 @@ mod tests {
             assert!(root.read_with(cx, |v, _| v.dialog.is_none()));
         }
         Fixture::click(cx, window, "toolbar-add");
+        Fixture::click(cx, window, "add-menu-install");
         root.read_with(cx, |v, _| {
             assert!(matches!(&v.dialog,Some(Dialog::NewInstance(d)) if d.group.text.is_empty()))
         });

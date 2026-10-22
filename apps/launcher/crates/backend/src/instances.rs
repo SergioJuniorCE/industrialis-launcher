@@ -62,6 +62,11 @@ pub async fn known_instance_ids(paths: &LauncherPaths) -> Result<HashSet<String>
     while let Ok(Some(entry)) = entries.next_entry().await {
         let name = entry.file_name().to_string_lossy().into_owned();
         let path = entry.path();
+        // Import staging directories are hidden partial copies; a cancelled or
+        // crashed import may leave one behind and it must not become an instance.
+        if name.starts_with(".import-") {
+            continue;
+        }
         if !tokio::fs::symlink_metadata(&path)
             .await
             .map(|m| m.is_dir())
@@ -100,7 +105,9 @@ pub async fn load_instances_with_issues(
                 continue;
             }
         };
-        if settings.pack_version.is_empty() {
+        // Frozen Prism imports have no pack version by design; only legacy
+        // documents with a missing version fall back to the directory id.
+        if settings.pack_version.is_empty() && !settings.imported {
             settings.pack_version = id.clone();
         }
         let group = match get_instance_group(paths, &id, &known).await {
@@ -188,6 +195,39 @@ mod tests {
     async fn empty_root_yields_no_instances() {
         let paths = temp_paths("empty");
         assert!(known_instance_ids(&paths).await.unwrap().is_empty());
+        assert!(load_instances(&paths).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn frozen_prism_imports_keep_an_empty_pack_version() {
+        let paths = temp_paths("frozen-import");
+        let root = paths.instances_dir();
+        tokio::fs::create_dir_all(root.join("imported")).await.unwrap();
+        tokio::fs::write(root.join("imported").join("mmc-pack.json"), "{}")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            paths.settings_path("imported").unwrap(),
+            r#"{"name":"Imported","imported":true}"#,
+        )
+        .await
+        .unwrap();
+
+        let list = load_instances(&paths).await.unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(list[0].settings.imported);
+        assert_eq!(list[0].settings.pack_version, "");
+    }
+
+    #[tokio::test]
+    async fn import_staging_directories_are_not_instances() {
+        let paths = temp_paths("import-staging");
+        let staging = paths.instances_dir().join(".import-gtnh-uuid");
+        tokio::fs::create_dir_all(&staging).await.unwrap();
+        tokio::fs::write(staging.join("mmc-pack.json"), "{}")
+            .await
+            .unwrap();
+
         assert!(load_instances(&paths).await.unwrap().is_empty());
     }
 }

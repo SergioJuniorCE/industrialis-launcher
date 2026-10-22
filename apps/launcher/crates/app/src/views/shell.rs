@@ -141,10 +141,12 @@ impl LauncherRoot {
             .window_control_area(WindowControlArea::Drag)
             .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
             .child(brand)
-            .child(add.occlude().on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+            .child(add.occlude().on_click(cx.listener(|v, e: &gpui::ClickEvent, _, cx| {
                     cx.stop_propagation();
                     v.tab = Tab::Instances;
-                    v.open_new_instance(cx);
+                    v.workspace_ui.menu = None;
+                    v.add_menu = Some(e.position());
+                    cx.notify();
                 }),
             ))
             .child(
@@ -321,6 +323,81 @@ impl LauncherRoot {
                         ),
                 )
             })
+    }
+
+    /// Dropdown for the toolbar Add button: install a new pack or import from
+    /// Prism. Rendered as a deferred overlay like the library context menu.
+    pub(super) fn toolbar_add_menu(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::Deferred> {
+        let position = self.add_menu?;
+        if self.dialog.is_some() || self.closing.is_some() {
+            return None;
+        }
+        let t = &self.theme;
+        let install = btn(t, "", ButtonVariant::Ghost)
+            .id("add-menu-install")
+            .debug_selector(|| "add-menu-install".into())
+            .aria_label("Install new GTNH pack")
+            .role(gpui::accesskit::Role::MenuItem)
+            .w_full()
+            .justify_start()
+            .text_xs()
+            .px_2()
+            .gap_2()
+            .child(icon("boxes", 14.0))
+            .child("Install new GTNH pack…")
+            .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                v.add_menu = None;
+                v.tab = Tab::Instances;
+                v.open_new_instance(cx);
+            }));
+        let import = btn(t, "", ButtonVariant::Ghost)
+            .id("add-menu-import")
+            .debug_selector(|| "add-menu-import".into())
+            .aria_label("Import from Prism")
+            .role(gpui::accesskit::Role::MenuItem)
+            .w_full()
+            .justify_start()
+            .text_xs()
+            .px_2()
+            .gap_2()
+            .child(icon("archive", 14.0))
+            .child("Import from Prism…")
+            .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                v.add_menu = None;
+                v.open_prism_import(None, false, cx);
+            }));
+        let menu = div()
+            .id("toolbar-add-menu")
+            .role(gpui::accesskit::Role::Menu)
+            .absolute()
+            .left(px((f32::from(position.x) - 12.0)
+                .min(f32::from(window.viewport_size().width) - 232.)
+                .max(0.)))
+            .top(px((f32::from(position.y) + 20.0)
+                .min(f32::from(window.viewport_size().height) - 88.)
+                .max(44.)))
+            .w(px(228.))
+            .p_1()
+            .rounded_md()
+            .border_1()
+            .border_color(t.border())
+            .bg(t.popover())
+            .shadow_lg()
+            .on_mouse_down_out(cx.listener(|v, event: &gpui::MouseDownEvent, _, cx| {
+                if event.button == MouseButton::Left {
+                    v.add_menu = None;
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(install)
+            .child(import);
+        Some(gpui::deferred(div().absolute().inset_0().child(menu)).with_priority(21))
     }
 
     pub(super) fn footer(&self) -> Div {

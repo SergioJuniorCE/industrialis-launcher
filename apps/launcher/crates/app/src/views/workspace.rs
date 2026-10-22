@@ -103,9 +103,17 @@ pub(super) fn display_name(info: &InstanceInfo) -> String {
         info.settings.name.clone()
     }
 }
+fn imported_frozen(info: &InstanceInfo) -> bool {
+    info.settings.imported
+        && (info.settings.pack_version.is_empty() || !info.settings.imported_gtnh)
+}
 fn pack_version(info: &InstanceInfo) -> &str {
     if info.settings.pack_version.is_empty() {
-        &info.id
+        if info.settings.imported {
+            "Imported"
+        } else {
+            &info.id
+        }
     } else {
         &info.settings.pack_version
     }
@@ -135,10 +143,21 @@ impl LauncherRoot {
             return;
         }
         self.workspace_ui.menu = Some((MenuTarget::Library, position));
+        self.add_menu = None;
         cx.notify();
     }
     fn request_instance_action(&mut self, id: String, action: u8, cx: &mut Context<Self>) {
         self.workspace_ui.menu = None;
+        // Imported instances without an assigned GTNH version stay frozen:
+        // no update checks, updates, or reinstalls.
+        if matches!(action, 0 | 4 | 12)
+            && self
+                .data
+                .selected_instance(Some(&id))
+                .is_some_and(imported_frozen)
+        {
+            return;
+        }
         if let Some(draft) = self
             .files_ui
             .dirty_key(&id)
@@ -221,7 +240,31 @@ impl LauncherRoot {
                         v.open_group_dialog(super::library_groups::GroupDialogKind::Create, cx);
                     }
                 }));
-            return Some(self.library_menu_overlay(div().child(item), *position, 48., window, cx));
+            let import_disabled = self.closing.is_some();
+            let import = btn(&self.theme, "Import from Prism…", ButtonVariant::Ghost)
+                .id("library-import-prism")
+                .debug_selector(|| "library-import-prism".into())
+                .role(gpui::accesskit::Role::MenuItem)
+                .tab_stop(!import_disabled)
+                .w_full()
+                .justify_start()
+                .text_xs()
+                .gap_2()
+                .when(import_disabled, |button| {
+                    button.opacity(0.5).cursor_default()
+                })
+                .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                    if !import_disabled {
+                        v.open_prism_import(None, false, cx);
+                    }
+                }));
+            return Some(self.library_menu_overlay(
+                div().child(item).child(import),
+                *position,
+                92.,
+                window,
+                cx,
+            ));
         }
         if let MenuTarget::Group(group) = target {
             return Some(self.library_menu_overlay(
@@ -246,6 +289,10 @@ impl LauncherRoot {
         };
         let t = &self.theme;
         let busy = self.instance_is_busy(id);
+        let frozen = self
+            .data
+            .selected_instance(Some(id))
+            .is_some_and(imported_frozen);
         let menu = div().children(
             [
                 ("folder-open", "Open folder", 1),
@@ -266,7 +313,8 @@ impl LauncherRoot {
                 let id = id.clone();
                 let disabled = (busy && !matches!(action, 1 | 5 | 6 | 7 | 8 | 9 | 12))
                     || (matches!(action, 7 | 8 | 9) && self.groups_ui.busy)
-                    || (action == 12 && self.catalog_ui.loading);
+                    || (action == 12 && self.catalog_ui.loading)
+                    || (frozen && matches!(action, 0 | 4 | 12));
                 btn(t, "", ButtonVariant::Ghost)
                     .id(format!("instance-menu-action:{action}"))
                     .aria_label(label)
@@ -538,8 +586,9 @@ impl LauncherRoot {
                     v.play(id.clone(), cx);
                 }
             }));
-        if self.pack_status(pack_version(info)).status
-            == industrialis_core::pack_version::PackUpdateStatus::UpdateAvailable
+        if !imported_frozen(info)
+            && self.pack_status(pack_version(info)).status
+                == industrialis_core::pack_version::PackUpdateStatus::UpdateAvailable
         {
             tile = tile.child(div().text_xs().child("Update available"));
         }
@@ -585,7 +634,10 @@ impl LauncherRoot {
             .into_iter()
             .filter(|(_, p)| {
                 p.status == Status::Running
-                    && matches!(p.operation, Operation::Copy | Operation::Install)
+                    && matches!(
+                        p.operation,
+                        Operation::Copy | Operation::Install | Operation::Import
+                    )
             })
             .collect();
         let ids: HashSet<_> = creating.iter().map(|(_, p)| p.id.as_str()).collect();
@@ -970,7 +1022,10 @@ impl LauncherRoot {
             .flex()
             .flex_col()
             .child(header)
-            .child(self.pack_status_view(&info.id, pack_version(&info), cx))
+            .children(
+                (!imported_frozen(&info))
+                    .then(|| self.pack_status_view(&info.id, pack_version(&info), cx)),
+            )
             .child(content)
             .child(self.detail_actions(&info, cx))
     }
@@ -1048,12 +1103,114 @@ impl LauncherRoot {
             ));
         }
         rows.push(("Account", account));
+        let imported = info.settings.imported;
+        let frozen = imported_frozen(info);
+        let gtnh_import = imported && info.settings.imported_gtnh;
+        let show_reinstall = !imported || (gtnh_import && !frozen);
+        let version_id = id.clone();
+        let reinstall_id = id.clone();
+        let version_control = div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .py_2()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("GTNH version"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(t.muted_foreground())
+                            .child(if frozen {
+                                "This copy was imported from Prism and stays frozen. Set an official GTNH version to enable update checks, updates, and reinstall."
+                            } else {
+                                "Imported from Prism. Change the version if this copy was imported with the wrong one."
+                            }),
+                    ),
+            )
+            .child(
+                btn(
+                    t,
+                    if frozen {
+                        "Set version…"
+                    } else {
+                        "Change version…"
+                    },
+                    ButtonVariant::Outline,
+                )
+                .debug_selector(|| "import-set-version".into())
+                .h(px(28.0))
+                .px(px(10.0))
+                .text_xs()
+                .tab_stop(enabled)
+                .when(!enabled, |el| el.opacity(0.5).cursor_default())
+                .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                    if enabled {
+                        v.open_import_version_dialog(&version_id, cx);
+                    }
+                })),
+            );
+        let reinstall = div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .py_2()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Clean reinstall"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(t.muted_foreground())
+                            .child("Fresh pack install while keeping saves, JourneyMap, options, and launcher overlays."),
+                    ),
+            )
+            .child(
+                btn(t, "", ButtonVariant::Outline)
+                    .aria_label("Reinstall")
+                    .h(px(28.0))
+                    .px(px(10.0))
+                    .text_xs()
+                    .child(icon("refresh-cw", 14.0))
+                    .child("Reinstall")
+                    .tab_stop(enabled)
+                    .when(!enabled, |el| el.opacity(0.5).cursor_default())
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        if enabled {
+                            v.request_instance_action(reinstall_id.clone(), 4, cx);
+                        }
+                    })),
+            );
         div().id("instance-info").flex_1().min_h_0().overflow_y_scroll().px_4().pt_3().pb_4().flex().flex_col().gap_3()
-            .child(div().flex().items_center().gap_3().py_2()
-                .child(div().flex_1().min_w_0().flex().flex_col().gap_1().child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Clean reinstall"))
-                    .child(div().text_xs().text_color(t.muted_foreground()).child("Fresh pack install while keeping saves, JourneyMap, options, and launcher overlays.")))
-                .child(btn(t, "", ButtonVariant::Outline).aria_label("Reinstall").h(px(28.0)).px(px(10.0)).text_xs().child(icon("refresh-cw", 14.0)).child("Reinstall").tab_stop(enabled).when(!enabled, |el| el.opacity(0.5).cursor_default())
-                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| { if enabled { v.request_instance_action(id.clone(), 4, cx); } }))))
+            .when(gtnh_import, |el| el.child(version_control))
+            .when(imported && !gtnh_import, |el| el.child(
+                div()
+                    .py_2()
+                    .text_xs()
+                    .text_color(t.muted_foreground())
+                    .child("Imported from Prism as a non-GTNH instance. Update checks, updates, and reinstall stay unavailable."),
+            ))
+            .when(show_reinstall, |el| el.child(reinstall))
             .child(div().flex().flex_wrap().children(rows.into_iter().map(|(key, value)| div().w(relative(0.5)).min_w_0().py(px(10.0)).pr_3().border_t_1().border_color(tint(t.border(), 0.66))
                 .flex().items_center().justify_between().gap_3().child(div().text_xs().flex_shrink_0().text_color(t.muted_foreground()).child(key)).child(div().flex_1().min_w_0().text_right().text_ellipsis().text_xs().font_weight(FontWeight::MEDIUM).child(value)))))
     }
@@ -1136,12 +1293,16 @@ impl LauncherRoot {
                 }
             })),
         );
-        for (glyph, label, action) in [
+        let mut actions = vec![
             ("arrow-up-circle", "Update pack", 0),
             ("folder-open", "Open instance folder", 1),
             ("copy", "Copy instance", 2),
             ("trash-2", "Delete instance", 3),
-        ] {
+        ];
+        if imported_frozen(info) {
+            actions.retain(|(_, _, action)| *action != 0);
+        }
+        for (glyph, label, action) in actions {
             let id = info.id.clone();
             bar = bar.child(
                 icon_btn(t, glyph, ButtonVariant::Outline)

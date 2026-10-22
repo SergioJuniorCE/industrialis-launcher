@@ -6,11 +6,14 @@ use gpui::{
     div, prelude::*, px, uniform_list, Context, Div, FontWeight, MouseButton, MouseDownEvent,
     UniformListScrollHandle, Window,
 };
-use industrialis_core::background_processes::{stage_label, Process, Processes, Status};
+use industrialis_core::background_processes::{
+    stage_label, Operation, Process, Processes, Status,
+};
 
 #[derive(Default)]
 pub(super) struct ProcessesUi {
     pub delete_cancel: std::collections::HashMap<String,std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    pub import_cancel: std::collections::HashMap<String,std::sync::Arc<std::sync::atomic::AtomicBool>>,
     pub history: Processes,
     pub selected: Option<String>,
     pub dropdown: bool,
@@ -114,8 +117,35 @@ impl LauncherRoot {
                         )
                     }),
             );
-        if p.status==Status::Running && p.operation==industrialis_core::background_processes::Operation::Delete {
+        if p.status==Status::Running && p.operation==Operation::Delete {
             let id=p.id.clone();card=card.child(btn(t,"Cancel deletion",ButtonVariant::Outline).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|{if let Some(cancel)=v.processes_ui.delete_cancel.get(&id){cancel.store(true,std::sync::atomic::Ordering::Release);v.data.status="Cancel requested. Already deleted files cannot be restored.".into();cx.notify();}})));
+        }
+        if p.status == Status::Running && p.operation == Operation::Import {
+            let id = p.id.clone();
+            card = card.child(
+                btn(t, "Cancel import", ButtonVariant::Outline)
+                    .debug_selector(|| "process-cancel-import".into())
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        if let Some(cancel) = v.processes_ui.import_cancel.get(&id) {
+                            cancel.store(true, std::sync::atomic::Ordering::Release);
+                            v.data.status =
+                                "Cancel requested. The current copy stops and later imports in the batch are skipped."
+                                    .into();
+                            cx.notify();
+                        }
+                    })),
+            );
+        }
+        if p.status == Status::Failed && p.operation == Operation::Import {
+            card = card.child(
+                div().flex().justify_end().px_2().pb(px(6.0)).child(
+                    btn(t, "Retry import", ButtonVariant::Outline)
+                        .debug_selector(|| "process-retry-import".into())
+                        .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                            v.open_prism_import(None, false, cx);
+                        })),
+                ),
+            );
         }
         if p.status != Status::Running {
             card = card.child(
