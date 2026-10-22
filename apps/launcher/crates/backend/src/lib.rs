@@ -29,6 +29,7 @@ pub mod pack_cache;
 pub mod pack_files;
 pub mod pack_prep;
 pub mod paths;
+pub mod prism;
 pub mod process_manager;
 pub mod profile_owner;
 mod profile_store;

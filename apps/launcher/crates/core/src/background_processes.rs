@@ -11,6 +11,7 @@ pub enum Operation {
     Delete,
     Reinstall,
     Copy,
+    Import,
 }
 
 impl Operation {
@@ -21,6 +22,7 @@ impl Operation {
             "delete" => Some(Self::Delete),
             "reinstall" => Some(Self::Reinstall),
             "copy" => Some(Self::Copy),
+            "import" => Some(Self::Import),
             _ => None,
         }
     }
@@ -31,6 +33,7 @@ impl Operation {
             Self::Delete => "delete",
             Self::Reinstall => "reinstall",
             Self::Copy => "copy",
+            Self::Import => "import",
         }
     }
     pub fn label(self) -> &'static str {
@@ -40,6 +43,7 @@ impl Operation {
             Self::Delete => "Deleting",
             Self::Reinstall => "Clean reinstall",
             Self::Copy => "Copying instance",
+            Self::Import => "Importing instance",
         }
     }
     fn initial_stage(self) -> &'static str {
@@ -49,6 +53,7 @@ impl Operation {
             Self::Delete => "deleting",
             Self::Reinstall => "reinstalling",
             Self::Copy => "copying",
+            Self::Import => "importing",
         }
     }
 }
@@ -85,7 +90,7 @@ impl Process {
     }
     pub fn progress_text(&self) -> String {
         let mut parts = vec![format!("{:.0}%", self.pct * 100.0)];
-        if matches!(self.stage.as_str(), "downloading" | "copying") {
+        if matches!(self.stage.as_str(), "downloading" | "copying" | "importing") {
             if let Some(downloaded) = self.downloaded_mb {
                 parts.push(self.total_mb.map_or_else(
                     || format!("{downloaded:.1} MB"),
@@ -159,7 +164,7 @@ impl Processes {
         } else {
             0.0
         };
-        if matches!(stage, "downloading" | "copying") {
+        if matches!(stage, "downloading" | "copying" | "importing") {
             (p.speed_mbps, p.downloaded_mb, p.total_mb) = transfer;
         } else {
             (p.speed_mbps, p.downloaded_mb, p.total_mb) = (None, None, None);
@@ -174,7 +179,9 @@ impl Processes {
         let Some(p) = self.current(token).filter(|p| p.status == Status::Running) else {
             return false;
         };
-        if error.is_some_and(|e|e.starts_with("Deletion cancelled;")){p.status=Status::Cancelled;p.stage="cancelled".into();p.append(error.unwrap().into());
+        if error.is_some_and(|e|{
+            e.starts_with("Deletion cancelled;") || e.starts_with("Import cancelled;")
+        }){p.status=Status::Cancelled;p.stage="cancelled".into();p.append(error.unwrap().into());
         } else if let Some(error) = error {
             p.status = Status::Failed;
             p.stage = "failed".into();
@@ -235,6 +242,7 @@ pub fn stage_label(stage: &str) -> &str {
         "deleting" => "Deleting",
         "reinstalling" => "Reinstalling",
         "copying" => "Copying",
+        "importing" => "Importing",
         "finalizing" => "Finalizing",
         "done" => "Complete",
         "failed" => "Failed",
@@ -296,5 +304,27 @@ mod tests {
         assert_eq!(history.sorted()[0].0, second.key);
         assert_eq!(history.running_count(), 0);
         assert_eq!(Operation::parse("preview"), None);
+    }
+    #[test]
+    fn import_operations_track_transfer_and_cancellation() {
+        assert_eq!(Operation::parse("import"), Some(Operation::Import));
+        assert_eq!(Operation::Import.key(), "import");
+        assert_eq!(Operation::Import.label(), "Importing instance");
+        let mut history = Processes::default();
+        let token = history.start(Operation::Import, "gtnh", "GTNH 2.8.0");
+        assert_eq!(history.get(&token.key).unwrap().stage, "importing");
+        history.progress(
+            &token,
+            "importing",
+            0.25,
+            None,
+            (Some(12.5), Some(2.5), Some(10.0)),
+        );
+        assert_eq!(
+            history.get(&token.key).unwrap().progress_text(),
+            "25% · 2.5 / 10.0 MB · 12.5 MB/s"
+        );
+        assert!(history.finish(&token, Some("Import cancelled; the partial copy was removed.")));
+        assert_eq!(history.get(&token.key).unwrap().status, Status::Cancelled);
     }
 }

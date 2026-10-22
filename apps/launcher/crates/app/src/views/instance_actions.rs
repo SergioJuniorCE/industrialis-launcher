@@ -709,7 +709,7 @@ impl LauncherRoot {
         self.dialog_frame(title, body, footer, cx)
     }
 
-    fn finish_instance_process(
+    pub(super) fn finish_instance_process(
         &mut self,
         token: &ProcessToken,
         error: Option<&str>,

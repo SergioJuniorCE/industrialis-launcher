@@ -13,6 +13,15 @@ pub struct InstanceSettings {
     pub name: String,
     pub pack_version: String,
     pub pack_java_type: String,
+    /// Set by the Prism importer. GTNH copies without an assigned pack version
+    /// stay frozen: no update checks, updates, or reinstalls. Non-GTNH copies
+    /// are always frozen.
+    #[serde(default)]
+    pub imported: bool,
+    /// The imported copy came from a detected GTNH pack. Only these may have a
+    /// GTNH version assigned later.
+    #[serde(default)]
+    pub imported_gtnh: bool,
     pub backups_enabled: bool,
     pub backup_retention_override: Option<u32>,
     pub java_path: Option<String>,
@@ -68,6 +77,8 @@ impl Default for InstanceSettings {
             name: String::new(),
             pack_version: String::new(),
             pack_java_type: "java17+".to_string(),
+            imported: false,
+            imported_gtnh: false,
             backups_enabled: false,
             backup_retention_override: None,
             java_path: None,
@@ -124,6 +135,8 @@ pub fn merge_instance_settings(disk: Option<InstanceSettings>) -> InstanceSettin
     merged.name = disk.name;
     merged.pack_version = disk.pack_version;
     merged.pack_java_type = disk.pack_java_type;
+    merged.imported = disk.imported;
+    merged.imported_gtnh = disk.imported_gtnh;
     merged.backups_enabled = disk.backups_enabled;
     merged.backup_retention_override = disk.backup_retention_override;
     merged.java_path = disk.java_path;
@@ -222,6 +235,12 @@ impl PartialInstanceSettings {
         }
         if let Some(v) = get_str("pack_java_type") {
             full.pack_java_type = v;
+        }
+        if let Some(v) = get_bool("imported") {
+            full.imported = v;
+        }
+        if let Some(v) = get_bool("imported_gtnh") {
+            full.imported_gtnh = v;
         }
         if let Some(v) = get_bool("backups_enabled") {
             full.backups_enabled = v;
@@ -374,5 +393,26 @@ mod tests {
         assert_eq!(format_play_time(59), "0m");
         assert_eq!(format_play_time(90), "1m");
         assert_eq!(format_play_time(7380), "2h 3m");
+    }
+
+    #[test]
+    fn imported_flag_round_trips_and_stays_out_of_extra_fields() {
+        let parsed = parse_instance_settings_json(
+            r#"{"name":"GTNH","imported":true,"imported_gtnh":true}"#,
+        );
+        assert!(parsed.imported);
+        assert!(parsed.imported_gtnh);
+        assert!(!parsed.extra_fields.contains_key("imported"));
+        assert!(!parsed.extra_fields.contains_key("imported_gtnh"));
+        let raw = serde_json::to_string(&parsed).unwrap();
+        let reparsed = parse_instance_settings_json(&raw);
+        assert!(reparsed.imported);
+        assert!(reparsed.imported_gtnh);
+        let legacy = parse_instance_settings_json(r#"{"name":"X"}"#);
+        assert!(!legacy.imported);
+        assert!(!legacy.imported_gtnh);
+        let merged = merge_instance_settings(Some(parsed));
+        assert!(merged.imported);
+        assert!(merged.imported_gtnh);
     }
 }

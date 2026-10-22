@@ -40,6 +40,7 @@ mod lifetime;
 mod minecraft_files;
 mod pack_catalog;
 mod preferences;
+mod prism_import;
 mod shell;
 #[cfg(test)]
 mod test_support;
@@ -107,6 +108,8 @@ enum Dialog {
     LauncherUpdate,
     Group(library_groups::GroupDialog),
     Icon(library_icons::IconDialog),
+    PrismImport(prism_import::PrismImportDialog),
+    ImportVersion(prism_import::ImportVersionDialog),
 }
 
 pub struct LauncherRoot {
@@ -127,6 +130,7 @@ pub struct LauncherRoot {
     log_scroll: UniformListScrollHandle,
     window_handle: Option<gpui::AnyWindowHandle>,
     dialog: Option<Dialog>,
+    add_menu: Option<gpui::Point<gpui::Pixels>>,
     modal_focus: Option<gpui::FocusHandle>,
     modal_visible: bool,
     focused_field: Option<String>,
@@ -193,6 +197,7 @@ impl LauncherRoot {
             log_scroll: UniformListScrollHandle::new(),
             window_handle: None,
             dialog: None,
+            add_menu: None,
             modal_focus: None,
             modal_visible: false,
             focused_field: None,
@@ -646,6 +651,9 @@ impl LauncherRoot {
             (Some(Dialog::Maintenance(d)), "maintenance-search") => &d.search,
             (Some(Dialog::CopyInstance(d)), "copy-name") => &d.name,
             (Some(Dialog::Group(d)), "group-name") => &d.name,
+            (Some(Dialog::PrismImport(d)), "prism-path") => &d.path,
+            (Some(Dialog::PrismImport(d)), "prism-version-search") => &d.search,
+            (Some(Dialog::ImportVersion(d)), "import-version-search") => &d.search,
             (_, "account-name") => &self.accounts_ui.offline_username,
             (_, "settings-java") => &self.settings_java,
             (_, "settings-retention") => &self.settings_retention,
@@ -663,6 +671,9 @@ impl LauncherRoot {
             (Some(Dialog::Maintenance(d)), "maintenance-search") => &mut d.search,
             (Some(Dialog::CopyInstance(d)), "copy-name") => &mut d.name,
             (Some(Dialog::Group(d)), "group-name") => &mut d.name,
+            (Some(Dialog::PrismImport(d)), "prism-path") => &mut d.path,
+            (Some(Dialog::PrismImport(d)), "prism-version-search") => &mut d.search,
+            (Some(Dialog::ImportVersion(d)), "import-version-search") => &mut d.search,
             (_, "account-name") => &mut self.accounts_ui.offline_username,
             (_, "settings-java") => &mut self.settings_java,
             (_, "settings-retention") => &mut self.settings_retention,
@@ -750,6 +761,7 @@ impl LauncherRoot {
         }
         self.dialog = None;
         self.processes_ui.dropdown = false;
+        self.add_menu = None;
         self.focused_field = None;
         cx.notify();
     }
@@ -763,6 +775,8 @@ impl LauncherRoot {
             self.submit_install(cx);
         } else if matches!(self.dialog, Some(Dialog::CopyInstance(_))) {
             self.submit_copy(cx);
+        } else if matches!(self.dialog, Some(Dialog::PrismImport(_))) {
+            self.submit_prism_dialog(cx);
         }
     }
 
@@ -951,6 +965,8 @@ impl LauncherRoot {
             Dialog::LauncherUpdate => Some(self.launcher_update_dialog(cx)),
             Dialog::Group(state) => Some(self.group_dialog(&state, cx)),
             Dialog::Icon(state) => Some(self.icon_dialog(&state, cx)),
+            Dialog::PrismImport(state) => Some(self.prism_import_dialog(&state, cx)),
+            Dialog::ImportVersion(state) => Some(self.import_version_dialog(&state, cx)),
         }
     }
 
@@ -1124,6 +1140,7 @@ impl Render for LauncherRoot {
                         v.close_dialog(cx);
                     } else {
                         v.workspace_ui.menu = None;
+                        v.add_menu = None;
                         v.accounts_ui.switcher_open = false;
                         v.processes_ui.dropdown = false;
                         cx.notify();
@@ -1167,6 +1184,8 @@ impl Render for LauncherRoot {
                     .child(dialog),
             );
         } else if let Some(menu) = self.workspace_menu(window, cx) {
+            root = root.child(menu);
+        } else if let Some(menu) = self.toolbar_add_menu(window, cx) {
             root = root.child(menu);
         }
         root.into_any_element()

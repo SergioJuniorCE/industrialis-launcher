@@ -25,6 +25,19 @@ instances and after a game stops, including recovered sessions and crash exits.
 Running instances retain their last cached size until exit; there is no manual
 size-refresh control.
 
+On first run, Industrialis can copy instances from Prism Launcher. The same import
+is permanent from the toolbar Add menu and the library background menu. GTNH
+instances are pre-selected; other instances can be selected with a warning and
+stay frozen. Imports are copies only: Prism's folder is never moved, changed, or
+registered. Display names, icons, Java/RAM/JVM overrides and Prism groups are
+mapped; accounts are not copied. Imported GTNH copies start without update checks
+until a GTNH version is assigned in the import dialog or later from Info, and
+assigning a version enables pack update checks, updates, and clean reinstall.
+Non-GTNH instances stay frozen with those actions unavailable. Discovery
+checks the standard per-OS Prism data folders and honors a custom `InstanceDir`,
+with a manual folder field as fallback. Imports run as cancellable Processes
+operations with per-instance failure isolation; the Prism source stays untouched.
+
 The instance Add-ons tab manages custom mods and resource packs. Import a local
 resource-pack ZIP or browse Modernity's matching weekly release, including its
 optional UI/texture add-ons and MyCTMLib mods. Downloads are checksum-verified and
@@ -208,7 +221,7 @@ replacement; previous recovery data blocks destructive retries. The operation
 reservations are in-process, with pid checks for running games and exclusive
 mkdir for destination collisions; they are not a cross-process maintenance lock.
 
-Processes now show background operation history for install, copy, update,
+Processes now show background operation history for install, copy, import, update,
 reinstall, and delete, with active-first ordering, transfer progress, operation
 logs, completion/failure states, dismissal, and a toolbar popup. Active installs
 and copies have progress placeholders in the instance grid. Copy-before-update

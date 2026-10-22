@@ -12,6 +12,18 @@ use crate::theme::{readable_color, ActiveTheme};
 /// Modal overlay: dimmed backdrop + centered card. Views attach Escape/close
 /// handlers; closing is idempotent so bubbled duplicates are harmless.
 pub fn dialog_shell(theme: &ActiveTheme, title: &str, body: Div, footer: Div) -> Div {
+    dialog_shell_with_width(theme, title, 460.0, body, footer)
+}
+
+/// Same modal shell with an explicit card width for content-heavy dialogs
+/// (for example the Prism instance selection list).
+pub fn dialog_shell_with_width(
+    theme: &ActiveTheme,
+    title: &str,
+    width: f32,
+    body: Div,
+    footer: Div,
+) -> Div {
     div()
         .absolute()
         .inset_0()
@@ -21,7 +33,7 @@ pub fn dialog_shell(theme: &ActiveTheme, title: &str, body: Div, footer: Div) ->
         .bg(gpui::rgba(0x00000099))
         .child(
             div()
-                .w(px(460.0))
+                .w(px(width))
                 .rounded(theme.radius())
                 .bg(theme.popover())
                 .border_1()

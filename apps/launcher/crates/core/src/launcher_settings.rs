@@ -135,6 +135,9 @@ pub struct LauncherSettingsData {
     pub instance_grid_columns: u32,
     #[serde(default = "default_backup_retention")]
     pub backup_retention_limit: u32,
+    /// One-time first-run Prism import prompt was answered (either choice).
+    #[serde(default)]
+    pub prism_import_prompted: bool,
     #[serde(flatten)]
     pub window: LauncherWindowSettings,
 }
@@ -176,6 +179,7 @@ impl Default for LauncherSettingsData {
             active_account_id: None,
             instance_grid_columns: default_grid_columns(),
             backup_retention_limit: default_backup_retention(),
+            prism_import_prompted: false,
             window: LauncherWindowSettings {
                 launch_maximized: false,
                 window_width: DEFAULT_LAUNCHER_WINDOW_WIDTH,
@@ -283,6 +287,10 @@ pub fn parse_launcher_settings_json(raw: &str) -> LauncherSettingsData {
     {
         settings.backup_retention_limit = limit;
     }
+    settings.prism_import_prompted = obj
+        .get("prism_import_prompted")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let partial_window = crate::launcher_window::PartialLauncherWindowSettings {
         launch_maximized: obj.get("launch_maximized").and_then(|v| v.as_bool()),
         window_width: obj.get("window_width").and_then(|v| v.as_i64()),
@@ -377,6 +385,16 @@ mod tests {
             parse_launcher_settings_json("nope"),
             LauncherSettingsData::default()
         );
+    }
+
+    #[test]
+    fn prism_import_prompt_marker_round_trips_without_extra_field_duplication() {
+        let parsed = parse_launcher_settings_json(r#"{"prism_import_prompted":true}"#);
+        assert!(parsed.prism_import_prompted);
+        assert!(!parsed.extra_fields.contains_key("prism_import_prompted"));
+        let raw = serde_json::to_string(&parsed).unwrap();
+        assert!(parse_launcher_settings_json(&raw).prism_import_prompted);
+        assert!(!parse_launcher_settings_json("{}").prism_import_prompted);
     }
 
     #[test]
