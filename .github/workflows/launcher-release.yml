@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - "launcher-v*"
-      - "launcher-gpui-v*"
+      - "launcher-preview-v*"
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -20,11 +20,11 @@ on:
         default: stable
 
 concurrency:
-  group: launcher-gpui-release-${{ github.ref }}
+  group: launcher-release-${{ github.ref }}
   cancel-in-progress: false
 
 env:
-  BUILD_CHANNEL: ${{ startsWith(github.ref_name, 'launcher-gpui-v') && 'preview' || inputs.channel || 'stable' }}
+  BUILD_CHANNEL: ${{ startsWith(github.ref_name, 'launcher-preview-v') && 'preview' || inputs.channel || 'stable' }}
 
 jobs:
   build:
@@ -69,15 +69,15 @@ jobs:
           $version = (& $compiler /VERSION | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $version -ne 'v3.11') { throw 'Unexpected NSIS compiler version' }
           "MAKENSIS=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Stamp GPUI version
+      - name: Stamp launcher version
         shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           BUILD_VERSION: ${{ inputs.version }}
         run: |
           cargo fetch --locked --manifest-path apps/launcher/Cargo.toml
-          if [[ "$RELEASE_TAG" == launcher-gpui-v* ]]; then
-            version="${RELEASE_TAG#launcher-gpui-v}"
+          if [[ "$RELEASE_TAG" == launcher-preview-v* ]]; then
+            version="${RELEASE_TAG#launcher-preview-v}"
           elif [[ "$RELEASE_TAG" == launcher-v* ]]; then
             version="${RELEASE_TAG#launcher-v}"
           else
@@ -89,7 +89,7 @@ jobs:
         if: runner.os == 'macOS'
         working-directory: apps/launcher
         run: cargo test -p industrialis-core -p industrialis-backend --lib --tests --jobs 1 --locked
-      - name: Test backend, core and GPUI interactions
+      - name: Test backend, core and launcher interactions
         if: runner.os != 'macOS'
         working-directory: apps/launcher
         run: cargo test --workspace --lib --bins --tests --jobs 1 --features industrialis-app/packaged-updates --locked -- --test-threads=1
@@ -107,27 +107,27 @@ jobs:
       - name: Test original Electron and native Linux credential interoperability
         if: runner.os == 'Linux'
         run: |
-          docker build -f apps/launcher/packaging/acceptance/linux-credentials.Dockerfile -t industrialis-gpui-credential-acceptance:local apps/launcher/packaging/acceptance
+          docker build -f apps/launcher/packaging/acceptance/linux-credentials.Dockerfile -t industrialis-credential-acceptance:local apps/launcher/packaging/acceptance
           mkdir -p apps/launcher/target/credential-acceptance
-          docker run --rm --network none --name industrialis-gpui-credential-acceptance \
+          docker run --rm --network none --name industrialis-credential-acceptance \
             --mount "type=bind,source=$PWD,target=/repo,readonly" \
             --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
             --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
             -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
-            industrialis-gpui-credential-acceptance:local \
+            industrialis-credential-acceptance:local \
             sh scripts/test-gpui-linux-credentials.sh /opt/electron-fixture/electron /target/debug/examples/credential_compat /receipt/verification.json
-          docker run --rm --network none --name industrialis-gpui-kwallet-acceptance \
+          docker run --rm --network none --name industrialis-kwallet-acceptance \
             --mount "type=bind,source=$PWD,target=/repo,readonly" \
             --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
             --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
             -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
-            industrialis-gpui-credential-acceptance:local \
+            industrialis-credential-acceptance:local \
             sh scripts/test-gpui-linux-kwallet.sh /opt/electron-fixture/electron /target/debug/examples/credential_compat /receipt/kwallet-verification.json
       - name: Retain Linux credential interoperability evidence
         if: always() && runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: launcher-gpui-linux-credentials
+          name: launcher-linux-credentials
           path: apps/launcher/target/credential-acceptance/*verification.json
           if-no-files-found: warn
       - name: Linux native renderer startup and shutdown
@@ -157,12 +157,12 @@ jobs:
         env:
           GPUI_PACKAGE_CHANNEL: ${{ env.BUILD_CHANNEL }}
           LIBGL_ALWAYS_SOFTWARE: "1"
-        run: sh scripts/test-gpui-linux-portable.sh "$PWD/apps/launcher/dist/IndustrialisGPUI-linux-x64.tar.gz" "$PWD/apps/launcher/target/release/industrialis" "$PWD/apps/launcher/dist"
+        run: sh scripts/test-gpui-linux-portable.sh "$PWD/apps/launcher/dist/IndustrialisLauncher-linux-x64.tar.gz" "$PWD/apps/launcher/target/release/industrialis" "$PWD/apps/launcher/dist"
       - name: Retain Linux packaged acceptance evidence
         if: always() && runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: launcher-gpui-linux-acceptance
+          name: launcher-linux-acceptance
           path: |
             apps/launcher/dist/verification.json
             apps/launcher/dist/portable-render.png
@@ -172,10 +172,10 @@ jobs:
         if: failure() && runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: launcher-gpui-linux-diagnostics
+          name: launcher-linux-diagnostics
           path: |
             apps/launcher/target/release/industrialis
-            apps/launcher/dist/IndustrialisGPUI-linux-x64.tar.gz
+            apps/launcher/dist/IndustrialisLauncher-linux-x64.tar.gz
           retention-days: 3
           if-no-files-found: warn
       - name: Verify Windows artifact bytes, metadata and notices
@@ -194,7 +194,7 @@ jobs:
         run: powershell -NoProfile -File scripts/test-gpui-windows-retirement.ps1 -MakeNSIS "$env:MAKENSIS"
       - uses: actions/upload-artifact@v4
         with:
-          name: launcher-gpui-${{ matrix.artifact }}
+          name: launcher-${{ matrix.artifact }}
           path: |
             apps/launcher/dist/*.exe
             apps/launcher/dist/*.zip
@@ -204,7 +204,7 @@ jobs:
 
   release:
     needs: build
-    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/launcher-v') || startsWith(github.ref, 'refs/tags/launcher-gpui-v'))
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/launcher-v') || startsWith(github.ref, 'refs/tags/launcher-preview-v'))
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -212,12 +212,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: launcher-gpui-*-*64
+          pattern: launcher-*-*64
           path: release-assets
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          prerelease: ${{ startsWith(github.ref_name, 'launcher-gpui-v') }}
+          prerelease: ${{ startsWith(github.ref_name, 'launcher-preview-v') }}
           make_latest: ${{ startsWith(github.ref_name, 'launcher-v') }}
           generate_release_notes: true
           body_path: apps/launcher/RELEASE_NOTES.md

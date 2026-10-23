@@ -11,18 +11,18 @@ spec = importlib.util.spec_from_file_location("portable", Path(__file__).with_na
 portable = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(portable)
 
-FILES = {"industrialis", "LICENSE", "THIRD_PARTY_NOTICES.txt", "README.txt", "icon.png", "industrialis-gpui.desktop"}
+FILES = {"industrialis", "LICENSE", "THIRD_PARTY_NOTICES.txt", "README.txt", "icon.png", "industrialis-launcher.desktop"}
 
 
 class ArchiveAcceptance(unittest.TestCase):
     def archive(self, root, extra=None):
         archive = root / "portable.tar.gz"
         with tarfile.open(archive, "w:gz") as tar:
-            directory = tarfile.TarInfo("industrialis-gpui")
+            directory = tarfile.TarInfo("industrialis-launcher")
             directory.type = tarfile.DIRTYPE
             tar.addfile(directory)
             for name in sorted(FILES):
-                entry = tarfile.TarInfo("industrialis-gpui/" + name)
+                entry = tarfile.TarInfo("industrialis-launcher/" + name)
                 data = (name + " bytes").encode()
                 entry.size = len(data)
                 entry.mode = 0o755 if name == "industrialis" else 0o644
@@ -43,8 +43,8 @@ class ArchiveAcceptance(unittest.TestCase):
         for kind in ("symlink", "hardlink", "traversal", "duplicate", "directory"):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                entry = tarfile.TarInfo({"duplicate": "industrialis-gpui/LICENSE",
-                                        "traversal": "../escaped", "directory": "industrialis-gpui/extra"}.get(kind, "industrialis-gpui/link"))
+                entry = tarfile.TarInfo({"duplicate": "industrialis-launcher/LICENSE",
+                                        "traversal": "../escaped", "directory": "industrialis-launcher/extra"}.get(kind, "industrialis-launcher/link"))
                 if kind in ("symlink", "hardlink"):
                     entry.type = tarfile.SYMTYPE if kind == "symlink" else tarfile.LNKTYPE
                     entry.linkname = "../../escaped"

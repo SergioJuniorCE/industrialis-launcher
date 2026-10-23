@@ -1,4 +1,4 @@
-//! GPUI-only GitHub release checks and verified Windows installer handoff.
+//! GitHub release checks and verified Windows installer handoff.
 //! No Electron assets, arbitrary endpoints, or unverified executables are used.
 
 use std::path::{Path, PathBuf};
@@ -13,16 +13,16 @@ use tokio::io::AsyncWriteExt;
 
 const REPOSITORY: &str = "SergioJuniorCE/industrialis-launcher";
 #[cfg(not(feature = "stable-updates"))]
-pub const TAG_PREFIX: &str = "launcher-gpui-v";
+pub const TAG_PREFIX: &str = "launcher-preview-v";
 #[cfg(feature = "stable-updates")]
 pub const TAG_PREFIX: &str = "launcher-v";
 #[cfg(not(feature = "stable-updates"))]
 pub const RELEASE_PAGE: &str =
-    "https://github.com/SergioJuniorCE/industrialis-launcher/releases?q=launcher-gpui-v";
+    "https://github.com/SergioJuniorCE/industrialis-launcher/releases?q=launcher-preview-v";
 #[cfg(feature = "stable-updates")]
 pub const RELEASE_PAGE: &str =
     "https://github.com/SergioJuniorCE/industrialis-launcher/releases?q=launcher-v";
-pub const STABLE_RELEASE_MARKER: &str = "<!-- industrialis-gpui-release-v1 -->";
+pub const STABLE_RELEASE_MARKER: &str = "<!-- industrialis-launcher-release-v1 -->";
 pub const INSTALL_MARKER: &str = "gpui-install.json";
 const MAX_INSTALLER_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 8 * 1024 * 1024;
@@ -50,10 +50,10 @@ impl Platform {
             Self::WindowsX64 => Some(if cfg!(feature = "stable-updates") {
                 "IndustrialisLauncherSetup.exe"
             } else {
-                "IndustrialisGPUISetup-x64.exe"
+                "IndustrialisLauncherPreviewSetup-x64.exe"
             }),
-            Self::MacArm64 => Some("IndustrialisGPUI-macos-arm64.dmg"),
-            Self::LinuxX64 => Some("IndustrialisGPUI-linux-x64.tar.gz"),
+            Self::MacArm64 => Some("IndustrialisLauncher-macos-arm64.dmg"),
+            Self::LinuxX64 => Some("IndustrialisLauncher-linux-x64.tar.gz"),
             Self::Unsupported => None,
         }
     }
@@ -66,8 +66,8 @@ struct Release {
     draft: bool,
     #[serde(default)]
     prerelease: bool,
-    // GPUI releases are marked prerelease until cutover so Electron's
-    // /releases/latest feed remains unchanged. Semver prerelease tags are ignored.
+    // Preview releases are marked prerelease so the stable feed ignores them.
+    // Semver prerelease tags are ignored.
     #[serde(default)]
     body: Option<String>,
     #[serde(default)]
@@ -116,7 +116,7 @@ pub type ProgressCallback = Arc<dyn Fn(DownloadProgress) + Send + Sync>;
 fn client() -> Result<reqwest::Client> {
     Ok(reqwest::Client::builder()
         .https_only(true)
-        .user_agent("Industrialis-GPUI-Updater")
+        .user_agent("Industrialis-Launcher-Updater")
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(300))
         .build()?)
@@ -146,7 +146,7 @@ pub async fn check_for_update(current: &str, platform: Platform) -> Result<Updat
             return select_update(&releases, current, platform);
         }
     }
-    bail!("Too many release pages; open the GPUI releases page to check manually")
+    bail!("Too many release pages; open the launcher releases page to check manually")
 }
 
 async fn bounded_body(mut response: reqwest::Response) -> Result<Vec<u8>> {
@@ -213,10 +213,10 @@ fn select_update(releases: &[Release], current: &str, platform: Platform) -> Res
 }
 
 fn validate_asset(asset: &Asset, tag: &str, platform: Platform) -> Result<()> {
-    let version = Version::parse(tag.strip_prefix(TAG_PREFIX).context("Not a GPUI release")?)?;
+    let version = Version::parse(tag.strip_prefix(TAG_PREFIX).context("Not a launcher release")?)?;
     ensure!(
         version.pre.is_empty() && version.build.is_empty(),
-        "Not a stable GPUI version"
+        "Not a stable launcher version"
     );
     ensure!(
         Some(asset.name.as_str()) == platform.asset_name(),
@@ -276,7 +276,7 @@ pub async fn download_installer(
         .context("No Windows installer in this release")?;
     validate_asset(asset, &update.tag, Platform::WindowsX64)?;
     let directory =
-        std::env::temp_dir().join(format!("industrialis-gpui-update-{}", uuid::Uuid::new_v4()));
+        std::env::temp_dir().join(format!("industrialis-launcher-update-{}", uuid::Uuid::new_v4()));
     tokio::fs::create_dir(&directory).await?;
     let prepared = PreparedInstaller {
         installer: directory.join(&asset.name),
@@ -379,7 +379,7 @@ impl PreparedInstaller {
             ensure!(
                 installation_directory(&executable, Platform::current()).as_deref()
                     == Some(directory),
-                "Not a GPUI installation directory"
+                "Not a launcher installation directory"
             );
             ensure!(
                 !directory.to_string_lossy().contains(['\r', '\n', '"']),
@@ -557,7 +557,7 @@ mod tests {
     }
 
     #[test]
-    fn selects_newest_gpui_semver_ignoring_electron_drafts_and_unstable_tags() {
+    fn selects_newest_launcher_semver_ignoring_electron_drafts_and_unstable_tags() {
         let mut electron = release("9.0.0", Platform::WindowsX64);
         electron.tag_name = "launcher-v9.0.0".into();
         electron.body = None;
@@ -612,7 +612,7 @@ mod tests {
         other_channel.tag_name = format!(
             "{}9.0.0",
             if cfg!(feature = "stable-updates") {
-                "launcher-gpui-v"
+                "launcher-preview-v"
             } else {
                 "launcher-v"
             }

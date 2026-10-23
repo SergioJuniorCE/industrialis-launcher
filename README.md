@@ -92,7 +92,7 @@ Build only one format with `pnpm build:launcher:installer` or
 single native distribution format.
 
 Stable `launcher-v*` tags build the native launcher on Windows x64, macOS arm64
-and Linux x64 and publish the production release. `launcher-gpui-v*` tags remain
+and Linux x64 and publish the production release. `launcher-preview-v*` tags remain
 optional prereleases; ordinary master pushes do not publish.
 See [release notes and known limitations](apps/launcher/RELEASE_NOTES.md) and
 [cutover and rollback](apps/launcher/CUTOVER.md).

@@ -1,4 +1,4 @@
-# Launcher updates and GPUI releases
+# Launcher updates and releases
 
 Launcher self-updates are separate from instance pack updates. Distribution
 builds check GitHub asynchronously at startup. Settings → About offers a manual
@@ -15,12 +15,12 @@ See [release notes](RELEASE_NOTES.md) and [cutover status](CUTOVER.md).
 The production workflow is `.github/workflows/launcher-release.yml`.
 Stable `launcher-vX.Y.Z` tags compile `stable-updates`, publish a regular GitHub
 Release and make it latest. Stable release bodies carry
-`<!-- industrialis-gpui-release-v1 -->`; the updater rejects unmarked Electron
+`<!-- industrialis-launcher-release-v1 -->`; the updater rejects unmarked Electron
 artifacts. Windows uses `IndustrialisLauncherSetup.exe`, preserving the existing
 website and old-updater download contract, with protocol registration and guarded
 Squirrel retirement. Existing profile data stays in its original location.
 
-Optional `launcher-gpui-vX.Y.Z` tags publish prereleases with `make_latest: false`
+Optional `launcher-preview-vX.Y.Z` tags publish prereleases with `make_latest: false`
 and the preview update feature. They remain outside the stable feed.
 Pull requests build and test all three platforms without publication;
 workflow_dispatch also builds artifacts only. Tag pushes alone publish releases.
@@ -41,27 +41,27 @@ encrypted accounts.
 
 `node scripts/build-launcher-gpui.mjs --replacement` also registers the retained
 `industrialislauncher:` scheme. Default preview artifacts omit that registration.
-Windows saves the previous handler and restores it on uninstall while GPUI still
+Windows saves the previous handler and restores it on uninstall while the launcher still
 owns the command; another application's later registration is kept. macOS embeds
 CFBundleURLTypes, and the Linux desktop entry declares the scheme for installation
 with `xdg-mime`. These registration paths need native installed acceptance before
 cutover; normal preview builds do not change the current protocol handler.
 
-The stable Windows installer first extracts the new GPUI executable, retaining
-an existing GPUI executable for rollback. It then runs the bundled retirement
+The stable Windows installer first extracts the new launcher executable, retaining
+an existing launcher executable for rollback. It then runs the bundled retirement
 helper against the exact old `%LOCALAPPDATA%\IndustrialisLauncher` installation.
 The helper refuses redirected paths, profile overlap or profile files inside
 the install directory, waits for launchers to close normally, and invokes the
 original `Update.exe --uninstall --silent`. It verifies the old executables are
 gone, including Squirrel's root shortcut stub, and clears only a handler
-targeting one of those removed files before GPUI
+targeting one of those removed files before the launcher
 registers its own handler. The helper waits for normal closure before delegating
 to Squirrel; legacy uninstall callbacks and cleanup still need installed acceptance.
 A failed helper aborts
-registration/restart and restores the previous GPUI executable. A failed or
+registration/restart and restores the previous launcher executable. A failed or
 partially completed Squirrel uninstall requires review/retry; fixture tests do
 not establish rollback of a real Squirrel installation. The original profile is
-never imported, moved or recursively deleted by the GPUI installer.
+never imported, moved or recursively deleted by the launcher installer.
 
 For an installed Windows x64 build:
 
@@ -69,7 +69,7 @@ For an installed Windows x64 build:
 2. Confirm the launcher update. The dialog blocks background input and closing
    the launcher during download/handoff. Busy state is checked again after the
    download, before installation.
-3. Download the exact `IndustrialisGPUISetup-x64.exe` preview asset, or
+3. Download the exact `IndustrialisLauncherPreviewSetup-x64.exe` preview asset, or
    `IndustrialisLauncherSetup.exe` for a marked stable release, from the matching
    tag in this repository. Require its GitHub SHA-256 digest, enforce the
    declared size and 512 MiB cap, verify the executable header, and remove
@@ -89,11 +89,11 @@ in the OS temporary directory afterward.
 
 The preview installer/uninstaller only manages its own application files, shortcut
 and registry keys. Stable installation additionally delegates old application
-retirement to Squirrel after the guards above. GPUI does not recursively delete
+retirement to Squirrel after the guards above. The launcher does not recursively delete
 the install directory or touch
 the launcher data directory, instances, saves, accounts, or preferences.
 
-All artifacts include the GPUI-owned project license and generated third-party
+All artifacts include the project license and generated third-party
 notices from the locked Cargo app graph. Supplied license/notice texts and declared
 license expressions are retained; the report excludes unrelated workspace packages
 and machine/profile paths. Native code-signing and distribution review remain
@@ -109,12 +109,12 @@ Visual C++ redistributable; OS libraries remain platform requirements.
 
 ## Artifacts and versioning
 
-| Platform             | Artifact                            | Launcher update installation |
-| -------------------- | ----------------------------------- | ---------------------------- |
-| Windows x64 stable   | `IndustrialisLauncherSetup.exe`     | In-app installer handoff     |
-| Windows x64 portable | `IndustrialisGPUI-windows-x64.zip`  | Manual release page          |
-| macOS arm64          | `IndustrialisGPUI-macos-arm64.dmg`  | Manual release page          |
-| Linux x64            | `IndustrialisGPUI-linux-x64.tar.gz` | Manual release page          |
+| Platform             | Artifact                                | Launcher update installation |
+| -------------------- | --------------------------------------- | ---------------------------- |
+| Windows x64 stable   | `IndustrialisLauncherSetup.exe`         | In-app installer handoff     |
+| Windows x64 portable | `IndustrialisLauncher-windows-x64.zip`  | Manual release page          |
+| macOS arm64          | `IndustrialisLauncher-macos-arm64.dmg`  | Manual release page          |
+| Linux x64            | `IndustrialisLauncher-linux-x64.tar.gz` | Manual release page          |
 
 macOS uses an app bundle with an ad-hoc signature. Linux is a portable archive;
 run `./industrialis` in the extracted directory. It requires a graphical desktop,
@@ -134,7 +134,7 @@ node scripts/set-gpui-launcher-version.mjs 0.1.1
 cargo update --workspace --offline --manifest-path apps/launcher/Cargo.toml
 ```
 
-The script synchronizes the GPUI package and app Cargo versions. About and
+The script synchronizes the launcher package and app Cargo versions. About and
 Windows executable resources use `CARGO_PKG_VERSION`; the installer uses that
 same package version. Components must fit Windows's 16-bit version fields.
 
@@ -165,7 +165,7 @@ application. `--replacement` alone continues to register only the protocol.
 
 The canonical `.github/workflows/launcher-release.yml` tests and builds all
 three native platforms. `launcher-v*` tags publish stable releases and
-`launcher-gpui-v*` tags publish optional isolated previews after every build
+`launcher-preview-v*` tags publish optional isolated previews after every build
 succeeds. `workflow_dispatch` builds CI artifacts without publishing a release.
 Root launcher development, packaging and version commands select GPUI;
 Electron source, aliases and build dependencies have been removed. The last
@@ -193,7 +193,7 @@ powershell -NoProfile -File scripts/test-gpui-windows-retirement.ps1 -MakeNSIS C
 
 Backend tests cover version/channel/platform selection, trusted URLs, mandatory
 digests, valid installation markers, download progress, truncated/corrupt/invalid
-executables, and cleanup. GPUI pointer/keyboard tests cover discovering failed
+executables, and cleanup. Native pointer/keyboard tests cover discovering failed
 checks, modal input blocking, progress, and closing after failure at 800/1100 px
 in light/dark modes. Busy guards cover games, instance operations and preferences.
 
@@ -211,13 +211,13 @@ callback, never the user's installed Squirrel updater. Stable-channel tests
 reject unmarked Electron releases, GitHub prereleases and the opposite channel.
 
 The separate [Windows Sandbox acceptance](LIVE_ACCEPTANCE.md#actual-squirrel-replacement-in-windows-sandbox)
-uses the unchanged public Electron 0.3.0 installer and the actual stable GPUI
+uses the unchanged public Electron 0.3.0 installer and the actual stable launcher
 artifact. Only generated profile data and owned guest windows are used. This
 checks real Squirrel retirement and installed lifecycle without replacing the
 personal installation. Results and exact artifact hashes are recorded in the
 [migration tracker](MIGRATION_TRACKER.md).
 
-Accepted follow-ups after the 0.4.0 production cutover: an actual published N → N+1 GPUI update,
+Accepted follow-ups after the 0.4.0 production cutover: an actual published N → N+1 launcher update,
 cross-platform artifact launch/install behavior, signing/notarization, physical
 replacement, running-user handoff and older Windows compatibility. The actual
 Electron 0.3.0 replacement, installed native lifecycle and same-owner protocol

@@ -23,7 +23,7 @@ const channel = option("--channel") ?? "preview";
 if (!["preview", "stable"].includes(channel)) throw new Error("Channel must be preview or stable");
 if (channel === "stable" && skipBuild) throw new Error("Stable packaging requires compiling the stable-updates feature; --skip-build is not allowed");
 const replacement = args.includes("--replacement") || channel === "stable";
-const windowsInstaller = channel === "stable" ? "IndustrialisLauncherSetup.exe" : "IndustrialisGPUISetup-x64.exe";
+const windowsInstaller = channel === "stable" ? "IndustrialisLauncherSetup.exe" : "IndustrialisLauncherPreviewSetup-x64.exe";
 const known = new Set(["--skip-build", "--replacement", "--binary", "--out", "--makensis", "--channel"]);
 for (let i = 0; i < args.length; i++) {
   if (!known.has(args[i])) throw new Error(`Unknown option ${args[i]}`);
@@ -86,7 +86,7 @@ if (process.platform === "win32") {
     run("powershell.exe", [
       "-NoProfile",
       "-Command",
-      `Compress-Archive -Path ${ps(path.join(portable, "*"))} -DestinationPath ${ps(path.join(out, "IndustrialisGPUI-windows-x64.zip"))} -Force`,
+      `Compress-Archive -Path ${ps(path.join(portable, "*"))} -DestinationPath ${ps(path.join(out, "IndustrialisLauncher-windows-x64.zip"))} -Force`,
     ]);
   }
   if (target !== "portable") {
@@ -129,10 +129,10 @@ if (process.platform === "win32") {
     "-ov",
     "-format",
     "UDZO",
-    path.join(out, "IndustrialisGPUI-macos-arm64.dmg"),
+    path.join(out, "IndustrialisLauncher-macos-arm64.dmg"),
   ]);
 } else {
-  const folder = path.join(staging, "industrialis-gpui");
+  const folder = path.join(staging, "industrialis-launcher");
   await mkdir(folder);
   await copyFile(binary, path.join(folder, "industrialis"));
   await copyFile(notices, path.join(folder, "THIRD_PARTY_NOTICES.txt"));
@@ -140,13 +140,13 @@ if (process.platform === "win32") {
   run("chmod", ["+x", path.join(folder, "industrialis")]);
   await copyFile(path.join(app, "crates/app/assets/brand.png"), path.join(folder, "icon.png"));
   await writeFile(
-    path.join(folder, "industrialis-gpui.desktop"),
-    `[Desktop Entry]\nType=Application\nName=Industrialis Launcher\nExec=industrialis %u\nIcon=industrialis-gpui\nCategories=Game;\nTerminal=false\n${replacement ? "MimeType=x-scheme-handler/industrialislauncher;\n" : ""}`,
+    path.join(folder, "industrialis-launcher.desktop"),
+    `[Desktop Entry]\nType=Application\nName=Industrialis Launcher\nExec=industrialis %u\nIcon=industrialis-launcher\nCategories=Game;\nTerminal=false\n${replacement ? "MimeType=x-scheme-handler/industrialislauncher;\n" : ""}`,
   );
   await writeFile(
     path.join(folder, "README.txt"),
-    `Industrialis Launcher ${version}\nRun ./industrialis. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig, X11 or Wayland libraries. Launcher updates are manual.\nIf an older Mesa software driver shows a black window, try: VK_DRIVER_FILES=/dev/null VK_ICD_FILENAMES=/dev/null LIBGL_ALWAYS_SOFTWARE=1 ./industrialis\nDesktop installation: put this directory on PATH, install icon.png as industrialis-gpui, and copy industrialis-gpui.desktop to ~/.local/share/applications/. ${replacement ? "Register it with: xdg-mime default industrialis-gpui.desktop x-scheme-handler/industrialislauncher" : "Preview desktop files do not register the original launcher protocol."}\n`,
+    `Industrialis Launcher ${version}\nRun ./industrialis. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig, X11 or Wayland libraries. Launcher updates are manual.\nIf an older Mesa software driver shows a black window, try: VK_DRIVER_FILES=/dev/null VK_ICD_FILENAMES=/dev/null LIBGL_ALWAYS_SOFTWARE=1 ./industrialis\nDesktop installation: put this directory on PATH, install icon.png as industrialis-launcher, and copy industrialis-launcher.desktop to ~/.local/share/applications/. ${replacement ? "Register it with: xdg-mime default industrialis-launcher.desktop x-scheme-handler/industrialislauncher" : "Preview desktop files do not register the original launcher protocol."}\n`,
   );
-  run("tar", ["-czf", path.join(out, "IndustrialisGPUI-linux-x64.tar.gz"), "-C", staging, "industrialis-gpui"]);
+  run("tar", ["-czf", path.join(out, "IndustrialisLauncher-linux-x64.tar.gz"), "-C", staging, "industrialis-launcher"]);
 }
-console.log(`GPUI ${version} ${channel} artifacts written to ${out}`);
+console.log(`Launcher ${version} ${channel} artifacts written to ${out}`);
