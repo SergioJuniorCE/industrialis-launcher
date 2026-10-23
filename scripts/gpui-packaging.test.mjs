@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { readCargoVersion, setVersion, validateVersion } from "./set-gpui-launcher-version.mjs";
 
 const app = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../apps/launcher");
-test("GPUI version stamping keeps package, Cargo, About and Windows metadata on one version", async () => {
+test("Launcher version stamping keeps package, Cargo, About and Windows metadata on one version", async () => {
   await mkdir(path.join(app, "target"), { recursive: true });
   const fixture = await mkdtemp(path.join(app, "target/version-test-"));
   await mkdir(path.join(fixture, "crates/app"), { recursive: true });
@@ -39,14 +39,17 @@ test("stable native release and optional previews use the correct update channel
   const workflow = await readFile(path.join(app, "../../.github/workflows/launcher-release.yml"), "utf8");
   const updater = await readFile(path.join(app, "crates/backend/src/release_updater.rs"), "utf8");
   const packager = await readFile(path.join(app, "../../scripts/build-launcher-gpui.mjs"), "utf8");
-  assert.match(workflow, /launcher-gpui-v\*/);
+  assert.match(workflow, /launcher-preview-v\*/);
   assert.match(workflow, /launcher-v\*/);
-  assert.ok(workflow.includes("prerelease: ${{ startsWith(github.ref_name, 'launcher-gpui-v') }}"));
+  assert.ok(workflow.includes("prerelease: ${{ startsWith(github.ref_name, 'launcher-preview-v') }}"));
   assert.ok(workflow.includes("make_latest: ${{ startsWith(github.ref_name, 'launcher-v') }}"));
   assert.match(workflow, /pull_request:/);
   assert.ok(!workflow.includes("electron-forge"));
+  assert.ok(!workflow.includes("launcher-gpui-v"));
+  assert.ok(!workflow.includes("name: launcher-gpui-"));
+  assert.ok(!workflow.includes("IndustrialisGPUI"));
   const notes = await readFile(path.join(app, "RELEASE_NOTES.md"), "utf8");
-  assert.ok(notes.includes("<!-- industrialis-gpui-release-v1 -->"));
+  assert.ok(notes.includes("<!-- industrialis-launcher-release-v1 -->"));
   const manifest = JSON.parse(await readFile(path.join(app, "../../package.json"), "utf8"));
   const launcher = JSON.parse(await readFile(path.join(app, "package.json"), "utf8"));
   const lockfile = await readFile(path.join(app, "../../pnpm-lock.yaml"), "utf8");
@@ -55,7 +58,7 @@ test("stable native release and optional previews use the correct update channel
   assert.match(lockfile, /^  apps\/launcher: \{\}$/m);
   assert.ok(!workflow.includes("apps/launcher-gpui"));
   assert.match(manifest.scripts["build:launcher:release"], /--channel stable/);
-  for (const asset of ["IndustrialisGPUISetup-x64.exe", "IndustrialisGPUI-macos-arm64.dmg", "IndustrialisGPUI-linux-x64.tar.gz"]) {
+  for (const asset of ["IndustrialisLauncherPreviewSetup-x64.exe", "IndustrialisLauncher-macos-arm64.dmg", "IndustrialisLauncher-linux-x64.tar.gz"]) {
     assert.ok(updater.includes(asset));
     assert.ok(packager.includes(asset));
   }

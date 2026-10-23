@@ -17,7 +17,7 @@ import tempfile
 import time
 import zlib
 
-FILES = {"industrialis", "LICENSE", "THIRD_PARTY_NOTICES.txt", "README.txt", "icon.png", "industrialis-gpui.desktop"}
+FILES = {"industrialis", "LICENSE", "THIRD_PARTY_NOTICES.txt", "README.txt", "icon.png", "industrialis-launcher.desktop"}
 
 
 def unpack_archive(archive, root):
@@ -26,9 +26,9 @@ def unpack_archive(archive, root):
     with tarfile.open(archive, "r:gz") as tar:
         members = tar.getmembers()
         files = [member for member in members if member.isfile()]
-        assert len(files) == len(FILES) and {m.name for m in files} == {f"industrialis-gpui/{name}" for name in FILES}, "Unexpected or duplicate portable files"
-        assert all(m.isfile() or (m.isdir() and m.name.rstrip("/") == "industrialis-gpui") for m in members), "Portable contains links or unexpected paths"
-        folder = root / "industrialis-gpui"
+        assert len(files) == len(FILES) and {m.name for m in files} == {f"industrialis-launcher/{name}" for name in FILES}, "Unexpected or duplicate portable files"
+        assert all(m.isfile() or (m.isdir() and m.name.rstrip("/") == "industrialis-launcher") for m in members), "Portable contains links or unexpected paths"
+        folder = root / "industrialis-launcher"
         folder.mkdir(parents=True, exist_ok=False)
         for member in files:
             destination = folder / Path(member.name).name
@@ -191,7 +191,7 @@ def main():
         notices = (folder / "THIRD_PARTY_NOTICES.txt").read_text()
         assert "gpui-pre" in notices and (app / "crates/app/assets/LICENSE-LUCIDE").read_text() in notices
         assert version in (folder / "README.txt").read_text() and "manual" in (folder / "README.txt").read_text()
-        registers_protocol = "MimeType=x-scheme-handler/industrialislauncher;" in (folder / "industrialis-gpui.desktop").read_text()
+        registers_protocol = "MimeType=x-scheme-handler/industrialislauncher;" in (folder / "industrialis-launcher.desktop").read_text()
         assert registers_protocol == (channel == "stable" or os.environ.get("GPUI_PACKAGE_REPLACEMENT") == "1"), "Desktop protocol registration differs from package options"
         dependencies = subprocess.run(["ldd", str(binary)], capture_output=True, text=True, check=True)
         assert "not found" not in dependencies.stdout + dependencies.stderr
@@ -210,12 +210,12 @@ def main():
         if registers_protocol:
             applications = data / "applications"
             applications.mkdir(parents=True)
-            shutil.copyfile(folder / "industrialis-gpui.desktop", applications / "industrialis-gpui.desktop")
+            shutil.copyfile(folder / "industrialis-launcher.desktop", applications / "industrialis-launcher.desktop")
             env["PATH"] = str(folder) + os.pathsep + env["PATH"]
             env["XDG_CURRENT_DESKTOP"] = "X-Generic"
-            subprocess.run(["xdg-mime", "default", "industrialis-gpui.desktop", "x-scheme-handler/industrialislauncher"], env=env, check=True, timeout=15)
+            subprocess.run(["xdg-mime", "default", "industrialis-launcher.desktop", "x-scheme-handler/industrialislauncher"], env=env, check=True, timeout=15)
             registered = subprocess.run(["xdg-mime", "query", "default", "x-scheme-handler/industrialislauncher"], env=env, capture_output=True, text=True, check=True, timeout=15)
-            assert registered.stdout.strip() == "industrialis-gpui.desktop", "Owned desktop scheme registration failed"
+            assert registered.stdout.strip() == "industrialis-launcher.desktop", "Owned desktop scheme registration failed"
         with (output / "portable-native.log").open("w") as log:
             child = subprocess.Popen([str(binary)], cwd=folder, env=env, stdout=log, stderr=log)
             try:

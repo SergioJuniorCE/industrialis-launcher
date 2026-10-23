@@ -11,9 +11,9 @@ $runtimeJson = & node (Join-Path $PSScriptRoot 'gpui-windows-runtime.mjs') $bina
 if ($LASTEXITCODE -ne 0) { throw 'Windows executable runtime verification failed' }
 $runtime = $runtimeJson | ConvertFrom-Json
 $artifactRoot = if ($ArtifactDirectory) { (Resolve-Path -LiteralPath $ArtifactDirectory).Path } else { Join-Path $appRoot 'dist' }
-$installerName = if ($Channel -eq 'stable') { 'IndustrialisLauncherSetup.exe' } else { 'IndustrialisGPUISetup-x64.exe' }
+$installerName = if ($Channel -eq 'stable') { 'IndustrialisLauncherSetup.exe' } else { 'IndustrialisLauncherPreviewSetup-x64.exe' }
 $installer = Join-Path $artifactRoot $installerName
-$portable = Join-Path $artifactRoot 'IndustrialisGPUI-windows-x64.zip'
+$portable = Join-Path $artifactRoot 'IndustrialisLauncher-windows-x64.zip'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($portable)
 try {

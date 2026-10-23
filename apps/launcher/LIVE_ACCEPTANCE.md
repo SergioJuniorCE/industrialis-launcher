@@ -303,7 +303,7 @@ Vulkan drivers, use the actual tarball and its compiled input:
 
 ```sh
 sh scripts/test-gpui-linux-portable.sh \
-  /absolute/artifacts/IndustrialisGPUI-linux-x64.tar.gz \
+  /absolute/artifacts/IndustrialisLauncher-linux-x64.tar.gz \
   /absolute/build/release/industrialis /absolute/artifacts
 ```
 
@@ -350,14 +350,14 @@ touch a user's keyring or certify macOS Keychain/KWallet.
 cargo build --manifest-path apps/launcher/Cargo.toml --workspace \
   --example credential_compat --locked --jobs 1 --features industrialis-app/packaged-updates
 docker build -f apps/launcher/packaging/acceptance/linux-credentials.Dockerfile \
-  -t industrialis-gpui-credential-acceptance:local apps/launcher/packaging/acceptance
+  -t industrialis-credential-acceptance:local apps/launcher/packaging/acceptance
 mkdir -p apps/launcher/target/credential-acceptance
 docker run --rm --network none \
   --mount "type=bind,source=$PWD,target=/repo,readonly" \
   --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
   --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
   -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
-  industrialis-gpui-credential-acceptance:local \
+  industrialis-credential-acceptance:local \
   sh scripts/test-gpui-linux-credentials.sh /opt/electron-fixture/electron \
   /target/debug/examples/credential_compat /receipt/verification.json
 ```

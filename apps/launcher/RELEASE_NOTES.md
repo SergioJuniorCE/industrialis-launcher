@@ -1,4 +1,4 @@
-<!-- industrialis-gpui-release-v1 -->
+<!-- industrialis-launcher-release-v1 -->
 
 # Industrialis Launcher 0.4.2
 
@@ -16,9 +16,9 @@ This release adds a Prism Launcher import so existing Prism instances can be cop
 
 ## Downloads
 
-- Windows x64 installer: **IndustrialisLauncherSetup.exe**. Windows portable: **IndustrialisGPUI-windows-x64.zip**.
-- macOS Apple Silicon: **IndustrialisGPUI-macos-arm64.dmg**.
-- Linux x64: **IndustrialisGPUI-linux-x64.tar.gz**. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig and X11/Wayland libraries.
+- Windows x64 installer: **IndustrialisLauncherSetup.exe**. Windows portable: **IndustrialisLauncher-windows-x64.zip**.
+- macOS Apple Silicon: **IndustrialisLauncher-macos-arm64.dmg**.
+- Linux x64: **IndustrialisLauncher-linux-x64.tar.gz**. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig and X11/Wayland libraries.
 - Windows installed builds support in-app updates. Portable, Linux and macOS updates are manual.
 
 ## Known limitations
