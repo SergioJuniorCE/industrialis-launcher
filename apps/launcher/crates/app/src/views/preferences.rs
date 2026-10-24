@@ -260,7 +260,7 @@ impl LauncherRoot {
                             )
                             .child(div().text_xs().text_color(t.muted_foreground()).child(
                                 format!(
-                                    "{} / {} · GPUI",
+                                    "{} / {}",
                                     std::env::consts::OS,
                                     std::env::consts::ARCH
                                 ),
