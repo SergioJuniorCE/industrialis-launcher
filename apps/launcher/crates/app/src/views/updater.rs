@@ -3,14 +3,16 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gpui::{div, prelude::*, px, Context, Div, FocusHandle, KeyDownEvent, MouseButton, Window};
+use gpui::{
+    div, prelude::*, px, Context, Div, FocusHandle, FontWeight, KeyDownEvent, MouseButton, Window,
+};
 use industrialis_backend::release_updater::{
-    self, AvailableUpdate, DownloadProgress, Platform, UpdateCheck,
+    self, AvailableUpdate, DownloadProgress, Platform, ReleaseNote, UpdateCheck,
 };
 
 use super::{Dialog, LauncherRoot};
 use crate::state::format_bytes;
-use crate::ui::{action_button, btn, progress_bar, ButtonVariant};
+use crate::ui::{action_button, btn, icon, progress_bar, ButtonVariant};
 
 #[derive(Debug, Clone)]
 enum State {
@@ -30,6 +32,10 @@ pub(crate) struct UpdaterUi {
     available: Option<AvailableUpdate>,
     installation: Option<PathBuf>,
     focus: Option<FocusHandle>,
+    changelog: Option<Vec<ReleaseNote>>,
+    changelog_loading: bool,
+    changelog_error: Option<String>,
+    changelog_focus: Option<FocusHandle>,
 }
 
 impl UpdaterUi {
@@ -44,6 +50,10 @@ impl UpdaterUi {
             available: None,
             installation: None,
             focus: None,
+            changelog: None,
+            changelog_loading: false,
+            changelog_error: None,
+            changelog_focus: None,
         }
     }
 
@@ -58,9 +68,9 @@ impl UpdaterUi {
     fn status(&self) -> String {
         match &self.state {
             State::Disabled => "Launcher updates are disabled in development builds.".into(),
-            State::Idle => "GPUI preview update channel".into(),
+            State::Idle => "Launcher update channel".into(),
             State::Checking => "Checking for launcher updates…".into(),
-            State::Current => "You're using the latest published GPUI version.".into(),
+            State::Current => "You're using the latest published version.".into(),
             State::Available => format!(
                 "Launcher v{} is available.",
                 self.available.as_ref().unwrap().version
@@ -150,6 +160,114 @@ impl LauncherRoot {
             .get_or_insert_with(|| cx.focus_handle());
         window.focus(focus, cx);
         cx.notify();
+    }
+
+    pub(super) fn footer_update(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        if !self.launcher_update.enabled {
+            return None;
+        }
+        let t = &self.theme;
+        let (label, glyph) = match &self.launcher_update.state {
+            State::Disabled => return None,
+            State::Idle => ("Check for updates".to_string(), "refresh-cw"),
+            State::Checking => ("Checking for updates…".to_string(), "loader-circle"),
+            State::Current => ("Launcher up to date".to_string(), "check"),
+            State::Available => (
+                format!(
+                    "Update available · v{}",
+                    self.launcher_update
+                        .available
+                        .as_ref()
+                        .map(|update| update.version.as_str())
+                        .unwrap_or("")
+                ),
+                "arrow-up-circle",
+            ),
+            State::Downloading(progress) => (
+                if progress.total == 0 {
+                    "Downloading update…".to_string()
+                } else {
+                    format!(
+                        "Downloading update… {}%",
+                        progress.downloaded.saturating_mul(100) / progress.total
+                    )
+                },
+                "loader-circle",
+            ),
+            State::Installing => ("Installing update…".to_string(), "loader-circle"),
+            State::Failed(_) => ("Update check failed".to_string(), "info"),
+        };
+        let color = match &self.launcher_update.state {
+            State::Failed(_) => t.destructive(),
+            State::Available | State::Downloading(_) | State::Installing => t.primary(),
+            _ => t.muted_foreground(),
+        };
+        Some(
+            btn(t, "", ButtonVariant::Ghost)
+                .id("footer-launcher-update")
+                .aria_label(label.clone())
+                .debug_selector(|| "footer-launcher-update".into())
+                .h(px(20.0))
+                .px_1()
+                .gap(px(4.0))
+                .text_size(px(11.0))
+                .text_color(color)
+                .flex_shrink_0()
+                .child(icon(glyph, 12.0))
+                .child(label)
+                .on_click(cx.listener(|v, _: &gpui::ClickEvent, window, cx| {
+                    v.open_launcher_update(window, cx)
+                }))
+                .into_any_element(),
+        )
+    }
+
+    pub(super) fn open_changelog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.closing.is_some() {
+            return;
+        }
+        self.dialog = Some(Dialog::Changelog);
+        self.focused_field = None;
+        self.processes_ui.dropdown = false;
+        let focus = self
+            .launcher_update
+            .changelog_focus
+            .get_or_insert_with(|| cx.focus_handle());
+        window.focus(focus, cx);
+        cx.notify();
+        if self.launcher_update.changelog.is_none() && !self.launcher_update.changelog_loading {
+            self.load_changelog(cx);
+        }
+    }
+
+    fn load_changelog(&mut self, cx: &mut Context<Self>) {
+        if self.launcher_update.changelog_loading {
+            return;
+        }
+        self.launcher_update.changelog_loading = true;
+        self.launcher_update.changelog_error = None;
+        cx.notify();
+        let rt = self.data.rt.clone();
+        cx.spawn(async move |view, cx| {
+            let result = rt.spawn(release_updater::recent_releases(20)).await;
+            let _ = view.update(cx, |v, cx| {
+                v.launcher_update.changelog_loading = false;
+                match result {
+                    Ok(Ok(releases)) => {
+                        v.launcher_update.changelog = Some(releases);
+                        v.launcher_update.changelog_error = None;
+                    }
+                    Ok(Err(error)) => {
+                        v.launcher_update.changelog_error = Some(format!("{error:#}"));
+                    }
+                    Err(error) => {
+                        v.launcher_update.changelog_error = Some(error.to_string());
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn update_blocker(&self) -> Option<&'static str> {
@@ -272,8 +390,9 @@ impl LauncherRoot {
             .flex_col()
             .gap_2()
             .child(self.launcher_update.status());
+        let mut actions = div().flex().gap_2();
         if self.launcher_update.enabled {
-            controls = controls.child(
+            actions = actions.child(
                 btn(&self.theme, "Check for updates", ButtonVariant::Outline)
                     .id("launcher-update-check")
                     .debug_selector(|| "launcher-update-check".into())
@@ -282,6 +401,15 @@ impl LauncherRoot {
                     ),
             );
         }
+        actions = actions.child(
+            btn(&self.theme, "Changelog", ButtonVariant::Outline)
+                .id("launcher-changelog")
+                .debug_selector(|| "about-changelog".into())
+                .on_click(cx.listener(|v, _: &gpui::ClickEvent, window, cx| {
+                    v.open_changelog(window, cx)
+                })),
+        );
+        controls = controls.child(actions);
         if self.launcher_update.notice_visible() {
             controls = controls.child(
                 btn(&self.theme, "Launcher update", ButtonVariant::Primary)
@@ -293,7 +421,7 @@ impl LauncherRoot {
             );
         }
         controls.child(
-            action_button(&self.theme, "GPUI releases", "external-link")
+            action_button(&self.theme, "Launcher releases", "external-link")
                 .id("launcher-update-releases")
                 .debug_selector(|| "about-releases".into())
                 .on_click(|_, _, cx| cx.open_url(release_updater::RELEASE_PAGE)),
@@ -328,7 +456,7 @@ impl LauncherRoot {
             }
             body = body.child(div().text_sm().text_color(self.theme.muted_foreground()).child(if self.launcher_update.automatic() {
                 "The launcher will close, install the verified update, and restart. Your instances and settings stay in the data directory."
-            } else { "This build uses manual updates. Download the matching GPUI artifact from the release page." }));
+            } else { "This build uses manual updates. Download the matching launcher artifact from the release page." }));
         }
         if let State::Downloading(p) = self.launcher_update.state {
             body = body.child(progress_bar(
@@ -365,6 +493,14 @@ impl LauncherRoot {
             } else {
                 "Retry check"
             };
+            footer = footer.child(
+                btn(&self.theme, "Changelog", ButtonVariant::Ghost)
+                    .id("launcher-update-changelog")
+                    .debug_selector(|| "launcher-update-changelog".into())
+                    .on_click(cx.listener(|v, _: &gpui::ClickEvent, window, cx| {
+                        v.open_changelog(window, cx)
+                    })),
+            );
             footer = footer
                 .child(
                     btn(&self.theme, "Release page", ButtonVariant::Ghost)
@@ -389,6 +525,132 @@ impl LauncherRoot {
             crate::ui::dialog_shell(&self.theme, "Launcher update", body, footer)
                 .id("launcher-update-dialog")
                 .debug_selector(|| "launcher-update-dialog".into())
+                .occlude()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .when_some(focus, |el, focus| el.track_focus(focus))
+                .on_key_down(cx.listener(|v, event: &KeyDownEvent, _, cx| {
+                    if event.keystroke.key == "escape" {
+                        v.close_dialog(cx);
+                    }
+                    cx.stop_propagation();
+                })),
+        )
+    }
+    pub(super) fn changelog_dialog(&self, cx: &mut Context<Self>) -> Div {
+        let t = &self.theme;
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(t.muted_foreground())
+                    .child(format!("Installed version: {}", env!("CARGO_PKG_VERSION"))),
+            );
+        if self.launcher_update.changelog_loading {
+            body = body.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(icon("loader-circle", 16.0))
+                    .child("Loading changelog…"),
+            );
+        } else if let Some(error) = &self.launcher_update.changelog_error {
+            body = body.child(
+                div()
+                    .text_sm()
+                    .text_color(t.destructive())
+                    .child(format!("Could not load the changelog: {error}")),
+            );
+        } else if let Some(releases) = &self.launcher_update.changelog {
+            if releases.is_empty() {
+                body = body.child(div().text_sm().child("No published releases were found."));
+            } else {
+                body = body.child(
+                    div()
+                        .id("changelog-list")
+                        .debug_selector(|| "changelog-list".into())
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .max_h(px(420.0))
+                        .overflow_y_scroll()
+                        .children(releases.iter().map(|release| {
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .text_sm()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .child(format!("v{}", release.version)),
+                                        )
+                                        .child(
+                                            btn(t, "Release", ButtonVariant::Ghost)
+                                                .id(format!(
+                                                    "changelog-release:{}",
+                                                    release.version
+                                                ))
+                                                .text_xs()
+                                                .px_1()
+                                                .h(px(20.0))
+                                                .on_click({
+                                                    let url = release.release_url.clone();
+                                                    move |_, _, cx| cx.open_url(&url)
+                                                }),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .line_height(gpui::relative(1.35))
+                                        .child(if release.notes.is_empty() {
+                                            "No release notes provided.".to_string()
+                                        } else {
+                                            release.notes.clone()
+                                        }),
+                                )
+                        })),
+                );
+            }
+        }
+        let footer = div()
+            .flex()
+            .gap_2()
+            .child(
+                btn(t, "Close", ButtonVariant::Ghost)
+                    .id("changelog-close")
+                    .debug_selector(|| "changelog-close".into())
+                    .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| v.close_dialog(cx))),
+            )
+            .child(
+                btn(t, "Reload", ButtonVariant::Ghost)
+                    .id("changelog-reload")
+                    .debug_selector(|| "changelog-reload".into())
+                    .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                        v.load_changelog(cx)
+                    })),
+            )
+            .child(
+                btn(t, "Release page", ButtonVariant::Ghost)
+                    .id("changelog-release-page")
+                    .debug_selector(|| "changelog-release-page".into())
+                    .on_click(|_, _, cx| cx.open_url(release_updater::RELEASE_PAGE)),
+            );
+        let focus = self.launcher_update.changelog_focus.as_ref();
+        div().absolute().inset_0().child(
+            crate::ui::dialog_shell_with_width(&self.theme, "Changelog", 640.0, body, footer)
+                .id("changelog-dialog")
+                .debug_selector(|| "changelog-dialog".into())
                 .occlude()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .when_some(focus, |el, focus| el.track_focus(focus))
@@ -501,5 +763,46 @@ mod tests {
         root.settings_saving = false;
         root.settings_save_pending = Some(root.data.settings.clone());
         assert!(root.update_blocker().is_some());
+    }
+
+    #[gpui::test]
+    fn footer_update_status_opens_changelog_and_shows_cached_releases(cx: &mut TestAppContext) {
+        let rt = Arc::new(tokio::runtime::Runtime::new().unwrap());
+        let handle = cx.open_window(size(px(1100.0), px(750.0)), |_, _| {
+            let mut v = LauncherRoot::new(data(rt.clone(), ThemeMode::Dark));
+            v.launcher_update = UpdaterUi::new(true);
+            v.launcher_update.state = State::Current;
+            v.launcher_update.changelog = Some(vec![ReleaseNote {
+                version: "0.4.2".into(),
+                notes: "Release notes".into(),
+                release_url: "https://example.test/launcher-v0.4.2".into(),
+            }]);
+            v
+        });
+        let root = handle.root(cx).unwrap();
+        cx.update_window(handle.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        let mut visual = VisualTestContext::from_window(handle.into(), cx);
+        let footer = visual
+            .debug_bounds("footer-launcher-update")
+            .expect("footer update status must be laid out");
+        visual.simulate_click(footer.center(), Default::default());
+        visual.update(|_, cx| {
+            assert!(matches!(
+                root.read(cx).dialog,
+                Some(Dialog::LauncherUpdate)
+            ))
+        });
+        visual.update(|window, cx| {
+            root.update(cx, |v, cx| {
+                v.dialog = None;
+                v.open_changelog(window, cx);
+            });
+            window.draw(cx).clear(cx);
+        });
+        assert!(visual.debug_bounds("changelog-dialog").is_some());
+        assert!(visual.debug_bounds("changelog-list").is_some());
+        visual.simulate_keystrokes("escape");
+        visual.update(|_, cx| assert!(root.read(cx).dialog.is_none()));
     }
 }

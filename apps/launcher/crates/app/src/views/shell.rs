@@ -400,7 +400,7 @@ impl LauncherRoot {
         Some(gpui::deferred(div().absolute().inset_0().child(menu)).with_priority(21))
     }
 
-    pub(super) fn footer(&self) -> Div {
+    pub(super) fn footer(&self, cx: &mut Context<Self>) -> Div {
         let t = &self.theme;
         let count = self.data.instances.len();
         let mut footer = div()
@@ -463,6 +463,11 @@ impl LauncherRoot {
                     .text_ellipsis()
                     .child(self.data.status.clone()),
             );
+        } else {
+            footer = footer.child(div().flex_1());
+        }
+        if let Some(update) = self.footer_update(cx) {
+            footer = footer.child(update);
         }
         footer
     }

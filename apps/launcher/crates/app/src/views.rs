@@ -106,6 +106,7 @@ enum Dialog {
     CopyInstance(instance_actions::CopyDialog),
     Maintenance(instance_actions::MaintenanceDialog),
     LauncherUpdate,
+    Changelog,
     Group(library_groups::GroupDialog),
     Icon(library_icons::IconDialog),
     PrismImport(prism_import::PrismImportDialog),
@@ -963,6 +964,7 @@ impl LauncherRoot {
             Dialog::CopyInstance(state) => Some(self.copy_dialog(&state, cx)),
             Dialog::Maintenance(state) => Some(self.maintenance_dialog(&state, cx)),
             Dialog::LauncherUpdate => Some(self.launcher_update_dialog(cx)),
+            Dialog::Changelog => Some(self.changelog_dialog(cx)),
             Dialog::Group(state) => Some(self.group_dialog(&state, cx)),
             Dialog::Icon(state) => Some(self.icon_dialog(&state, cx)),
             Dialog::PrismImport(state) => Some(self.prism_import_dialog(&state, cx)),
@@ -1162,7 +1164,7 @@ impl Render for LauncherRoot {
             .child(self.toolbar(window, cx))
             .child(recovery)
             .child(div().flex_1().min_h_0().flex().flex_col().child(content))
-            .child(self.footer());
+            .child(self.footer(cx));
         if let Some(popup) = self
             .dialog
             .is_none()

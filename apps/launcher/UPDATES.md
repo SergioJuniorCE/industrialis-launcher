@@ -3,8 +3,12 @@
 Launcher self-updates are separate from instance pack updates. Distribution
 builds check GitHub asynchronously at startup. Settings → About offers a manual
 check, status, retry, and the release page; the toolbar shows an update action
-when a newer version is available or a check failed. Updates install only after
-the user confirms **Download and restart** in the launcher update dialog.
+when a newer version is available or a check failed. The status bar also reports
+the launcher update state (`Launcher up to date`, `Update available`, checking,
+downloading, or failed), and selecting it opens the update dialog. Settings →
+About and the update dialog include a changelog viewer with recent published
+release notes. Updates install only after the user confirms **Download and
+restart** in the launcher update dialog.
 
 ## Stable and preview channels
 

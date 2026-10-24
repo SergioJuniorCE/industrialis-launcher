@@ -23,6 +23,7 @@ pub const RELEASE_PAGE: &str =
 pub const RELEASE_PAGE: &str =
     "https://github.com/SergioJuniorCE/industrialis-launcher/releases?q=launcher-v";
 pub const STABLE_RELEASE_MARKER: &str = "<!-- industrialis-launcher-release-v1 -->";
+const LEGACY_STABLE_RELEASE_MARKER: &str = "<!-- industrialis-gpui-release-v1 -->";
 pub const INSTALL_MARKER: &str = "gpui-install.json";
 const MAX_INSTALLER_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 8 * 1024 * 1024;
@@ -91,6 +92,13 @@ pub struct AvailableUpdate {
     asset: Option<Asset>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ReleaseNote {
+    pub version: String,
+    pub notes: String,
+    pub release_url: String,
+}
+
 impl AvailableUpdate {
     pub fn has_windows_installer(&self) -> bool {
         self.asset
@@ -122,7 +130,7 @@ fn client() -> Result<reqwest::Client> {
         .build()?)
 }
 
-pub async fn check_for_update(current: &str, platform: Platform) -> Result<UpdateCheck> {
+async fn fetch_releases() -> Result<Vec<Release>> {
     let client = client()?;
     let mut releases = Vec::new();
     // The repository also publishes other products. Search beyond the first
@@ -143,10 +151,20 @@ pub async fn check_for_update(current: &str, platform: Platform) -> Result<Updat
         let finished = batch.len() < 100;
         releases.extend(batch);
         if finished {
-            return select_update(&releases, current, platform);
+            return Ok(releases);
         }
     }
     bail!("Too many release pages; open the launcher releases page to check manually")
+}
+
+pub async fn check_for_update(current: &str, platform: Platform) -> Result<UpdateCheck> {
+    let releases = fetch_releases().await?;
+    select_update(&releases, current, platform)
+}
+
+pub async fn recent_releases(limit: usize) -> Result<Vec<ReleaseNote>> {
+    let releases = fetch_releases().await?;
+    Ok(select_changelog(&releases, limit))
 }
 
 async fn bounded_body(mut response: reqwest::Response) -> Result<Vec<u8>> {
@@ -168,11 +186,10 @@ fn select_update(releases: &[Release], current: &str, platform: Platform) -> Res
         .filter_map(|release| {
             if cfg!(feature = "stable-updates")
                 && (release.prerelease
-                    || !release
-                        .body
-                        .as_deref()
-                        .unwrap_or_default()
-                        .contains(STABLE_RELEASE_MARKER))
+                    || !release.body.as_deref().is_some_and(|body| {
+                        body.contains(STABLE_RELEASE_MARKER)
+                            || body.contains(LEGACY_STABLE_RELEASE_MARKER)
+                    }))
             {
                 return None;
             }
@@ -201,6 +218,7 @@ fn select_update(releases: &[Release], current: &str, platform: Platform) -> Res
             .as_deref()
             .unwrap_or_default()
             .replace(STABLE_RELEASE_MARKER, "")
+            .replace(LEGACY_STABLE_RELEASE_MARKER, "")
             .trim()
             .to_string(),
         release_url: format!(
@@ -210,6 +228,51 @@ fn select_update(releases: &[Release], current: &str, platform: Platform) -> Res
         tag: release.tag_name.clone(),
         asset,
     }))
+}
+
+fn select_changelog(releases: &[Release], limit: usize) -> Vec<ReleaseNote> {
+    let mut versioned: Vec<(Version, &Release)> = releases
+        .iter()
+        .filter_map(|release| {
+            if release.draft {
+                return None;
+            }
+            if cfg!(feature = "stable-updates")
+                && (release.prerelease
+                    || !release.body.as_deref().is_some_and(|body| {
+                        body.contains(STABLE_RELEASE_MARKER)
+                            || body.contains(LEGACY_STABLE_RELEASE_MARKER)
+                    }))
+            {
+                return None;
+            }
+            let version = Version::parse(release.tag_name.strip_prefix(TAG_PREFIX)?).ok()?;
+            if !version.pre.is_empty() || !version.build.is_empty() {
+                return None;
+            }
+            Some((version, release))
+        })
+        .collect();
+    versioned.sort_by(|(a, _), (b, _)| b.cmp(a));
+    versioned
+        .into_iter()
+        .take(limit)
+        .map(|(version, release)| ReleaseNote {
+            version: version.to_string(),
+            notes: release
+                .body
+                .as_deref()
+                .unwrap_or_default()
+                .replace(STABLE_RELEASE_MARKER, "")
+                .replace(LEGACY_STABLE_RELEASE_MARKER, "")
+                .trim()
+                .to_string(),
+            release_url: format!(
+                "https://github.com/{REPOSITORY}/releases/tag/{}",
+                release.tag_name
+            ),
+        })
+        .collect()
 }
 
 fn validate_asset(asset: &Asset, tag: &str, platform: Platform) -> Result<()> {
@@ -585,6 +648,35 @@ mod tests {
             select_update(&releases, "1.0.0", Platform::WindowsX64).unwrap(),
             UpdateCheck::Current
         ));
+    }
+
+    #[test]
+    fn changelog_lists_newest_channel_releases_and_strips_marker() {
+        let mut draft = release("9.0.0", Platform::WindowsX64);
+        draft.draft = true;
+        let mut electron = release("8.0.0", Platform::WindowsX64);
+        electron.tag_name = "launcher-v8.0.0".into();
+        electron.body = Some("Original Electron release".into());
+        let mut legacy = release("0.0.9", Platform::WindowsX64);
+        legacy.body = Some(format!("{LEGACY_STABLE_RELEASE_MARKER}\nLegacy notes"));
+        let releases = vec![
+            draft,
+            electron,
+            legacy,
+            release("0.2.0", Platform::WindowsX64),
+            release("0.3.0-beta.1", Platform::WindowsX64),
+            release("0.1.0", Platform::WindowsX64),
+        ];
+        let notes = select_changelog(&releases, 3);
+        assert_eq!(notes.len(), 3);
+        assert_eq!(notes[0].version, "0.2.0");
+        assert_eq!(notes[1].version, "0.1.0");
+        assert_eq!(notes[2].version, "0.0.9");
+        assert_eq!(notes[0].notes, "Release notes");
+        assert_eq!(notes[2].notes, "Legacy notes");
+        assert!(notes[0]
+            .release_url
+            .ends_with(&format!("/{TAG_PREFIX}0.2.0")));
     }
 
     #[test]
