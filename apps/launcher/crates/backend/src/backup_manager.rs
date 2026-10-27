@@ -64,11 +64,18 @@ mod tests {
         std::fs::remove_dir_all(paths.base()).unwrap();
     }
 
-    struct SlowStore {inner:MemoryStore,active:std::sync::atomic::AtomicUsize,max:std::sync::atomic::AtomicUsize}
+    struct SlowStore {inner:MemoryStore,active:std::sync::atomic::AtomicUsize,max:std::sync::atomic::AtomicUsize,started:std::sync::atomic::AtomicUsize,peer:tokio::sync::Notify}
     #[async_trait::async_trait]
     impl BackupStore for SlowStore {
         async fn list(&self,prefix:&str)->anyhow::Result<Vec<backups::RemoteObject>>{self.inner.list(prefix).await}
         async fn upload(&self,key:&str,source:backups::UploadSource,content_type:&str,progress:backups::Progress)->anyhow::Result<()> {
+            // Hold the first two uploads until both are in flight so the overlap
+            // assertion does not depend on how long unrelated file work takes.
+            match self.started.fetch_add(1,Ordering::SeqCst) {
+                0=>{let _=tokio::time::timeout(Duration::from_secs(5),self.peer.notified()).await;},
+                1=>self.peer.notify_one(),
+                _=>{},
+            }
             let count=self.active.fetch_add(1,Ordering::SeqCst)+1;self.max.fetch_max(count,Ordering::SeqCst);
             tokio::time::sleep(Duration::from_millis(30)).await;
             let result=self.inner.upload(key,source,content_type,progress).await;self.active.fetch_sub(1,Ordering::SeqCst);result
@@ -79,7 +86,7 @@ mod tests {
     #[tokio::test]
     async fn uploads_two_instances_at_once_and_persists_every_delivery() {
         let paths=fixture();
-        let store=Arc::new(SlowStore{inner:Default::default(),active:Default::default(),max:Default::default()});
+        let store=Arc::new(SlowStore{inner:Default::default(),active:Default::default(),max:Default::default(),started:Default::default(),peer:Default::default()});
         let manager=BackupManager::with_store(paths.clone(),store.clone(),None);
         for id in ["one","two","three"]{
             let dir=paths.instance_dir(id).unwrap();std::fs::create_dir_all(dir.join(".minecraft/backups")).unwrap();
