@@ -29,7 +29,7 @@ fn default_window_tint_opacity() -> u8 {
 }
 
 impl ThemeOverrides {
-    /// Set (non-empty) overrides as pairs, for the GPUI theme bridge.
+    /// Set (non-empty) overrides as pairs, for the launcher theme bridge.
     pub fn as_pairs(&self) -> Vec<(String, String)> {
         [
             ("background", &self.background),

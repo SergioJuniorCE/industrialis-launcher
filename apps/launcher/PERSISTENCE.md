@@ -20,7 +20,7 @@ saves through the editor backend, then replaces fresh pack configs through the
 actual staged update and reinstall flow. It uses a path outside the legacy
 preservation allowlist so passing requires the editor's persistent overlay.
 
-GPUI is a drop-in replacement: it opens the same `industrialis-launcher` directory
+Launcher is a drop-in replacement: it opens the same `industrialis-launcher` directory
 and existing files as Electron, in place. Users must not copy their data, import a
 profile, run a migration wizard or sign in again just because the UI was replaced.
 Windows uses `%APPDATA%/industrialis-launcher`, macOS uses
@@ -44,7 +44,7 @@ unsupported entry cannot hide valid accounts, and mutations keep that entry in
 `accounts.json` for recovery. Unchanged legacy accounts retain their existing shape
 even when another account is added, refreshed or removed. Unchanged rows retain
 optional nulls and their original order. A changed account uses the same current
-version 3 format supported by Electron; no separate GPUI account format is introduced. Unrecognized
+version 3 format supported by Electron; no separate Launcher account format is introduced. Unrecognized
 account, token, profile, entitlement and skin fields survive serialization and
 refresh. A late token refresh cannot restore an account removed during the request.
 These files still use the existing plaintext credential format; existing encrypted
@@ -79,12 +79,12 @@ are untouched by preference/account/group edits.
 
 ## Save ownership
 
-`backend/profile_owner.rs` acquires cross-process ownership before GPUI startup
+`backend/profile_owner.rs` acquires cross-process ownership before Launcher startup
 reads (which can also prune PID state). The guard outlives the backend runtime.
 Electron uses the matching `profile-owner.mjs` protocol before constructing its
 backend, and holds ownership through disposal. CLI commands that can write acquire
 operation ownership; read-only inspection remains available while a launcher runs.
-A second launcher signals the owner and exits. GPUI polls the activation signal on
+A second launcher signals the owner and exits. Launcher polls the activation signal on
 the UI executor and activates/restores its existing window; Electron restores,
 shows and focuses its existing main window. Signals received during startup wait
 for window creation. On Windows the Rust client identifies the owner PID, calls
@@ -105,7 +105,7 @@ unrelated tools editing files directly. See the primary API references:
 [Rust TCP listener](https://doc.rust-lang.org/std/net/struct.TcpListener.html) and
 [Node net server](https://nodejs.org/api/net.html#serverlistenoptions-callback).
 
-Old released Electron/GPUI binaries do not implement this shared protocol and
+Old released Electron/Launcher binaries do not implement this shared protocol and
 cannot be retroactively locked by it. Installed-version cutover must stop the old
 process before starting its replacement. Startup now detects packaged Electron
 processes before admitting a new default-profile owner and refuses to write while
@@ -124,7 +124,7 @@ network request or game/pack operation runs while holding it. An admitted
 transaction owns its task, so cancellation of its caller does not release the
 mutex during an unfinished file replacement.
 
-The GPUI preference queue coalesces rapid edits and writes the latest snapshot.
+The launcher preference queue coalesces rapid edits and writes the latest snapshot.
 Its backend save merges the current disk account default instead of copying the
 UI's older default. Account changes update only account/default fields in the UI.
 Instance editor patches merge into the latest document and cannot modify
@@ -171,7 +171,7 @@ with synthetic current/legacy credentials, copies it, edits the copy, and checks
 preservation of extension fields and untouched resource bytes. It also covers
 concurrent preferences/default/removal/group operations, corrupt documents and
 failed account-default writes. Backend tests exercise simultaneous readers,
-read-only and Windows sharing failures, retry and caller cancellation. A GPUI
+read-only and Windows sharing failures, retry and caller cancellation. A Launcher
 pointer/close test exercises failure retention, the Retry button and saved values.
 
 Run from `apps/launcher`:
@@ -189,7 +189,7 @@ macOS/Linux runtime paths and permissions, existing encrypted cloud credentials
 and crash/power-loss rehearsal still need verification. Cloud support must consume
 the existing credential store without a user migration requirement (F16).
 The mutex alone does not lock other processes; the ownership endpoint protects the
-current GPUI/Electron/CLI entry points. Older-installed-version coexistence still
+current Launcher/Electron/CLI entry points. Older-installed-version coexistence still
 needs the F26/F33 cutover checks. Do not run write rehearsals against live profiles.
 
 Cross-runtime checks use actual Rust/Node child processes and the real native app
@@ -197,10 +197,10 @@ as a secondary launcher, without creating a second window or reading user data:
 
 ```sh
 cargo build -p industrialis-cli -p industrialis-app -p industrialis-backend --bin industrialis-cli --example profile_owner --example profile_ownership_smoke --locked --offline
-node --test ../../scripts/gpui-profile-owner.test.mjs
+node --test ../../scripts/profile-owner.test.mjs
 ```
 
-From the repository root, run `node --test scripts/gpui-profile-owner.test.mjs`.
+From the repository root, run `node --test scripts/profile-owner.test.mjs`.
 The separate app example links the same app source without replacing a running
 development executable. Tests cover competing writers, read-only inspection,
 activation handoff, simultaneous launches, graceful/forced-exit release and
@@ -217,7 +217,7 @@ back to the original WMI escape behavior when necessary.
 
 Running PID entries keep Electron's pid/creation_id fields and optional native
 session metadata. Windows uses Electron-compatible .NET epoch milliseconds;
-macOS uses ps lstart; Linux uses boot identity and start ticks. Early GPUI Unix
+macOS uses ps lstart; Linux uses boot identity and start ticks. Early Launcher Unix
 second identities remain readable without rewriting records. Native capture
 positions and play-time checkpoints are saved in place. Time is credited once,
 up to the recorded exit time; a missing receipt for a dead restored process does
@@ -231,6 +231,6 @@ join this admission and drain mechanism when ported.
 
 Synthetic lifetime checks: build the backend game_lifecycle example and app
 profile_ownership_smoke example, then run
-`node --test scripts/gpui-game-broker.test.mjs`. This exercises Windows
+`node --test scripts/game-broker.test.mjs`. This exercises Windows
 parent termination, native identity compatibility, output/exit/hook durability,
 graceful close and reopening without accessing the user's profile.

@@ -62,10 +62,10 @@ and [VS Code color themes](https://code.visualstudio.com/api/extension-guides/co
 
 The provider/archive tests cover JSONC inheritance, TextMate file references,
 light/dark variants, stable update identities, unsafe paths, cycles, mismatched
-packages and non-color extensions. Native GPUI interaction tests cover import,
+packages and non-color extensions. Native Launcher interaction tests cover import,
 Apply, Saved theme selection, updates, profile reload and extension-field
 preservation. Editor tests check scoped colors/styles and theme switching with
-undo preserved. These GPUI tests use a virtual test context, never the host desktop.
+undo preserved. These Launcher tests use a virtual test context, never the host desktop.
 
 The opt-in online smoke writes a new temporary profile and removes it on success:
 
@@ -75,7 +75,7 @@ cargo run -p industrialis-backend --example openvsx_theme_smoke --locked --jobs 
 
 It exercises public search, a real pinned Dracula package with checksum validation,
 all contributed variants, native color validity, syntax retention, save/reload and
-cleanup. A separate opt-in GPUI test dispatches the actual Install, Apply and Search
+cleanup. A separate opt-in Launcher test dispatches the actual Install, Apply and Search
 controls against the public registry:
 
 ```sh
@@ -90,4 +90,4 @@ pass does not establish rendered Windows/macOS/Linux desktop acceptance; no host
 desktop input or personal profile was used.
 
 The final Windows suites passed 50 core, 144 backend and 51 app tests. The opt-in
-public-network GPUI test passed separately; the backend NSIS scenario was not run.
+public-network Launcher test passed separately; the backend NSIS scenario was not run.

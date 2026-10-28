@@ -92,7 +92,7 @@ fn apply_native(window: &Window, material: WindowMaterial, mode: ThemeMode) -> R
         }
         return Ok(());
     }
-    if std::env::var("GPUI_DISABLE_DIRECT_COMPOSITION")
+    if std::env::var("INDUSTRIALIS_DISABLE_DIRECT_COMPOSITION")
         .is_ok_and(|value| value == "true" || value == "1")
     {
         return Err(

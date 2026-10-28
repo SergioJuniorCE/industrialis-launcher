@@ -44,8 +44,9 @@ pub(super) struct WorkspaceUi {
 }
 impl WorkspaceUi {
     pub fn load(paths: &LauncherPaths) -> Self {
-        let path = paths.base().join("gpui-workspace.json");
+        let path = paths.base().join("launcher-workspace.json");
         let saved: Value = std::fs::read(&path)
+            .or_else(|_| std::fs::read(paths.base().join("gpui-workspace.json")))
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
@@ -1426,7 +1427,7 @@ mod tests {
         let paths = LauncherPaths::new(directory.clone());
         let lock = Default::default();
         let generation = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(2));
-        let path = directory.join("gpui-workspace.json");
+        let path = directory.join("launcher-workspace.json");
         write_snapshot(
             path.clone(),
             json!({"fraction": 0.64, "collapsed": ["Production"]}),
@@ -1447,7 +1448,7 @@ mod tests {
         .unwrap();
         let loaded = WorkspaceUi::load(&paths);
         assert!((loaded.fraction - 0.64).abs() < 0.001);
-        assert!(loaded.collapsed.is_empty()); // Legacy GPUI shadow state is ignored.
+        assert!(loaded.collapsed.is_empty()); // Legacy launcher shadow state is ignored.
         std::fs::remove_file(path).unwrap();
         std::fs::remove_dir(directory).unwrap();
     }

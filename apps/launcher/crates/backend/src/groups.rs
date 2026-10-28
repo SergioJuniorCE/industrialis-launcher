@@ -688,7 +688,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(groups_state(&paths).await.unwrap().ungrouped_name, "Loose");
-        assert!(!paths.base().join("gpui-workspace.json").exists());
+        assert!(!paths.base().join("launcher-workspace.json").exists());
     }
 
     fn temp_paths(name: &str) -> LauncherPaths {

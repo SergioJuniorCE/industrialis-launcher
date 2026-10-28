@@ -118,7 +118,7 @@ pub fn acquire(paths: &LauncherPaths, kind: OwnerKind) -> anyhow::Result<Acquisi
             if kind == OwnerKind::Launcher && owner == OwnerKind::Launcher {
                 allow_foreground(pid);
                 // Permission handoff precedes the activation request, including
-                // when the current owner is Electron rather than GPUI.
+                // when the current owner is Electron rather than the launcher.
                 return Ok(Acquisition::Existing(
                     request_owner(address, &key, "focus")?.0,
                 ));

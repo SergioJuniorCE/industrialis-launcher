@@ -1,6 +1,6 @@
 # Third-party mods and resource packs
 
-The GPUI instance **Add-ons** tab contains **Mods** and **Resource packs**.
+The launcher instance **Add-ons** tab contains **Mods** and **Resource packs**.
 Existing custom mod imports remain available. Resource packs can be imported from
 ZIP files or installed individually from Modernity's GitHub release assets.
 
@@ -84,7 +84,7 @@ Follow-up work for a general marketplace (separate from Electron parity):
 
 ## Verification
 
-Automated GPUI tests exercise ZIP picker cancellation, valid imports, invalid
+Automated Launcher tests exercise ZIP picker cancellation, valid imports, invalid
 archives, real paired files, confirmed removal and maintenance guards. Backend
 checks cover wrapper normalization, invalid archives, identity collisions,
 source receipts, restoration, safe removal and compatibility changes. The
@@ -109,7 +109,7 @@ controls. It verifies active/persistent bytes, source receipts and unchanged
 metadata, visits the existing Mods manager and closes the app normally:
 
 ```sh
-GPUI_ISOLATED_CONTENT_CONTAINER=1 sh scripts/test-gpui-linux-content.sh \
+LAUNCHER_ISOLATED_CONTENT_CONTAINER=1 sh scripts/test-linux-content.sh \
   /target/debug/examples/profile_ownership_smoke /output
 ```
 

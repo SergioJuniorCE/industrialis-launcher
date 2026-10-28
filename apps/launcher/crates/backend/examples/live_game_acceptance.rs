@@ -27,7 +27,7 @@ fn main() -> anyhow::Result<()> {
             && std::fs::read_to_string(profile.join(".gpui-live-acceptance"))
                 .ok()
                 .as_deref()
-                == Some("industrialis-gpui-expendable-live-acceptance-v1"),
+                == Some("industrialis-expendable-live-acceptance-v1"),
         "Use a marked expendable acceptance profile"
     );
     let paths = LauncherPaths::new(profile);
@@ -59,11 +59,11 @@ async fn run(paths: LauncherPaths, id: String, java: String) -> anyhow::Result<(
     let existing = accounts::load_accounts(&paths).await?;
     let account_id = match existing
         .iter()
-        .find(|account| accounts::profile_identity(account).0 == "GpuiAcceptance")
+        .find(|account| accounts::profile_identity(account).0 == "LauncherAcceptance")
     {
         Some(account) => accounts::account_to_info(account).id,
         None => {
-            accounts::create_offline_account(&paths, "GpuiAcceptance")
+            accounts::create_offline_account(&paths, "LauncherAcceptance")
                 .await?
                 .id
         }
@@ -103,7 +103,7 @@ async fn run(paths: LauncherPaths, id: String, java: String) -> anyhow::Result<(
         launch::launch_instance_with_started(&game_paths, &game_id, emit, started_callback).await
     });
     let start = std::time::Instant::now();
-    let limit = std::env::var("GPUI_GAME_ACCEPTANCE_SECONDS")
+    let limit = std::env::var("LAUNCHER_GAME_ACCEPTANCE_SECONDS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(900);

@@ -123,7 +123,7 @@ pub fn matches_creation_id(pid: u32, expected: &str) -> bool {
     if get_process_creation_id(pid).as_deref() == Some(&expected) {
         return true;
     }
-    // Read records written by the early GPUI prototype without rewriting them.
+    // Read records written by the early launcher prototype without rewriting them.
     expected
         .parse::<u64>()
         .ok()

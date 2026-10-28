@@ -2,7 +2,7 @@
 
 ## Easy mode responsiveness, 2026-10-15
 
-Easy forms use GPUI's variable-height virtual list, retaining each visible input's
+Easy forms use the UI's variable-height virtual list, retaining each visible input's
 native entity, draft value, and undo history while constructing only viewport rows.
 The parsed Forge document is cached against the exact current source. Source changes
 invalidate parsed data and list measurements without moving the scroll anchor.
@@ -10,9 +10,9 @@ Descriptions still wrap and multiline settings retain their native text areas.
 Save controls sit outside the scrolling form, including on narrow panels.
 
 The 500-setting hover regression measured 502.29 ms per CPU redraw before this
-change and 4.44 ms after virtualization and parse caching (virtual GPUI test, not
+change and 4.44 ms after virtualization and parse caching (virtual Launcher test, not
 GPU FPS). The test also reaches and edits the last field. Native Windows acceptance:
-`scripts/test-gpui-windows-caption-sandbox.ps1 -Scenario easy`.
+`scripts/test-windows-caption-sandbox.ps1 -Scenario easy`.
 
 ## Explorer performance, 2026-10-15
 
@@ -47,18 +47,18 @@ the directory rather than revealing its entry inside the parent folder.
 Pop-out moves the saved draft to its own native window. Old pane mouse callbacks
 tolerate the moved draft through the rest of that pointer event; otherwise bubbling
 mouse-up could abort the native launcher. Native file action and pop-out acceptance:
-`scripts/test-gpui-windows-caption-sandbox.ps1 -Scenario files`.
+`scripts/test-windows-caption-sandbox.ps1 -Scenario files`.
 
-Keep the editor native in GPUI, as requested. The Explorer now uses GPUI's
+Keep the editor native in Launcher, as requested. The Explorer now uses Launcher's
 virtualized uniform list: only viewport rows become UI elements, while the full
 directory data and stable row IDs remain available for navigation. Folder loading,
 drafts, Easy/Advanced editing, and file persistence keep their existing paths.
 
 The `large_folder_hover_work_is_bounded_by_the_viewport` regression drives pointer
 movement over actual rendered rows. With 5,000 cached entries, CPU hover redraw
-time fell from 524.75 ms to 4.42 ms on the development machine. This virtual GPUI
+time fell from 524.75 ms to 4.42 ms on the development machine. This virtual Launcher
 measurement is not a native GPU frame-rate claim. Native Windows acceptance runs
-with `scripts/test-gpui-windows-caption-sandbox.ps1 -Scenario explorer`, using an
+with `scripts/test-windows-caption-sandbox.ps1 -Scenario explorer`, using an
 isolated 5,000-file profile and checking that End reaches the last editable file.
 
 Brief: repair the native launcher's contrast, expose every directory entry, retain
@@ -68,7 +68,7 @@ shared profile. Design variance 3, motion intensity 1, visual density 7.
 
 The supplied screenshot uses Sandstone: bronze actions, warm near-black surfaces,
 small system text, a fixed file-list height and almost indistinguishable panels.
-The previous GPUI editor already uses gpui-base's native EditorState, with line
+The previous UI editor already uses gpui-base's native EditorState, with line
 numbers, a search engine, selection and undo; it never installs a syntax highlighter
 or renders the search input.
 Forge's lossless Easy editor exists, but a single conditional mode-switch button
@@ -77,7 +77,7 @@ the layout lets rows shrink and spill outside the usable scrolling area.
 
 Use the design-taste-frontend skill's audit, contrast and preservation guidance.
 Its marketing layouts and web editor recommendations do not apply to this native
-product. Keep the pinned GPUI/gpui-base editing engine; Syntect supplies maintained
+product. Keep the pinned framework/gpui-base editing engine; Syntect supplies maintained
 grammars through the engine's supported InputHighlighter seam. Forge gets a small
 bundled syntax definition for its property types, comments, values and sections.
 This is real native editing with syntax-colored spans, not an overlay over a
@@ -99,7 +99,7 @@ Stored custom theme overrides are retained.
 Use real platform font family names for code: Consolas on Windows, Menlo on
 macOS and the Fontconfig monospace alias on Linux. The pinned Windows DirectWrite
 resolver only special-cases `.SystemUIFont`; a literal `monospace` name can fall
-through to GPUI's proportional fallback stack.
+through to the UI's proportional fallback stack.
 
 Acceptance must cover the last entry in a directory with more than one screen of
 files; Easy scalar/list edits; Advanced Unicode edits, highlighting, clipboard,
@@ -109,7 +109,7 @@ Native screenshots and input tests run only on disposable owned desktops.
 
 ## Verified repair, 2026-10-12
 
-The GPUI regression reaches file 120 in a bounded scrolling directory and saves
+The launcher regression reaches file 120 in a bounded scrolling directory and saves
 an Easy edit with its comments intact in both game and persistent overlay files.
 A second regression checks painted and clickable row bounds in a wide layout.
 The existing Advanced edit/save/conflict/pop-out and Unicode/clipboard/undo tests

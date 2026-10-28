@@ -24,7 +24,8 @@ pub const RELEASE_PAGE: &str =
     "https://github.com/SergioJuniorCE/industrialis-launcher/releases?q=launcher-v";
 pub const STABLE_RELEASE_MARKER: &str = "<!-- industrialis-launcher-release-v1 -->";
 const LEGACY_STABLE_RELEASE_MARKER: &str = "<!-- industrialis-gpui-release-v1 -->";
-pub const INSTALL_MARKER: &str = "gpui-install.json";
+pub const INSTALL_MARKER: &str = "install.json";
+const LEGACY_INSTALL_MARKER: &str = "gpui-install.json";
 const MAX_INSTALLER_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 8 * 1024 * 1024;
 
@@ -422,12 +423,15 @@ pub fn installation_directory(executable: &Path, platform: Platform) -> Option<P
         return None;
     }
     let directory = executable.parent()?;
-    let metadata = std::fs::metadata(directory.join(INSTALL_MARKER)).ok()?;
+    let marker_path = [INSTALL_MARKER, LEGACY_INSTALL_MARKER]
+        .iter()
+        .map(|name| directory.join(name))
+        .find(|path| path.is_file())?;
+    let metadata = std::fs::metadata(&marker_path).ok()?;
     if metadata.len() > 1024 {
         return None;
     }
-    let marker: InstallMarker =
-        serde_json::from_slice(&std::fs::read(directory.join(INSTALL_MARKER)).ok()?).ok()?;
+    let marker: InstallMarker = serde_json::from_slice(&std::fs::read(&marker_path).ok()?).ok()?;
     (marker.format == 1 && marker.kind == "nsis").then(|| directory.to_path_buf())
 }
 
@@ -494,15 +498,15 @@ mod tests {
 
     #[cfg(windows)]
     #[tokio::test]
-    #[ignore = "Run scripts/test-gpui-windows-updater.ps1 with NSIS; uses isolated fixture executables"]
+    #[ignore = "Run scripts/test-windows-updater.ps1 with NSIS; uses isolated fixture executables"]
     async fn nsis_install_update_restart_and_uninstall() {
         use std::os::windows::process::CommandExt;
         let installer = PathBuf::from(
-            std::env::var_os("GPUI_NSIS_SMOKE_INSTALLER").expect("Smoke installer required"),
+            std::env::var_os("LAUNCHER_NSIS_SMOKE_INSTALLER").expect("Smoke installer required"),
         );
-        if std::env::var_os("GPUI_NSIS_SMOKE_CHILD").is_some() {
+        if std::env::var_os("LAUNCHER_NSIS_SMOKE_CHILD").is_some() {
             let failed_dir =
-                std::env::temp_dir().join(format!("gpui-smoke-no-ack-{}", uuid::Uuid::new_v4()));
+                std::env::temp_dir().join(format!("launcher-smoke-no-ack-{}", uuid::Uuid::new_v4()));
             std::fs::create_dir(&failed_dir).unwrap();
             let failed = PreparedInstaller {
                 installer: failed_dir.join("not-an-installer.exe"),
@@ -521,7 +525,7 @@ mod tests {
             );
             assert!(!failed_dir.exists());
             let dir =
-                std::env::temp_dir().join(format!("gpui-smoke-handoff-{}", uuid::Uuid::new_v4()));
+                std::env::temp_dir().join(format!("launcher-smoke-handoff-{}", uuid::Uuid::new_v4()));
             std::fs::create_dir(&dir).unwrap();
             let prepared = PreparedInstaller {
                 installer: dir.join("setup.exe"),
@@ -564,7 +568,7 @@ mod tests {
                 "release_updater::tests::nsis_install_update_restart_and_uninstall",
                 "--nocapture",
             ])
-            .env("GPUI_NSIS_SMOKE_CHILD", "1")
+            .env("LAUNCHER_NSIS_SMOKE_CHILD", "1")
             .creation_flags(0x08000000)
             .status()
             .unwrap();
@@ -736,7 +740,7 @@ mod tests {
 
     #[test]
     fn installer_mode_requires_valid_marker_and_exact_executable() {
-        let dir = std::env::temp_dir().join(format!("gpui-marker-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("launcher-marker-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&dir).unwrap();
         let exe = dir.join("industrialis.exe");
         assert!(installation_directory(&exe, Platform::WindowsX64).is_none());
@@ -749,6 +753,16 @@ mod tests {
         assert!(installation_directory(&dir.join("other.exe"), Platform::WindowsX64).is_none());
         std::fs::write(dir.join(INSTALL_MARKER), r#"{"format":2,"kind":"nsis"}"#).unwrap();
         assert!(installation_directory(&exe, Platform::WindowsX64).is_none());
+        std::fs::remove_file(dir.join(INSTALL_MARKER)).unwrap();
+        std::fs::write(
+            dir.join(LEGACY_INSTALL_MARKER),
+            r#"{"format":1,"kind":"nsis"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            installation_directory(&exe, Platform::WindowsX64),
+            Some(dir.clone())
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -779,7 +793,7 @@ mod tests {
 
     #[tokio::test]
     async fn verified_download_reports_progress_and_keeps_only_complete_executable() {
-        let dir = std::env::temp_dir().join(format!("gpui-download-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("launcher-download-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&dir).unwrap();
         let prepared = PreparedInstaller {
             installer: dir.join("setup.exe"),
@@ -812,7 +826,7 @@ mod tests {
             (&b"MZok"[..], 4, 3, Sha256::digest(b"MZok")),
         ] {
             let dir =
-                std::env::temp_dir().join(format!("gpui-download-fail-{}", uuid::Uuid::new_v4()));
+                std::env::temp_dir().join(format!("launcher-download-fail-{}", uuid::Uuid::new_v4()));
             std::fs::create_dir(&dir).unwrap();
             let prepared = PreparedInstaller {
                 installer: dir.join("setup.exe"),

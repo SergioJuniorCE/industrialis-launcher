@@ -1,4 +1,4 @@
-//! Industrialis launcher — GPUI app.
+//! Industrialis launcher — native desktop app.
 //!
 //! Boots a tokio runtime, loads backend snapshots synchronously, and opens
 //! the main window on [`views::LauncherRoot`].

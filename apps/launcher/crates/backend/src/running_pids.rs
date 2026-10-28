@@ -11,8 +11,12 @@ pub struct RunningGamePid {
     pub pid: u32,
     #[serde(rename = "creation_id")]
     pub creation_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub gpui_session: Option<GameSession>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "gpui_session"
+    )]
+    pub launcher_session: Option<GameSession>,
     #[serde(flatten)]
     pub extra_fields: serde_json::Map<String, serde_json::Value>,
 }
@@ -67,9 +71,11 @@ pub async fn load_running_game_pids(
             Ok(id) if id == *raw_id => {
                 let mut extras = entry.as_object().cloned().unwrap_or_default();
                 let session = entry
-                    .get("gpui_session")
+                    .get("launcher_session")
+                    .or_else(|| entry.get("gpui_session"))
                     .and_then(|v| serde_json::from_value(v.clone()).ok());
                 if session.is_some() {
+                    extras.remove("launcher_session");
                     extras.remove("gpui_session");
                 }
                 for key in ["pid", "creation_id"] {
@@ -80,7 +86,7 @@ pub async fn load_running_game_pids(
                     RunningGamePid {
                         pid,
                         creation_id,
-                        gpui_session: session,
+                        launcher_session: session,
                         extra_fields: extras,
                     },
                 );
@@ -164,7 +170,7 @@ mod tests {
     async fn concurrent_updates_keep_other_games_and_unknown_rows() {
         let paths = temp_paths("concurrent");
         write_json(&paths.running_game_pids_path(),&serde_json::json!({
-            "legacy":{"pid":33,"creation_id":"  old  ","gpui_session":{"future":true},"extension":null},
+            "legacy":{"pid":33,"creation_id":"  old  ","launcher_session":{"future":true},"extension":null},
             "unknown":{"pid":"unsupported","keep":true}
         })).await.unwrap();
         let before: serde_json::Value = serde_json::from_slice(
@@ -183,7 +189,7 @@ mod tests {
                         RunningGamePid {
                             pid: n + 100,
                             creation_id: format!("c{n}"),
-                            gpui_session: None,
+                            launcher_session: None,
                             extra_fields: Default::default(),
                         },
                     );
@@ -214,6 +220,32 @@ mod tests {
                 .unwrap(),
             b"broken"
         );
+    }
+
+    #[tokio::test]
+    async fn retired_session_key_still_loads() {
+        let paths = temp_paths("retired-session");
+        tokio::fs::create_dir_all(paths.base()).await.unwrap();
+        write_json(
+            &paths.running_game_pids_path(),
+            &serde_json::json!({
+                "game": {
+                    "pid": 10,
+                    "creation_id": "c",
+                    "gpui_session": {
+                        "capture_id": "x",
+                        "started_at_ms": 1,
+                        "record_time": false,
+                        "stdout_offset": 0,
+                        "stderr_offset": 0
+                    }
+                }
+            }),
+        )
+        .await
+        .unwrap();
+        let pids = load_running_game_pids(&paths).await.unwrap();
+        assert!(pids["game"].launcher_session.is_some());
     }
 
     fn temp_paths(name: &str) -> LauncherPaths {

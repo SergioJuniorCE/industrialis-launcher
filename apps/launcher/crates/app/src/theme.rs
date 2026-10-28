@@ -1,4 +1,4 @@
-//! GPUI bridge over `industrialis-core` theme tokens.
+//! UI bridge over `industrialis-core` theme tokens.
 //!
 //! Every color in the UI comes from here — no hardcoded hex in views.
 
