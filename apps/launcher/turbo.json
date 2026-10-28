@@ -2,7 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "dev": {
-      "passThroughEnv": ["INDUSTRIALIS_DATA_DIR", "JAVA_HOME", "CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "GPUI_DISABLE_DIRECT_COMPOSITION"]
+      "passThroughEnv": ["INDUSTRIALIS_DATA_DIR", "JAVA_HOME", "CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "INDUSTRIALIS_DISABLE_DIRECT_COMPOSITION"]
     },
     "build": {
       "cache": false,

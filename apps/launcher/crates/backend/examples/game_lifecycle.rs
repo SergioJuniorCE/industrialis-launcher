@@ -71,7 +71,7 @@ fn main() -> anyhow::Result<()> {
                 RunningGamePid {
                     pid,
                     creation_id: process.creation_id.clone().unwrap(),
-                    gpui_session: Some(session),
+                    launcher_session: Some(session),
                     extra_fields: Default::default(),
                 },
             )]),

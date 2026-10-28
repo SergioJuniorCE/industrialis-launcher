@@ -2,7 +2,7 @@
 
 Use [MIGRATION_TRACKER.md](MIGRATION_TRACKER.md) for status and stable feature IDs.
 These scenarios supplement the synthetic regression suite. A successful backend
-scenario does not establish physical GPUI, provider or installed-app acceptance.
+scenario does not establish physical Launcher, provider or installed-app acceptance.
 Keep Electron until [CUTOVER.md](CUTOVER.md) is satisfied.
 
 F15's [native copy sound check](MIGRATION_TRACKER.md#2026-10-11-f15-copy-completion-cue-verification)
@@ -46,7 +46,7 @@ The existing full workspace baseline is recorded separately.
 The owned editor runner also supports the Explorer scenario:
 
 ```sh
-GPUI_ISOLATED_EDITOR_CONTAINER=1 sh scripts/test-gpui-linux-editor.sh \
+LAUNCHER_ISOLATED_EDITOR_CONTAINER=1 sh scripts/test-linux-editor.sh \
   /target/debug/examples/profile_ownership_smoke /output explorer
 ```
 
@@ -63,7 +63,7 @@ Build the actual app under its independent acceptance filename:
 
 ```sh
 cargo build -p industrialis-app --example profile_ownership_smoke --locked --offline --jobs 1
-GPUI_ISOLATED_EDITOR_CONTAINER=1 sh scripts/test-gpui-linux-editor.sh \
+LAUNCHER_ISOLATED_EDITOR_CONTAINER=1 sh scripts/test-linux-editor.sh \
   /target/debug/examples/profile_ownership_smoke /output
 ```
 
@@ -78,7 +78,7 @@ comments, lists and Unicode preserved. Both processes must close with exit 0.
 Failed full runs remove the previous passing receipt.
 
 `target/live-acceptance/editor-20261012/` contains screenshots, native verification,
-source/container provenance and full Rust-suite logs. GPUI regressions additionally
+source/container provenance and full Rust-suite logs. Launcher regressions additionally
 reach the final file in a 120-file directory and verify bounded clickable rows,
 Advanced saves, conflict/pop-out guards and search focus. This does not replace
 physical font/IME or other-platform acceptance.
@@ -89,7 +89,7 @@ Inside an owned disposable Linux container, with the repository and built app
 mounted read-only and only a generated output mount writable:
 
 ```sh
-GPUI_ISOLATED_LIBRARY_CONTAINER=1 sh scripts/test-gpui-linux-library.sh \
+LAUNCHER_ISOLATED_LIBRARY_CONTAINER=1 sh scripts/test-linux-library.sh \
   /target/debug/examples/profile_ownership_smoke /output
 ```
 
@@ -101,7 +101,7 @@ the original group schema with extension fields retained. It opens the native
 instance context menu and dispatches the manual pack check. Networking is disabled;
 the expected failure reports the generated C instance. Both apps close with exit 0.
 `target/live-acceptance/library-20261012/` holds receipts, screenshots, test logs
-and provenance. Hourly timing is verified by a GPUI fake-clock regression rather
+and provenance. Hourly timing is verified by a launcher fake-clock regression rather
 than waiting an hour on a desktop; physical/platform checks remain separate.
 
 ## Automated real-pack maintenance
@@ -134,13 +134,13 @@ for Forge's successful mod-loading message, invokes Stop and checks that the
 game is no longer running. Logs and play time are persisted normally; the report
 is `game-acceptance-<instance-id>.json`. It replaces the acceptance instance's
 Java/account/RAM/window/JVM settings and never accesses the user's account store.
-The default deadline is 900 seconds; `GPUI_GAME_ACCEPTANCE_SECONDS` overrides it.
+The default deadline is 900 seconds; `LAUNCHER_GAME_ACCEPTANCE_SECONDS` overrides it.
 
 On Linux, run from the repo root:
 
 ```sh
-sh scripts/test-gpui-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java
-sh scripts/test-gpui-live-game.sh /absolute/expendable/profile LiveLegacy /absolute/java8/bin/java
+sh scripts/test-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java
+sh scripts/test-live-game.sh /absolute/expendable/profile LiveLegacy /absolute/java8/bin/java
 ```
 
 The script creates and cleans an owned temporary virtual desktop, D-Bus session
@@ -159,8 +159,8 @@ cover client mod loading and process handling, **not world gameplay or input**.
 Use the same marked **offline** profile and installed Java variants:
 
 ```sh
-sh scripts/test-gpui-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java --detached
-sh scripts/test-gpui-live-game.sh /absolute/expendable/profile LiveLegacy /absolute/java8/bin/java --detached
+sh scripts/test-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java --detached
+sh scripts/test-live-game.sh /absolute/expendable/profile LiveLegacy /absolute/java8/bin/java --detached
 ```
 
 This selects `live_detached_game_acceptance`. Fresh owning launcher processes
@@ -172,7 +172,7 @@ complete heartbeat replay without duplicates, one exit log, exact receipt-based
 play time and exactly one pre/post hook. Repeating recovery must leave finalized
 logs/time unchanged. Hook files and `detached-game-acceptance-<id>.json` belong
 to the expendable instance/profile. This establishes backend process lifetime
-on a virtual desktop, not physical GPUI gestures or world gameplay. Keep the
+on a virtual desktop, not physical Launcher gestures or world gameplay. Keep the
 runner and binaries unchanged while acceptance processes are running.
 
 The 2026-10-08 Linux Java 17+ run passes in 266 seconds. The final Java 8u504
@@ -185,26 +185,26 @@ play-time reconciliation. See the tracker for the reports and platform limits.
 With the same marked, offline acceptance profile and installed pack used above:
 
 ```sh
-sh scripts/test-gpui-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java --normal-exit
-sh scripts/test-gpui-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java --abnormal-exit
+sh scripts/test-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java --normal-exit
+sh scripts/test-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java --abnormal-exit
 ```
 
 For a real IPv6 loopback connection, prefix normal/abnormal mode with
-`GPUI_AUTO_JOIN_IPV6=1`. The fixture binds `::1` on an unused custom port and
+`LAUNCHER_AUTO_JOIN_IPV6=1`. The fixture binds `::1` on an unused custom port and
 checks the actual host and port in the Minecraft handshake. IPv6 mode rejects
 server-world mode and writes separate `ipv6-connection-exit-*.json` reports.
 No public server or production network route is involved.
 
-The lightweight `scripts/GpuiMinecraftServerAddress.java` probe can additionally
+The lightweight `scripts/MinecraftServerAddress.java` probe can additionally
 run against the installed 1.7.10 client JAR, without launching Minecraft. Compile
 it with `javac --release 8 -d <probe-output>`, add the output and client JAR to the
-classpath, and invoke `gpui.acceptance.GpuiMinecraftServerAddress '[::1]' 25570`.
+classpath, and invoke `industrialis.acceptance.MinecraftServerAddress '[::1]' 25570`.
 The raw `::1` comparison fails because Forge joins host and port before parsing;
 the bracketed control preserves both the intended address and custom port.
 Use a network-disabled disposable fixture for these parser comparisons.
 
 The `live_connection_exit_acceptance` example requires Linux/Xvfb, Python 3 and
-libX11 (plus libXRes/XRes 1.2 for older LWJGL 2 windows), the exact expendable-profile marker and the generated `GpuiAcceptance`
+libX11 (plus libXRes/XRes 1.2 for older LWJGL 2 windows), the exact expendable-profile marker and the generated `LauncherAcceptance`
 offline account. It rejects real account credentials, linked profile/instance
 roots and an already-running game. Its loopback listener selects an unused
 custom port, checks the actual Minecraft 1.7.10/Forge login handshake and offline
@@ -213,7 +213,7 @@ Forge's loaded message precedes remaining texture/menu work; the runner allows
 three minutes afterward and fails immediately on an actual connection error.
 
 Normal mode sends `WM_DELETE_WINDOW` to the exact game's X11 window using
-`gpui-virtual-game-window.py`. That helper requires the isolated-desktop flag,
+`virtual-game-window.py`. That helper requires the isolated-desktop flag,
 matches `_NET_WM_PID` or obtains a local owner's PID from XRes on a visible window,
 and refuses ambiguous/missing ownership. Older LWJGL 2 windows omit the PID
 property; their X-server resource ownership is queried directly. Hidden SDL
@@ -234,12 +234,12 @@ Reports are
 `connection-exit-<id>-injected-abnormal.json` in the ignored acceptance profile.
 Keep source scripts and binaries unchanged while their acceptance run is active.
 These checks establish auto-join routing and exit accounting, not online-server
-authentication, a Forge server connection, world gameplay or native GPUI input.
+authentication, a Forge server connection, world gameplay or native Launcher input.
 
 The visible-window helper regression runs separately without a game:
 
 ```sh
-GPUI_ISOLATED_VIRTUAL_DESKTOP=1 xvfb-run -a python3 scripts/gpui-virtual-game-window.test.py
+LAUNCHER_ISOLATED_VIRTUAL_DESKTOP=1 xvfb-run -a python3 scripts/virtual-game-window.test.py
 ```
 
 It checks the isolated-desktop guard, rejection of multiple visible owned
@@ -250,29 +250,29 @@ without sending a close event.
 
 ### Private Forge server world entry
 
-`scripts/test-gpui-forge-server.sh` is an entrypoint for a fresh, disposable GTNH
+`scripts/test-forge-server.sh` is an entrypoint for a fresh, disposable GTNH
 2.9.0-RC-2 Docker server. It requires the explicit
-`GPUI_EXPENDABLE_FORGE_SERVER=gtnh-2.9.0-rc2-acceptance-v1` flag, an already configured
+`LAUNCHER_EXPENDABLE_FORGE_SERVER=gtnh-2.9.0-rc2-acceptance-v1` flag, an already configured
 EULA and no existing world. It never accepts an agreement or deletes a world.
 The current fixture uses cached image
 `sha256:4e44a10826a4fd72b2d8a123eaf3af67796762cb549b3cbc29bdbff8747094ff`.
 
 Run that server with an anonymous `/app/server` volume, interactive stdin, the
 script mounted read-only, a private **internal** Docker network, alias
-`gpui-acceptance-server`, `--ulimit core=0`, and **no published ports**. Its
+`launcher-acceptance-server`, `--ulimit core=0`, and **no published ports**. Its
 generated configuration permits only one offline player, uses port 25570 and a
-fresh `gpui-acceptance-world`. The fixture uses a 4 GiB Java heap and view distance
+fresh `launcher-acceptance-world`. The fixture uses a 4 GiB Java heap and view distance
 2 to bound resource use. Wait for the server's `Done` message before starting the
 client container on the same network.
 
 ```sh
 nonce=$(tr -d '-' < /proc/sys/kernel/random/uuid)
-GPUI_FORGE_WORLD_NONCE="$nonce" \
-  sh scripts/test-gpui-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java --server-world
+LAUNCHER_FORGE_WORLD_NONCE="$nonce" \
+  sh scripts/test-live-game.sh /absolute/expendable/profile LiveModern /usr/bin/java --server-world
 ```
 
-After the private server reports the generated `GpuiAcceptance` player joining,
-send `say GPUI_WORLD_<same-nonce>` through that server's own console stdin. The
+After the private server reports the generated `LauncherAcceptance` player joining,
+send `say LAUNCHER_WORLD_<same-nonce>` through that server's own console stdin. The
 client must receive the exact marker in an actual `[CHAT]` line. This establishes
 Forge connection and in-world traffic; login-start alone cannot pass. The runner
 then closes the visible exact-PID game window and applies the same code-0,
@@ -282,17 +282,17 @@ Stop the generated server through its console, then remove only the network
 created for this run. This scenario does not verify online authentication,
 physical gameplay controls or any existing user's world.
 
-For timing diagnosis, `gpui-isolated-tcp-delay.py` can run as a separate marked
+For timing diagnosis, `isolated-tcp-delay.py` can run as a separate marked
 container on that same internal network, with no published ports and alias
-`gpui-acceptance-proxy`. It requires
-`GPUI_EXPENDABLE_FORGE_PROXY=gtnh-acceptance-latency-v1`; its endpoints are fixed to
+`launcher-acceptance-proxy`. It requires
+`LAUNCHER_EXPENDABLE_FORGE_PROXY=gtnh-acceptance-latency-v1`; its endpoints are fixed to
 the generated server on 25570 and its own listener on 25571. Setting
-`GPUI_FORGE_LATENCY_CONTROL=1` on the world runner selects that route. The report
+`LAUNCHER_FORGE_LATENCY_CONTROL=1` on the world runner selects that route. The report
 explicitly records the configured forwarding delay (zero or 200 ms per direction). This is
 a diagnostic control for a timing-sensitive Forge startup failure, never a
 production workaround or an ordinary direct-server pass.
-For a matched zero-delay baseline, set `GPUI_FORGE_PROXY_DELAY_MS=0` on both the
-proxy and the runner while retaining `GPUI_FORGE_LATENCY_CONTROL=1`. Stop the
+For a matched zero-delay baseline, set `LAUNCHER_FORGE_PROXY_DELAY_MS=0` on both the
+proxy and the runner while retaining `LAUNCHER_FORGE_LATENCY_CONTROL=1`. Stop the
 owned proxy after the prior game exits, then restart it before changing delay;
 keep source scripts and binaries unchanged during each actual process run.
 
@@ -302,18 +302,18 @@ On an isolated Linux fixture with Xvfb, Openbox, Python 3, libX11/XRes and softw
 Vulkan drivers, use the actual tarball and its compiled input:
 
 ```sh
-sh scripts/test-gpui-linux-portable.sh \
+sh scripts/test-linux-portable.sh \
   /absolute/artifacts/IndustrialisLauncher-linux-x64.tar.gz \
   /absolute/build/release/industrialis /absolute/artifacts
 ```
 
-Set `GPUI_PACKAGE_CHANNEL=stable` for a stable artifact; the default is preview.
-Set `GPUI_PACKAGE_REPLACEMENT=1` for an explicitly packaged preview using
+Set `LAUNCHER_PACKAGE_CHANNEL=stable` for a stable artifact; the default is preview.
+Set `LAUNCHER_PACKAGE_REPLACEMENT=1` for an explicitly packaged preview using
 `--replacement`; this validates the opt-in protocol registration separately from
 the release channel.
 The check requires protocol metadata to match the selected channel and reports
 the actual Linux distribution and architecture. It supports Python 3.10 and
-newer; `python3 scripts/gpui-linux-portable-smoke.test.py` verifies extraction of
+newer; `python3 scripts/linux-portable-smoke.test.py` verifies extraction of
 the expected files and rejection of links, duplicate files and unexpected paths
 before anything is extracted. The release workflow runs these checks and boots
 the packaged Linux executable after packaging. Screenshots/logs/outcomes upload
@@ -356,9 +356,9 @@ docker run --rm --network none \
   --mount "type=bind,source=$PWD,target=/repo,readonly" \
   --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
   --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
-  -e GPUI_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
+  -e LAUNCHER_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
   industrialis-credential-acceptance:local \
-  sh scripts/test-gpui-linux-credentials.sh /opt/electron-fixture/electron \
+  sh scripts/test-linux-credentials.sh /opt/electron-fixture/electron \
   /target/debug/examples/credential_compat /receipt/verification.json
 ```
 
@@ -378,8 +378,8 @@ without claiming a clean pull of its default minimal base image.
 ### Opt-in Windows provider harness
 
 The user may authorize real provider accounts in a **new** expendable profile
-marked `.gpui-live-accounts` with contents
-`industrialis-gpui-expendable-live-accounts-v1`. Never mark a normal user profile.
+marked `.launcher-live-accounts` with contents
+`industrialis-expendable-live-accounts-v1`. Never mark a normal user profile.
 Reports contain outcomes only; never display or commit the saved account/credential
 files. These tests do not import or move existing user accounts.
 
@@ -412,7 +412,7 @@ or account identifiers. Its outcome-only report is
 test authorization remains usable. In an isolated Linux fixture, use:
 
 ```sh
-sh scripts/test-gpui-live-game.sh /absolute/expendable/account-profile AuthModern /usr/bin/java --microsoft
+sh scripts/test-live-game.sh /absolute/expendable/account-profile AuthModern /usr/bin/java --microsoft
 ```
 
 Never use a normal user profile or copy its credentials into a fixture. Tests
@@ -459,19 +459,19 @@ the stable Fxx IDs in the tracker; partial evidence keeps the item unchecked.
 
 ### Actual Squirrel replacement in Windows Sandbox
 
-`scripts/test-gpui-windows-squirrel-sandbox.ps1` prepares a disposable VM fixture.
-Use the unchanged public `launcher-v0.3.0` Windows installer and a stable GPUI
+`scripts/test-windows-squirrel-sandbox.ps1` prepares a disposable VM fixture.
+Use the unchanged public `launcher-v0.3.0` Windows installer and a stable Launcher
 artifact directory containing its `verification.json`. From the repository root:
 
 ```powershell
 # Verify the actual guest wait function with disposable native children only.
-powershell -NoProfile -File scripts/test-gpui-windows-process-exit.ps1
+powershell -NoProfile -File scripts/test-windows-process-exit.ps1
 # Preparation only; no installer executes on the host.
-powershell -NoProfile -File scripts/test-gpui-windows-squirrel-sandbox.ps1 `
+powershell -NoProfile -File scripts/test-windows-squirrel-sandbox.ps1 `
   -LegacyInstaller <downloaded-0.3.0-setup.exe> -StableArtifactDirectory <verified-stable-directory>
 # Add -Run to execute in an already-enabled Windows Sandbox.
 # Add -RunningLegacy to keep the actual released Electron fixture window open
-# while the GPUI installer waits; the guest closes only that fixture normally.
+# while the launcher installer waits; the guest closes only that fixture normally.
 # Add -NativeUi for guest-only accessibility, keyboard, native pickers,
 # folder/default-editor dispatch and independent editor-window scenarios.
 ```
@@ -487,11 +487,11 @@ These controls use Microsoft's [Windows Sandbox configuration format](https://le
 The guest verifies its disposable identity before installation or shutdown. It
 installs the actual old release, closes only its expendable fixture processes,
 seeds generated accounts/settings/instance/player data in the normal app-data
-location, then runs the actual stable GPUI installer. Assertions cover old
+location, then runs the actual stable Launcher installer. Assertions cover old
 executables/shortcuts/uninstall registration, new executable checksum, exact
-pre-boot profile preservation, protocol ownership, native GPUI boot/normal close,
+pre-boot profile preservation, protocol ownership, native Launcher boot/normal close,
 unknown-field persistence, actual protocol launch restoring/foregrounding the same
-minimized guest owner, GPUI uninstall and post-uninstall profile preservation.
+minimized guest owner, Launcher uninstall and post-uninstall profile preservation.
 Evidence stays under `target/live-acceptance/squirrel-sandbox-*/output`. The host
 checks the receipt nonce and closes only that fixture's identified Sandbox client
 after guest shutdown. Neither installer runs on the physical host.
@@ -537,8 +537,8 @@ standalone default is inspection only. Avoid `-Apply` on a personal installation
 until the installed acceptance scenario is authorized and launchers are closed.
 
 ```powershell
-node --test scripts/gpui-packaging.test.mjs scripts/gpui-notices.test.mjs
-powershell -NoProfile -File scripts/test-gpui-windows-retirement.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
+node --test scripts/packaging.test.mjs scripts/notices.test.mjs
+powershell -NoProfile -File scripts/test-windows-retirement.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
 ```
 
 The retirement test uses synthetic install files, a uniquely owned registry test
@@ -555,7 +555,7 @@ The guest receipt, native trees, editor receipt, screenshot and progress log are
 `target/live-acceptance/squirrel-sandbox-0faf50f8f6ee4c1ea6f49f01061b631f/output/`.
 
 Eleven generated files survive the old window's normal close/replacement before
-GPUI boot. Same-owner registered protocol foreground restoration, installed
+Launcher boot. Same-owner registered protocol foreground restoration, installed
 rendering, normal close and uninstall pass; fifteen post-test files survive
 uninstall and the dead legacy handler is not restored. The screenshot was inspected.
 
@@ -583,7 +583,7 @@ update are outside the generated-profile VM evidence.
 
 The checked-in `packaging/acceptance/linux-credentials.Dockerfile` now builds from
 its default Debian trixie-slim base and verifies the official Electron 43.3.0 ZIP.
-Both `scripts/test-gpui-linux-credentials.sh` and `scripts/test-gpui-linux-kwallet.sh`
+Both `scripts/test-linux-credentials.sh` and `scripts/test-linux-kwallet.sh`
 pass with actual GNOME Secret Service and KWallet 6 on this fresh image. Each
 requires an owned Docker session, creates private HOME/runtime/config/data/temp
 paths, D-Bus and Xvfb, and runs with networking disabled and source/binaries read-only.
@@ -598,15 +598,15 @@ original user wallets and live Google authorization remain separate gates.
 
 ### 2026-10-14 Open VSX themes (virtual UI and public registry)
 
-The Open VSX enhancement passes 50 core, 144 backend and 51 GPUI app tests on
-Windows. Its opt-in network GPUI test passes separately, clicking Install, Apply
+The Open VSX enhancement passes 50 core, 144 backend and 51 Launcher app tests on
+Windows. Its opt-in network Launcher test passes separately, clicking Install, Apply
 and Search against Open VSX in a generated profile. The public backend smoke
 imports Dracula 2.25.1 with registry checksum verification, retaining two variants
 and 85 syntax rules each, then saves/reloads 51,139 bytes of theme data and removes
 the profile. Saved light/dark selection, updates, custom copies, extension-field
 preservation and editor theme changes with undo are covered by the app regressions.
 Logs and source/log hashes are in
-`target/live-acceptance/openvsx-20261014/receipt.json`. These are virtual GPUI windows;
+`target/live-acceptance/openvsx-20261014/receipt.json`. These are virtual Launcher windows;
 rendered platform-desktop acceptance has not been run for this enhancement. No
 physical Windows desktop input, user profile, extension execution, retained VSIX
 or release is part of this verification. See [Open VSX themes](OPEN_VSX_THEMES.md).

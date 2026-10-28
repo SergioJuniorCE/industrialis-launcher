@@ -24,15 +24,15 @@ use industrialis_core::{
 };
 
 fn main() {
-    let budget_ms = std::env::var("GPUI_BENCH_BUDGET_MS")
+    let budget_ms = std::env::var("LAUNCHER_BENCH_BUDGET_MS")
         .ok()
         .map(|value| value.parse::<f64>().expect("budget must be a number"))
         .unwrap_or(1000.0 / 60.0);
     assert!(budget_ms.is_finite() && budget_ms > 0.0);
     let material: WindowMaterial = serde_json::from_value(serde_json::Value::String(
-        std::env::var("GPUI_BENCH_MATERIAL").unwrap_or_else(|_| "opaque".into()),
+        std::env::var("LAUNCHER_BENCH_MATERIAL").unwrap_or_else(|_| "opaque".into()),
     ))
-    .expect("GPUI_BENCH_MATERIAL must be opaque, frosted or mica");
+    .expect("LAUNCHER_BENCH_MATERIAL must be opaque, frosted or mica");
     let timings = Arc::new(std::sync::Mutex::new(Vec::new()));
     let collected = timings.clone();
     let rt = Arc::new(tokio::runtime::Runtime::new().expect("Tokio runtime"));
@@ -149,7 +149,7 @@ fn main() {
                     .expect("draw switched backdrop");
                     handle
                         .update(cx, |root, _window, _| {
-                            if std::env::var_os("GPUI_BENCH_REQUIRE_BACKDROP").is_some() {
+                            if std::env::var_os("LAUNCHER_BENCH_REQUIRE_BACKDROP").is_some() {
                                 assert_eq!(
                                     root.theme.window_material, material,
                                     "native material must be available"

@@ -35,15 +35,16 @@ still check versions, but open the release page for manual replacement.
 
 ## Windows installation
 
-The per-user NSIS installer installs `industrialis.exe` and `gpui-install.json`
+The per-user NSIS installer installs `industrialis.exe` and `install.json`
 in `%LOCALAPPDATA%\Programs\Industrialis Launcher` by default. Existing native
-installations keep their registered install directory when upgraded. The marker
+installations keep their registered install directory when upgraded; the retired
+codename folder is replaced by the current default and removed. The marker
 identifies an installation that the updater may replace; it is omitted from
 portable ZIPs. The preview uses a separate install directory, shortcut, and
 uninstall entry. It does not remove the Electron installation or migrate
 encrypted accounts.
 
-`node scripts/build-launcher-gpui.mjs --replacement` also registers the retained
+`node scripts/build-launcher.mjs --replacement` also registers the retained
 `industrialislauncher:` scheme. Default preview artifacts omit that registration.
 Windows saves the previous handler and restores it on uninstall while the launcher still
 owns the command; another application's later registration is kept. macOS embeds
@@ -134,7 +135,7 @@ signed production distributions.
 Stamp versions using:
 
 ```powershell
-node scripts/set-gpui-launcher-version.mjs 0.1.1
+node scripts/launcher-version.mjs 0.1.1
 cargo update --workspace --offline --manifest-path apps/launcher/Cargo.toml
 ```
 
@@ -145,13 +146,13 @@ same package version. Components must fit Windows's 16-bit version fields.
 From the repository root:
 
 ```powershell
-pnpm build:launcher:gpui
-pnpm build:launcher:gpui:installer
-pnpm build:launcher:gpui:portable
+pnpm build:launcher:preview
+pnpm build:launcher:preview:installer
+pnpm build:launcher:preview:portable
 ```
 
 Windows needs NSIS 3.11 or later. Use `MAKENSIS` or `--makensis <absolute path>`
-with `node scripts/build-launcher-gpui.mjs` for a portable compiler. The build
+with `node scripts/build-launcher.mjs` for a portable compiler. The build
 uses `cargo build --release --locked --features packaged-updates`; outputs go
 to `apps/launcher/dist`. `--skip-build --binary <path>` is only for packaging
 smoke fixtures, not release builds. The packager supports native Windows x64,
@@ -160,7 +161,7 @@ macOS arm64 and Linux x64 hosts.
 Build-only stable preparation, after reviewing the retirement behavior:
 
 ```powershell
-node scripts/build-launcher-gpui.mjs --channel stable --out apps/launcher/target/stable-review
+node scripts/build-launcher.mjs --channel stable --out apps/launcher/target/stable-review
 ```
 
 Do not install that stable artifact over an existing installation until the actual
@@ -171,7 +172,7 @@ The canonical `.github/workflows/launcher-release.yml` tests and builds all
 three native platforms. `launcher-v*` tags publish stable releases and
 `launcher-preview-v*` tags publish optional isolated previews after every build
 succeeds. `workflow_dispatch` builds CI artifacts without publishing a release.
-Root launcher development, packaging and version commands select GPUI;
+Root launcher development, packaging and version commands select the native launcher;
 Electron source, aliases and build dependencies have been removed. The last
 Electron source and binary remain available under `launcher-v0.3.0` for rollback.
 
@@ -188,11 +189,11 @@ cargo test --workspace --lib --bins --tests --jobs 1 --features industrialis-app
 cargo run -p industrialis-cli --locked --features industrialis-backend/stable-updates -- check-launcher-update --current-version 0.3.0
 
 # From the repository root:
-node --test scripts/gpui-packaging.test.mjs scripts/gpui-notices.test.mjs scripts/gpui-windows-runtime.test.mjs
-powershell -NoProfile -File scripts/verify-gpui-windows-artifacts.ps1
-powershell -NoProfile -File scripts/test-gpui-windows-process-exit.ps1
-powershell -NoProfile -File scripts/test-gpui-windows-updater.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
-powershell -NoProfile -File scripts/test-gpui-windows-retirement.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
+node --test scripts/packaging.test.mjs scripts/notices.test.mjs scripts/windows-runtime.test.mjs
+powershell -NoProfile -File scripts/verify-windows-artifacts.ps1
+powershell -NoProfile -File scripts/test-windows-process-exit.ps1
+powershell -NoProfile -File scripts/test-windows-updater.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
+powershell -NoProfile -File scripts/test-windows-retirement.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
 ```
 
 Backend tests cover version/channel/platform selection, trusted URLs, mandatory

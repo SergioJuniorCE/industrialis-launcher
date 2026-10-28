@@ -13,11 +13,20 @@ Unicode true
   !error "OUTFILE is required"
 !endif
 
+; Current product identity.
+!define APP_REGKEY "Software\Industrialis\Launcher"
+!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisLauncher"
+!define INSTALL_MARKER "install.json"
+; Retired identity from older builds. Only used to migrate and clean up.
+!define LEGACY_REGKEY "Software\Industrialis\GPUI"
+!define LEGACY_UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI"
+!define LEGACY_INSTALL_MARKER "gpui-install.json"
+!define LEGACY_FOLDER_NAME "Industrialis GPUI"
+
 Name "Industrialis Launcher"
 OutFile "${OUTFILE}"
-; The registry identity stays "GPUI" so existing installations keep updating in place.
 InstallDir "$LOCALAPPDATA\Programs\Industrialis Launcher"
-InstallDirRegKey HKCU "Software\Industrialis\GPUI" "InstallDir"
+InstallDirRegKey HKCU "${APP_REGKEY}" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 VIProductVersion "${APPVERSION}.0"
@@ -39,9 +48,42 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "Industrialis"
 Var UpdatePID
 Var ReadyFile
 Var ProcessHandle
+Var LegacyDir
+Var MigrateLegacy
 
 Function .onInit
   SetShellVarContext current
+  StrCpy $MigrateLegacy "0"
+
+  ; Older updaters pass /D=<existing directory>. If that directory is the
+  ; retired default, install to the current one and remove the old copy.
+  ${GetFileName} $R0 $INSTDIR
+  ${GetParent} $R1 $INSTDIR
+  ${If} $R0 == "${LEGACY_FOLDER_NAME}"
+  ${AndIf} $R1 == "$LOCALAPPDATA\Programs"
+    StrCpy $MigrateLegacy "1"
+    StrCpy $LegacyDir "$INSTDIR"
+    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\Industrialis Launcher"
+  ${EndIf}
+
+  ; Without /D the directory comes from the registry. Adopt a custom location
+  ; from an older build, but never inherit the retired default folder.
+  ReadRegStr $R2 HKCU "${APP_REGKEY}" "InstallDir"
+  ${If} $R2 == ""
+    ReadRegStr $R2 HKCU "${LEGACY_REGKEY}" "InstallDir"
+    ${If} $R2 != ""
+      ${GetFileName} $R0 $R2
+      ${GetParent} $R1 $R2
+      ${If} $R0 == "${LEGACY_FOLDER_NAME}"
+      ${AndIf} $R1 == "$LOCALAPPDATA\Programs"
+        StrCpy $MigrateLegacy "1"
+        StrCpy $LegacyDir "$R2"
+      ${ElseIf} $INSTDIR == "$LOCALAPPDATA\Programs\Industrialis Launcher"
+        StrCpy $INSTDIR "$R2"
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+
   ${GetParameters} $R0
   ${GetOptions} $R0 "/UPDATEPID=" $UpdatePID
   ${If} $UpdatePID != ""
@@ -52,10 +94,14 @@ Function .onInit
       SetErrorLevel 1
       Abort
     ${EndIf}
-    IfFileExists "$INSTDIR\gpui-install.json" +4 0
+    ${If} ${FileExists} "$INSTDIR\${INSTALL_MARKER}"
+    ${OrIf} ${FileExists} "$INSTDIR\${LEGACY_INSTALL_MARKER}"
+      ; Existing installation marker found.
+    ${Else}
       MessageBox MB_ICONSTOP "This is not an existing launcher installation. Use the normal installer." /SD IDOK
       SetErrorLevel 1
       Abort
+    ${EndIf}
     System::Call 'kernel32::OpenProcess(i 0x00100000, i 0, i $UpdatePID) p .r0'
     StrCpy $ProcessHandle $0
     ${If} $ProcessHandle == 0
@@ -119,9 +165,10 @@ extract:
     Abort
   ${EndIf}
 !endif
-  FileOpen $R1 "$INSTDIR\gpui-install.json" w
+  FileOpen $R1 "$INSTDIR\${INSTALL_MARKER}" w
   FileWrite $R1 '{"format":1,"kind":"nsis"}'
   FileClose $R1
+  Delete "$INSTDIR\${LEGACY_INSTALL_MARKER}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 !ifdef NOTICEFILE
   File /oname=THIRD_PARTY_NOTICES.txt "${NOTICEFILE}"
@@ -130,32 +177,50 @@ extract:
   File /oname=LICENSE "${LICENSEFILE}"
 !endif
 !ifndef SMOKE_TEST
-  WriteRegStr HKCU "Software\Industrialis\GPUI" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "DisplayName" "Industrialis Launcher"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "DisplayVersion" "${APPVERSION}"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "DisplayIcon" "$INSTDIR\industrialis.exe"
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "NoModify" 1
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI" "NoRepair" 1
+  WriteRegStr HKCU "${APP_REGKEY}" "InstallDir" "$INSTDIR"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "Industrialis Launcher"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${APPVERSION}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\industrialis.exe"
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
 !ifdef REGISTER_PROTOCOL
   ReadRegStr $R2 HKCU "Software\Classes\industrialislauncher\shell\open\command" ""
   StrCpy $R3 '$\"$INSTDIR\industrialis.exe$\" $\"%1$\"'
   ${If} $R2 != $R3
-    WriteRegStr HKCU "Software\Industrialis\GPUI" "ProtocolPreviousCommand" "$R2"
+    WriteRegStr HKCU "${APP_REGKEY}" "ProtocolPreviousCommand" "$R2"
     ReadRegStr $R2 HKCU "Software\Classes\industrialislauncher" ""
-    WriteRegStr HKCU "Software\Industrialis\GPUI" "ProtocolPreviousName" "$R2"
+    WriteRegStr HKCU "${APP_REGKEY}" "ProtocolPreviousName" "$R2"
   ${EndIf}
-  WriteRegDWORD HKCU "Software\Industrialis\GPUI" "ProtocolRegistered" 1
+  WriteRegDWORD HKCU "${APP_REGKEY}" "ProtocolRegistered" 1
   WriteRegStr HKCU "Software\Classes\industrialislauncher" "" "URL:Industrialis Launcher"
   WriteRegStr HKCU "Software\Classes\industrialislauncher" "URL Protocol" ""
   WriteRegStr HKCU "Software\Classes\industrialislauncher\shell\open\command" "" "$R3"
 !endif
+  ; Retire the old identity so no later install can inherit it.
+  DeleteRegKey HKCU "${LEGACY_REGKEY}"
+  DeleteRegKey HKCU "${LEGACY_UNINSTALL_KEY}"
   ; Remove the shortcut name used by older builds so upgrades do not leave duplicates.
   Delete "$SMPROGRAMS\Industrialis GPUI.lnk"
   CreateShortcut "$SMPROGRAMS\Industrialis Launcher.lnk" "$INSTDIR\industrialis.exe"
 !endif
   Delete "$INSTDIR\industrialis.exe.previous"
+
+  ; Move an older installation out of the retired default folder. Only known
+  ; files are removed; the directory itself is kept if anything else remains.
+  ${If} $MigrateLegacy == "1"
+  ${AndIf} $LegacyDir != ""
+  ${AndIf} $LegacyDir != $INSTDIR
+    Delete "$LegacyDir\industrialis.exe"
+    Delete "$LegacyDir\industrialis.exe.previous"
+    Delete "$LegacyDir\${INSTALL_MARKER}"
+    Delete "$LegacyDir\${LEGACY_INSTALL_MARKER}"
+    Delete "$LegacyDir\Uninstall.exe"
+    Delete "$LegacyDir\THIRD_PARTY_NOTICES.txt"
+    Delete "$LegacyDir\LICENSE"
+    RMDir "$LegacyDir"
+  ${EndIf}
 SectionEnd
 
 Function .onInstSuccess
@@ -176,24 +241,25 @@ Section "Uninstall"
   ${EndIf}
 app_already_removed:
   Delete "$INSTDIR\industrialis.exe.previous"
-  Delete "$INSTDIR\gpui-install.json"
+  Delete "$INSTDIR\${INSTALL_MARKER}"
+  Delete "$INSTDIR\${LEGACY_INSTALL_MARKER}"
   Delete "$INSTDIR\THIRD_PARTY_NOTICES.txt"
   Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\Uninstall.exe"
 !ifndef SMOKE_TEST
-  ReadRegStr $R0 HKCU "Software\Industrialis\GPUI" "InstallDir"
+  ReadRegStr $R0 HKCU "${APP_REGKEY}" "InstallDir"
   ${If} $R0 == $INSTDIR
     ; Updater builds must also clean a protocol registered by an earlier
     ; replacement build. Restore the previous handler only while we still own it.
-    ReadRegDWORD $R1 HKCU "Software\Industrialis\GPUI" "ProtocolRegistered"
+    ReadRegDWORD $R1 HKCU "${APP_REGKEY}" "ProtocolRegistered"
     ReadRegStr $R2 HKCU "Software\Classes\industrialislauncher\shell\open\command" ""
     StrCpy $R3 '$\"$INSTDIR\industrialis.exe$\" $\"%1$\"'
     ${If} $R1 == 1
     ${AndIf} $R2 == $R3
-      ReadRegStr $R2 HKCU "Software\Industrialis\GPUI" "ProtocolPreviousCommand"
+      ReadRegStr $R2 HKCU "${APP_REGKEY}" "ProtocolPreviousCommand"
       ${If} $R2 != ""
         WriteRegStr HKCU "Software\Classes\industrialislauncher\shell\open\command" "" "$R2"
-        ReadRegStr $R2 HKCU "Software\Industrialis\GPUI" "ProtocolPreviousName"
+        ReadRegStr $R2 HKCU "${APP_REGKEY}" "ProtocolPreviousName"
         WriteRegStr HKCU "Software\Classes\industrialislauncher" "" "$R2"
       ${Else}
         DeleteRegValue HKCU "Software\Classes\industrialislauncher\shell\open\command" ""
@@ -205,11 +271,14 @@ app_already_removed:
         DeleteRegKey /ifempty HKCU "Software\Classes\industrialislauncher"
       ${EndIf}
     ${EndIf}
-    Delete "$SMPROGRAMS\Industrialis Launcher.lnk"
-    Delete "$SMPROGRAMS\Industrialis GPUI.lnk"
-    DeleteRegKey HKCU "Software\Industrialis\GPUI"
-    DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI"
+    DeleteRegKey HKCU "${APP_REGKEY}"
+    DeleteRegKey HKCU "${UNINSTALL_KEY}"
   ${EndIf}
+  ; The retired identity is always removed, even if $INSTDIR moved.
+  DeleteRegKey HKCU "${LEGACY_REGKEY}"
+  DeleteRegKey HKCU "${LEGACY_UNINSTALL_KEY}"
+  Delete "$SMPROGRAMS\Industrialis Launcher.lnk"
+  Delete "$SMPROGRAMS\Industrialis GPUI.lnk"
 !endif
   ; Never recursively delete this directory or the user's app-data directory.
   RMDir "$INSTDIR"

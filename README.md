@@ -8,7 +8,7 @@ Turborepo monorepo for the Industrialis GT New Horizons launcher and website.
 
 | App                         | Package                   | Description                                        |
 | --------------------------- | ------------------------- | -------------------------------------------------- |
-| [Launcher](apps/launcher)   | `@industrialis/launcher`  | Native Rust/GPUI desktop launcher                  |
+| [Launcher](apps/launcher)   | `@industrialis/launcher`  | Native Rust/Launcher desktop launcher              |
 | [Website](apps/website)     | `@industrialis/website`   | Next.js marketing site                             |
 | [Server](apps/server)       | `@industrialis/server`    | Linux CLI + Docker daemon for hosting GTNH servers |
 | [Dashboard](apps/dashboard) | `@industrialis/dashboard` | Astro UI for managing hosted servers               |
@@ -34,8 +34,8 @@ See [docs/server-hosting.md](docs/server-hosting.md) for Docker, systemd, and co
 
 Launcher release packaging requires Node.js 24.x, matching the GitHub Actions
 release environment. Development, builds, and tests can use the current LTS.
-GPUI packaging needs NSIS 3.11 on Windows and native platform build libraries on
-Linux/macOS; see [GPUI updates and packaging](apps/launcher/UPDATES.md).
+Launcher packaging needs NSIS 3.11 on Windows and native platform build libraries on
+Linux/macOS; see [Launcher updates and packaging](apps/launcher/UPDATES.md).
 
 ## Development
 
@@ -52,7 +52,7 @@ pnpm dev
 Or run a single app:
 
 ```bash
-pnpm dev:launcher    # Native GPUI desktop app
+pnpm dev:launcher    # Native Launcher desktop app
 pnpm dev:website     # Next.js site on :3000
 pnpm dev:server      # GTNH server daemon on :4310
 pnpm dev:dashboard   # Astro server console on :3001
@@ -123,7 +123,7 @@ for an individual pack under **Instance Settings > General > Cloud backups**.
 ```
 industrialis/
 |-- apps/
-|   |-- launcher/          # Rust + GPUI desktop app
+|   |-- launcher/          # Rust + Launcher desktop app
 |   |-- website/           # Next.js marketing site
 |   |-- server/            # industrialis CLI + Docker daemon
 |   `-- dashboard/         # Astro server console
@@ -140,7 +140,7 @@ industrialis/
 ## Tech stack
 
 - **Monorepo:** pnpm workspaces, Turborepo
-- **Launcher:** Rust, GPUI, Tokio, native gpui-base editor and Syntect
+- **Launcher:** Rust, Tokio, native gpui-base editor and Syntect
 - **Website:** Next.js 16, React 19
 - **Server:** Node, Fastify, Dockerode, Commander
 - **Dashboard:** Astro 5, React islands, Tailwind CSS 4

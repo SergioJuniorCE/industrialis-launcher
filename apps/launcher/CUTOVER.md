@@ -4,7 +4,7 @@
 
 The owner explicitly chose **Replace Electron in stable**, accepting the remaining
 checks listed in [release notes](RELEASE_NOTES.md). They remain follow-up work;
-this decision does not turn unrun scenarios into passed tests. GPUI 0.4.0 owns
+this decision does not turn unrun scenarios into passed tests. Launcher 0.4.0 owns
 the production launcher tag workflow. Electron source/build dependencies are
 removed; the original profile path and installer retirement safeguards remain.
 The immutable last-Electron release is launcher-v0.3.0.
@@ -26,7 +26,7 @@ offers 0.4.0 to version 0.3.0 and reports version 0.4.0 up to date. These checks
 do not install an update or establish a published native N-to-N+1 update cycle.
 
 Electron source and build dependencies were removed in #65. Root launcher
-commands and the production workflow select GPUI; server, dashboard and website
+commands and the production workflow select Launcher; server, dashboard and website
 packages remain. The canonical source directory is now `apps/launcher`; the old
 Electron source is available at the immutable `launcher-v0.3.0` tag. The original
 profile path and documented rollback safeguards remain in place.
@@ -47,7 +47,7 @@ The remaining tickets depend on provider configuration,
 original-account testing, physical/platform checks, release access or cutover approval.
 Sound selection (F40) is a separate requested enhancement, not an Electron removal gate.
 
-Windows has 233 passing Rust tests. Linux has 230, including 44 app tests with GPUI
+Windows has 233 passing Rust tests. Linux has 230, including 44 app tests with Launcher
 interactions, in a read-only source container. Native Windows process tests cover cross-runtime
 ownership, second launch, detached games, durable logs and exactly-once exit
 accounting. A synthetic profile passes actual Electron safeStorage ↔ Rust
@@ -88,7 +88,7 @@ recover the same game PID, then Stop from a fresh owner. Environment/wrapper,
 pre/post hooks, JVM/RAM/window arguments and exactly-once captured logs/play time
 pass. The final Java 8 runner exits successfully after the stricter complete-log
 and single-exit checks. This covers backend process lifetime in Xvfb; physical
-GPUI gestures and native Windows/macOS lifetime acceptance remain open. Both
+Launcher gestures and native Windows/macOS lifetime acceptance remain open. Both
 actual Linux clients now also pass normal window close with code 0; Java 17+
 passes injected SIGKILL failure handling. Each records one exit, one post-exit
 hook and bounded play time, and repeated recovery leaves time unchanged. Both
@@ -120,7 +120,7 @@ packaged executable's recorded provenance and do not certify newer source edits.
 On 2026-10-08, actual Windows Microsoft device-code sign-in, playable license,
 profile/skin resolution, live token refresh and persisted-account reload pass in
 a newly authorized expendable profile. Existing original-account compatibility
-and physical GPUI account interaction remain separate acceptance scenarios.
+and physical Launcher account interaction remain separate acceptance scenarios.
 Google acceptance is pending the user's desktop OAuth client configuration.
 
 The native Windows CLI also reads the original normal app-data profile without
@@ -135,7 +135,7 @@ sign-in. Account persistence and play time pass; online-server authentication,
 world gameplay, native account controls and pre-existing original accounts
 remain outside this evidence.
 
-The prepared stable build recognizes marked GPUI `launcher-v*` releases and uses
+The prepared stable build recognizes marked Launcher `launcher-v*` releases and uses
 the Windows filename accepted by Electron's existing updater. Its installer
 includes guarded Squirrel retirement. Synthetic tests cover running/overlap/data
 guards, failure rollback and cleanup of only the obsolete protocol handler.
@@ -151,15 +151,15 @@ and live-account acceptance are separate. No host installation or
 production distribution was changed. See
 [the live acceptance runbook](LIVE_ACCEPTANCE.md) and [update channels](UPDATES.md).
 
-`node scripts/rehearse-gpui-cutover.mjs` copies only GPUI sources/resources into an
+`node scripts/rehearse-cutover.mjs` copies only framework sources/resources into an
 isolated source snapshot with no Electron app. It compiles/tests the port, runs
 the frozen old ownership protocol against native processes and renders a hidden
 window. It never copies user profiles or replaces a running development EXE.
-Snapshots, source hashes and results stay under GPUI's ignored `target` directory.
+Snapshots, source hashes and results stay under the launcher's ignored `target` directory.
 
-`node scripts/rehearse-gpui-workspace.mjs --verify` additionally creates a
+`node scripts/rehearse-workspace.mjs --verify` additionally creates a
 source-only monorepo snapshot without Electron, removes legacy build aliases and
-its zip override there, redirects the copied version command to GPUI, and prunes
+its zip override there, redirects the copied version command to Launcher, and prunes
 the copied pnpm lockfile. It installs dependencies with scripts disabled, checks
 lint/types/tests, builds server/dashboard/website and verifies packaging/notices.
 The 2026-10-08 Windows run passes: 205 Rust tests, 27 server tests, 8 dashboard
@@ -169,7 +169,7 @@ This complements the native entrypoint/process/render rehearsal above; it does
 not build a new production launcher, switch public distribution or remove the
 original app in this checkout. `--online` allows missing public registry metadata
 and packages; the default uses the local cache only. Corepack is located next to
-Node, or supplied with `GPUI_REHEARSAL_COREPACK` pointing to its `dist/corepack.js`.
+Node, or supplied with `LAUNCHER_REHEARSAL_COREPACK` pointing to its `dist/corepack.js`.
 
 ## Follow-up acceptance (accepted for 0.4.0)
 
@@ -206,7 +206,7 @@ Node, or supplied with `GPUI_REHEARSAL_COREPACK` pointing to its `dist/corepack.
    is only best effort and cannot stop an old app starting later. The packager's
    `--replacement` flag registers `industrialislauncher:`; it does not uninstall
    the old launcher. The separate `--channel stable` build includes the guarded
-   retirement helper: extract GPUI first, wait for normal launcher closure, invoke
+   retirement helper: extract Launcher first, wait for normal launcher closure, invoke
    the original Squirrel uninstaller and verify old executables are gone. Its
    synthetic rollback tests do not establish real partially failed Squirrel
    recovery. Windows protocol launch, handler ownership and dead-handler cleanup
@@ -214,7 +214,7 @@ Node, or supplied with `GPUI_REHEARSAL_COREPACK` pointing to its `dist/corepack.
    Preserve any required old protocol
    handler until the actual replacement sequence is established.
 5. **Published updates (F32–F33).** Establish signing/notarization policy; build
-   and launch native artifacts on all targets. Run a real published GPUI N → N+1
+   and launch native artifacts on all targets. Run a real published Launcher N → N+1
    Windows update with digest verification, busy/close/save guards, failure
    recovery and preserved profile. Verify documented manual updates elsewhere.
    Publishing is a separate action; local packaging does not publish anything.

@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
                 .file_type()
                 .is_symlink()
             && std::fs::read_to_string(profile.join(".gpui-live-acceptance"))?
-                == "industrialis-gpui-expendable-live-acceptance-v1",
+                == "industrialis-expendable-live-acceptance-v1",
         "Use a marked expendable profile"
     );
     let paths = LauncherPaths::new(profile);
@@ -152,7 +152,7 @@ async fn start(paths: &LauncherPaths, id: &str, java: &str) -> anyhow::Result<()
     let account = match account {
         Some(a) => accounts::account_to_info(&a).id,
         None => {
-            accounts::create_offline_account(paths, "GpuiAcceptance")
+            accounts::create_offline_account(paths, "LauncherAcceptance")
                 .await?
                 .id
         }
@@ -185,15 +185,15 @@ async fn start(paths: &LauncherPaths, id: &str, java: &str) -> anyhow::Result<()
     config.override_env = true;
     config
         .env_vars
-        .insert("GPUI_ACCEPTANCE_MARKER".into(), nonce.clone());
+        .insert("LAUNCHER_ACCEPTANCE_MARKER".into(), nonce.clone());
     config.override_commands = true;
     config.pre_launch_command =
-        "printf '%s\\n' \"$GPUI_ACCEPTANCE_MARKER\" '$INST_ID' > acceptance-pre.txt".into();
+        "printf '%s\\n' \"$LAUNCHER_ACCEPTANCE_MARKER\" '$INST_ID' > acceptance-pre.txt".into();
     config.post_exit_command =
-        "printf '%s\\n' \"$GPUI_ACCEPTANCE_MARKER\" '$INST_ID' >> acceptance-post.txt".into();
+        "printf '%s\\n' \"$LAUNCHER_ACCEPTANCE_MARKER\" '$INST_ID' >> acceptance-post.txt".into();
     config.wrapper_command = "sh \"$INST_DIR/acceptance-wrapper.sh\"".into();
     tokio::fs::write(instance.join("acceptance-wrapper.sh"), format!(
-        "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$GPUI_ACCEPTANCE_MARKER\" > ../acceptance-env.txt\nprintf '%s\\n' \"$@\" > ../acceptance-args.txt\ngame=$$\n(while kill -0 \"$game\" 2>/dev/null; do printf 'GPUI_ACCEPTANCE_TICK_{nonce} %s\\n' \"$(date +%s%N)\"; sleep 1; done) &\nexec \"$@\"\n"
+        "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$LAUNCHER_ACCEPTANCE_MARKER\" > ../acceptance-env.txt\nprintf '%s\\n' \"$@\" > ../acceptance-args.txt\ngame=$$\n(while kill -0 \"$game\" 2>/dev/null; do printf 'LAUNCHER_ACCEPTANCE_TICK_{nonce} %s\\n' \"$(date +%s%N)\"; sleep 1; done) &\nexec \"$@\"\n"
     )).await?;
     // Unique marker makes repeated runs independent without deleting previous evidence.
     tokio::fs::write(instance.join("acceptance-post.txt"), b"").await?;
@@ -210,7 +210,7 @@ async fn start(paths: &LauncherPaths, id: &str, java: &str) -> anyhow::Result<()
     let mut task =
         tokio::spawn(async move { launch::launch_instance(&game_paths, &game_id, emit).await });
     let begin = std::time::Instant::now();
-    let deadline = std::env::var("GPUI_GAME_ACCEPTANCE_SECONDS")
+    let deadline = std::env::var("LAUNCHER_GAME_ACCEPTANCE_SECONDS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(900);
@@ -233,7 +233,7 @@ async fn start(paths: &LauncherPaths, id: &str, java: &str) -> anyhow::Result<()
         .remove(id)
         .context("Missing game session")?;
     let session = entry
-        .gpui_session
+        .launcher_session
         .as_ref()
         .context("Missing native capture session")?;
     tokio::time::timeout(
@@ -250,7 +250,7 @@ async fn start(paths: &LauncherPaths, id: &str, java: &str) -> anyhow::Result<()
         .await?
         .remove(id)
         .context("Detach lost PID")?;
-    let saved_session = saved.gpui_session.context("Detach lost session")?;
+    let saved_session = saved.launcher_session.context("Detach lost session")?;
     let report = json!({"pid":entry.pid,"creation_id":entry.creation_id,"capture_id":session.capture_id,
         "started_at_ms":session.started_at_ms,"initial_play_seconds":initial_seconds,"nonce":nonce,
         "stdout_offset":saved_session.stdout_offset,"initial_exit_lines":initial_exit_lines,
@@ -313,7 +313,7 @@ async fn recover(paths: &LauncherPaths, id: &str) -> anyhow::Result<()> {
         "Reopened a different game process"
     );
     let session = entry
-        .gpui_session
+        .launcher_session
         .as_ref()
         .context("Missing capture session")?;
     let directory = paths
@@ -325,7 +325,7 @@ async fn recover(paths: &LauncherPaths, id: &str) -> anyhow::Result<()> {
         .as_u64()
         .context("Missing checkpoint offset")? as usize;
     let nonce = start["nonce"].as_str().unwrap();
-    let tick = format!("GPUI_ACCEPTANCE_TICK_{nonce}");
+    let tick = format!("LAUNCHER_ACCEPTANCE_TICK_{nonce}");
     ensure!(
         raw.get(offset..)
             .is_some_and(|bytes| String::from_utf8_lossy(bytes).contains(&tick)),

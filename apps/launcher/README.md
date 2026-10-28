@@ -3,7 +3,7 @@
 Native production launcher as of 0.4.0. See [release notes](RELEASE_NOTES.md)
 for downloads, accepted limitations and rollback.
 
-`@industrialis/launcher` is the Rust + [GPUI](https://gpui.rs/) desktop app,
+`@industrialis/launcher` is the Rust desktop app,
 replacing the former Electron + React launcher. Single native binary, no Chromium,
 no Node runtime.
 
@@ -70,7 +70,7 @@ Development and test builds use limited debug information. Incremental caching
 is enabled only for the frequently edited UI crate in dev, with 32 codegen units;
 backend and test builds remain non-incremental. This retains module/line
 information, reuses compiled dependencies and avoids storing separate large
-incremental test variants. GPUI's development optimization remains enabled for
+incremental test variants. the framework's development optimization remains enabled for
 smooth native window movement. Dev builds use two jobs; tests and packaging keep
 their existing limits. See [build measurements and dependencies](DEV_BUILDS.md).
 
@@ -93,9 +93,9 @@ cargo run -p industrialis-app --config profile.dev.debug=2
 ```
 apps/launcher/
   crates/
-    core/   # Pure logic ported from apps/launcher TS (no GPUI dep)
+    core/   # Pure logic ported from apps/launcher TS (no framework dependency)
     backend/ # Tokio services: accounts, Java, install, launch, instances
-    app/    # GPUI window + views, depends on core
+    app/    # UI window + views, depends on core
     cli/    # Headless backend harness
 ```
 
@@ -126,18 +126,18 @@ in [the migration checklist](MIGRATION_TRACKER.md#persistence-process-lifetime-a
 | `log_buffer`        | `src/lib/log-buffer.ts`          |
 | `pack_version`      | `src/lib/pack-version-status.ts` |
 
-## GPUI pins
+## Framework pins
 
 `industrialis-app` uses the published `gpui-pre` snapshots
 (`gpui = { package = "gpui-pre", version = "=0.3.8" }`), the same pin the
 `gpui-component` 0.7.x releases build against. Bump `gpui`,
-`gpui_platform`, and `gpui-component` together — GPUI is pre-1.0 and
+`gpui_platform`, and `gpui-component` together — the framework is pre-1.0 and
 snapshots may change the API.
 
 ## Commands
 
 ```bash
-pnpm --filter @industrialis/launcher dev    # watch, rebuild and restart GPUI
+pnpm --filter @industrialis/launcher dev    # watch, rebuild and restart the launcher
 pnpm --filter @industrialis/launcher dev:once # single run, without watching
 pnpm --filter @industrialis/launcher build
 pnpm --filter @industrialis/launcher test
@@ -162,7 +162,7 @@ cargo test --workspace
 ## Development rendering performance
 
 The dev profile optimizes `gpui-pre` while keeping launcher code unoptimized
-with debug information. Native Windows moves invalidate GPUI's layout; the
+with debug information. Native Windows moves invalidate the UI layout; the
 default unoptimized framework made the full launcher redraw too slowly during
 dragging. This does not change the release profile.
 
@@ -175,7 +175,7 @@ cargo run -p industrialis-app --example window_move_bench --locked
 It renders the real launcher with two fictional instances at 1600 by 900, warms
 up for ten redraws, and reports median/p95 CPU layout time for 150 bounds-change
 redraws. Exit status is nonzero when p95 exceeds the default 16.67 ms budget;
-`GPUI_BENCH_BUDGET_MS` can adjust that budget for slower test machines. It does
+`LAUNCHER_BENCH_BUDGET_MS` can adjust that budget for slower test machines. It does
 not read the real user profile, launch games, inject input, or measure GPU
 presentation/actual drag FPS. Run it on a desktop-capable machine, separately
 from correctness tests. To compare the old dev configuration:
@@ -187,7 +187,7 @@ cargo run -p industrialis-app --example window_move_bench --locked --config 'pro
 ## Port status
 
 Launcher self-updates and native preview packaging are implemented. See
-[Updates and releases](UPDATES.md) for the isolated GPUI channel, Windows
+[Updates and releases](UPDATES.md) for the isolated Launcher channel, Windows
 installer handoff, manual updates on other targets, packaging commands, and
 remaining distribution verification. Development builds do not check updates.
 
@@ -252,14 +252,14 @@ Electron. Live provider and native macOS/Linux key-store checks remain open.
 
 The retained Aditya configuration service is available through
 `industrialis-cli preset-status <id>` and `apply-preset <id> [--disable]`.
-Its nine bundled files belong to GPUI and are embedded in the binary. The original
+Its nine bundled files belong to the framework and are embedded in the binary. The original
 React UI had no caller for this service. Disabling removes overlays and keeps game
 files. Both mutations and other writer CLI commands participate in profile ownership.
 
 The UI uses owned EBF artwork and Lucide icons, a 44px toolbar, 24px footer,
 144px instance tiles, and a resizable library/details split starting at 54/46.
 Groups/order/collapse persist in the original `instances/instgroups.json`; only
-the split position uses `gpui-workspace.json`. Accounts
+the split position uses `launcher-workspace.json`. Accounts
 use the centered reference layout; launcher preferences use its sidebar layout.
 Windows drag, minimize, maximize, and close controls are wired, with an 800×600
 minimum window size. See [UI parity](UI_PARITY.md) for the reference dimensions,
@@ -275,7 +275,7 @@ physical input/IME and window behavior, installed upgrades, and native platform
 checks in [MIGRATION_TRACKER.md](MIGRATION_TRACKER.md). Precise visual
 parity is tracked separately. Offline fixtures do not prove live services.
 
-Run `node scripts/rehearse-gpui-cutover.mjs` from the repository root to build and
+Run `node scripts/rehearse-cutover.mjs` from the repository root to build and
 test a source-only snapshot containing no original launcher directory. It uses
 the existing Cargo cache and a separate example filename for the real app, so
 it does not replace a running development executable. Process tests use synthetic
@@ -283,11 +283,11 @@ temporary profiles; the final render benchmark opens a hidden window. Evidence
 and source hashes remain under `target/source-removal-*`. The rehearsal does not
 delete source, change the user's profile, or switch production downloads.
 
-Root `pnpm dev` and `pnpm dev:launcher` select GPUI. The legacy app is available
-as `pnpm dev:launcher:electron` for comparison, after closing GPUI. Turbo preserves
+Root `pnpm dev` and `pnpm dev:launcher` select Launcher. The legacy app is available
+as `pnpm dev:launcher:electron` for comparison, after closing Launcher. Turbo preserves
 `INDUSTRIALIS_DATA_DIR` and `JAVA_HOME` for native development. Cargo owns native
 build/test caching; Turbo does not cache a successful build without its executable.
-Root launcher packaging commands also select GPUI. Production downloads and the
+Root launcher packaging commands also select Launcher. Production downloads and the
 Electron release feed remain separate until [cutover acceptance](CUTOVER.md).
 
 ## Window materials
@@ -310,31 +310,31 @@ in light and dark themes, including the actual Windows DWM attributes. In
 PowerShell, from this directory:
 
 ```powershell
-$env:GPUI_BENCH_MATERIAL = 'frosted' # opaque, frosted, or mica
-$env:GPUI_BENCH_REQUIRE_BACKDROP = '1' # fail if a native material is unavailable
+$env:LAUNCHER_BENCH_MATERIAL = 'frosted' # opaque, frosted, or mica
+$env:LAUNCHER_BENCH_REQUIRE_BACKDROP = '1' # fail if a native material is unavailable
 cargo run -p industrialis-app --example window_move_bench --locked
-Remove-Item Env:GPUI_BENCH_MATERIAL, Env:GPUI_BENCH_REQUIRE_BACKDROP
+Remove-Item Env:LAUNCHER_BENCH_MATERIAL, Env:LAUNCHER_BENCH_REQUIRE_BACKDROP
 ```
 
 The benchmark excludes compositor presentation and actual desktop drag cadence.
 
-Linux native rendering can be checked with `sh scripts/test-gpui-linux-render.sh`
+Linux native rendering can be checked with `sh scripts/test-linux-render.sh`
 from the repository root. It needs Xvfb, Openbox, D-Bus, Mesa Vulkan drivers and
-the normal GPUI build libraries. It uses fictional instances in a virtual desktop,
-with a 45-second timeout. Set `GPUI_BENCH_BUDGET_MS=16.67` for a stricter layout
+the normal native build libraries. It uses fictional instances in a virtual desktop,
+with a 45-second timeout. Set `LAUNCHER_BENCH_BUDGET_MS=16.67` for a stricter layout
 budget; its default CI budget checks startup/render/shutdown rather than desktop FPS.
 
-## Reusable GPUI skills
+## Reusable framework skills
 
 Versioned skills live in the repository and are also installed in the local Codex
 skill directory:
 
-- [GPUI state and contexts](../../.agents/skills/gpui-state-and-contexts/SKILL.md):
+- [Framework state and contexts](../../.agents/skills/gpui-state-and-contexts/SKILL.md):
   entities, context lifetimes, application boot, and asynchronous updates.
-- [GPUI layout and components](../../.agents/skills/gpui-layout-and-components/SKILL.md):
+- [Framework layout and components](../../.agents/skills/gpui-layout-and-components/SKILL.md):
   element composition, scrolling, themes, and navigation of Zed's UI crates.
-- [GPUI input and actions](../../.agents/skills/gpui-input-and-actions/SKILL.md):
+- [Framework input and actions](../../.agents/skills/gpui-input-and-actions/SKILL.md):
   focus, action/key dispatch, bindings, and native text input.
 
-Each skill links to the supplied official GPUI/Zed sources and distinguishes
+Each skill links to the supplied official framework/Zed sources and distinguishes
 upstream main from the pinned crate API.

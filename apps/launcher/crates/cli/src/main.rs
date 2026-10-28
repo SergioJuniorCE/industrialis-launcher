@@ -1,6 +1,6 @@
 //! Headless harness for the Rust backend (Phase 2).
 //!
-//! Every command exercises a backend service without the GPUI window, so
+//! Every command exercises a backend service without the launcher window, so
 //! services are verified before UI wiring lands:
 //!
 //! ```sh
@@ -111,7 +111,7 @@ enum Command {
     },
     /// List pack versions from the GTNH catalog.
     PackVersions,
-    /// Check only GPUI launcher releases (does not install or write data).
+    /// Check only launcher releases (does not install or write data).
     CheckLauncherUpdate {
         #[arg(long)]
         current_version: String,

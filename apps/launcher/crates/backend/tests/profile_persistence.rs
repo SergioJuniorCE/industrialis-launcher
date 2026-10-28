@@ -1,4 +1,4 @@
-//! Electron-shaped profiles, copied before exercising the GPUI services.
+//! Electron-shaped profiles, copied before exercising the launcher services.
 //! These fixtures contain synthetic credentials only and never touch user data.
 
 use industrialis_backend::{accounts, fs_utils, groups, instances, paths::LauncherPaths, settings};

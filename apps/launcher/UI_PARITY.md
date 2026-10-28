@@ -4,7 +4,7 @@ Functional gaps and the criteria for removing Electron are tracked in
 [MIGRATION_TRACKER.md](MIGRATION_TRACKER.md). Prioritize that checklist;
 aesthetic matching can follow later.
 
-The GPUI migration should preserve the Electron launcher's interface. This is a
+The launcher migration should preserve the Electron launcher's interface. This is a
 work list, not a declaration of pixel parity. Implemented dimensions were checked
 against the actual React components and their computed browser styles using
 isolated fictional instance data. Native screenshot comparison remains pending.
@@ -31,7 +31,7 @@ panel tabs retain black for the selected tab and grey for unselected tabs.
 
 ## Implemented reference geometry
 
-| Area                | Reference applied in GPUI                                                                                          |
+| Area                | Reference applied in Launcher                                                                                      |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Window              | Minimum 800×600; saved dimensions and maximized preference                                                         |
 | Shell               | Toolbar 44px; footer 24px and 11px text; Windows controls 46×44px                                                  |
@@ -52,9 +52,9 @@ the existing theme tokens, including primary hover tints and translucent selecte
 states. Native text metrics, image rendering, shadows, scrollbars, hover/focus
 states, and custom titlebar behavior still require visual comparison.
 
-Top-bar hover transitions have a GPUI rendering regression test covering all
+Top-bar hover transitions have a launcher rendering regression test covering all
 eleven Windows controls, entry and exit, light/dark modes, Monochrome/Industrialis,
-and compact/default widths. Stable IDs are required for GPUI to retain hover
+and compact/default widths. Stable IDs are required for Launcher to retain hover
 state and schedule redraws; retain those IDs when adjusting the toolbar.
 
 ## Remaining work
@@ -96,7 +96,7 @@ Native inspection confirms the icons render, and an actual topbar drag moved the
 window by 70px horizontally and vertically. A Windows `WM_NCHITTEST` probe
 reproduced the old toolbar returning `HTCLIENT`, then confirmed `HTCAPTION` after
 the fix, with Add, navigation, and Close remaining client controls. Icon tests
-also check inherited colors and rasterize every embedded SVG through GPUI.
+also check inherited colors and rasterize every embedded SVG through the framework.
 Native layout probes confirm the three-dot SVG shares the exact center of its
 28×28 button and navigation icons share a vertical center with their labels.
 These focused checks do not certify visual or interaction parity for every screen.

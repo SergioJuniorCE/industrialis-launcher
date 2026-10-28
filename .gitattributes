@@ -1,2 +1,2 @@
-# Keep GPUI acceptance runners executable in Linux containers after Windows checkouts.
-scripts/test-gpui-*.sh text eol=lf
+# Keep launcher acceptance runners executable in Linux containers after Windows checkouts.
+scripts/test-*.sh text eol=lf

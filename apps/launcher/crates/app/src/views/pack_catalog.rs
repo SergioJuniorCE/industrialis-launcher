@@ -176,7 +176,7 @@ mod tests {
                     RunningGamePid {
                         pid: 2147483646,
                         creation_id: "size-fixture".into(),
-                        gpui_session: Some(GameSession {
+                        launcher_session: Some(GameSession {
                             capture_id: capture_id.into(),
                             started_at_ms: 1000,
                             record_time: false,

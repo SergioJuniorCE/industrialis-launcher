@@ -34,10 +34,10 @@ fn run() -> anyhow::Result<()> {
         "Acceptance profile cannot be redirected"
     );
     ensure!(
-        std::fs::read_to_string(profile.join(".gpui-live-accounts"))
+        std::fs::read_to_string(profile.join(".launcher-live-accounts"))
             .ok()
             .as_deref()
-            == Some("industrialis-gpui-expendable-live-accounts-v1"),
+            == Some("industrialis-expendable-live-accounts-v1"),
         "Use a marked expendable account profile"
     );
     let paths = LauncherPaths::new(profile);
@@ -129,7 +129,7 @@ async fn microsoft_game(paths: &LauncherPaths, id: &str, java: &str) -> anyhow::
     let mut task =
         tokio::spawn(async move { launch::launch_instance(&game_paths, &game_id, emit).await });
     let start = std::time::Instant::now();
-    let limit = std::env::var("GPUI_GAME_ACCEPTANCE_SECONDS")
+    let limit = std::env::var("LAUNCHER_GAME_ACCEPTANCE_SECONDS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(900);
@@ -294,7 +294,7 @@ async fn google(paths: &LauncherPaths) -> anyhow::Result<()> {
         drive.status().await?.connected,
         "Google connection did not persist"
     );
-    let id = format!("GpuiCloudAcceptance{}", uuid::Uuid::new_v4().simple());
+    let id = format!("LauncherCloudAcceptance{}", uuid::Uuid::new_v4().simple());
     let directory = paths.instance_dir(&id)?;
     let backup_dir = paths.instance_backups_dir(&id)?;
     tokio::fs::create_dir_all(&backup_dir).await?;
@@ -390,6 +390,6 @@ async fn google(paths: &LauncherPaths) -> anyhow::Result<()> {
         "retry_committed_once":true,"download_exact_bytes":true,"restore_preserved_local_archive":true,
         "retention_scoped_to_unique_test_instance":true,"test_remote_files_deleted":true,
         "local_archives_preserved":true,"test_instance":id,"original_profile":"untouched",
-        "boundary":"backend/provider acceptance; physical GPUI sign-in controls not verified"
+        "boundary":"backend/provider acceptance; physical sign-in controls not verified"
     })).await
 }

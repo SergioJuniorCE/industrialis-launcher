@@ -69,8 +69,8 @@ function Invoke-LegacyRetirement($Install,
     [scriptblock]$Uninstall = {
       param($updater)
       $process = Start-Process -FilePath $updater -ArgumentList @('--uninstall', '--silent') -WindowStyle Hidden -PassThru
-      if (-not $process.WaitForExit(120000)) { throw 'Squirrel uninstall is still running. GPUI was not started; wait before retrying.' }
-      if ($process.ExitCode -ne 0) { throw "Squirrel uninstall failed ($($process.ExitCode)). GPUI was not started." }
+      if (-not $process.WaitForExit(120000)) { throw 'Squirrel uninstall is still running. The launcher was not started; wait before retrying.' }
+      if ($process.ExitCode -ne 0) { throw "Squirrel uninstall failed ($($process.ExitCode)). The launcher was not started." }
     }) {
   if ($null -eq $Install) { return }
   # Do not force-stop applications. The old updater starts its installer before
@@ -82,7 +82,7 @@ function Invoke-LegacyRetirement($Install,
   }
   & $Uninstall $Install.Updater
   foreach ($exe in $Install.Executables) {
-    if (Test-Path -LiteralPath $exe) { throw 'An old launcher executable remains. GPUI was not started.' }
+    if (Test-Path -LiteralPath $exe) { throw 'An old launcher executable remains. The launcher was not started.' }
   }
 }
 
@@ -94,7 +94,7 @@ function Remove-DeadLegacyProtocol($Install,
   if ($command -match '^"([^"]+)"') {
     $exe = $Matches[1]
     if ($Install.Executables -contains $exe -and -not (Test-Path -LiteralPath $exe)) {
-      # An uninstalled handler must not be restored by the future GPUI uninstall.
+      # An uninstalled handler must not be restored by the future launcher uninstall.
       $writableKey = (Get-Item -LiteralPath $Key).OpenSubKey('', $true)
       if ($null -eq $writableKey) { throw 'Unable to open the dead legacy protocol handler for cleanup' }
       try { $writableKey.DeleteValue('', $false) } finally { $writableKey.Dispose() }

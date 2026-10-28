@@ -1,8 +1,8 @@
-# GPUI development builds
+# Launcher development builds
 
 The reported delay occurs while Cargo says Compiling, before application startup.
 `pnpm --filter @industrialis/launcher dev` runs the dependency-free Node
-watcher in `scripts/dev-launcher-gpui.mjs`. It builds with Cargo, launches the
+watcher in `scripts/dev-launcher.mjs`. It builds with Cargo, launches the
 reported executable and automatically rebuilds/restarts on source or asset saves.
 Watch mode builds `industrialis-dev` with the `dev-watch` feature, so a running
 ordinary `industrialis.exe` cannot lock its output on Windows. Dependencies use
@@ -14,14 +14,14 @@ profile before opening the watched version; the profile ownership guard still
 allows only one writer.
 On Windows, the watch target uses the GUI subsystem to avoid an extra console.
 The runner must launch it with `windowsHide: false`: Node's hide flag sets
-`STARTF_USESHOWWINDOW`/`SW_HIDE`, which can hide GPUI's first native window too.
+`STARTF_USESHOWWINDOW`/`SW_HIDE`, which can hide the first native window too.
 The Electron,
 website and dashboard JavaScript dependencies are not compiled into this native
 build. pnpm may verify/install workspace dependencies when package manifests
 change: it performed a 33.5-second one-time verification install after the dev
 script update. A warm pnpm-to-Cargo help dispatch then took 0.23 seconds. For Rust
 iteration without pnpm workspace verification, run `node
-../../scripts/dev-launcher-gpui.mjs` from `apps/launcher`. For a single run,
+../../scripts/dev-launcher.mjs` from `apps/launcher`. For a single run,
 use `pnpm --filter @industrialis/launcher dev:once` or `cargo run -p
 industrialis-app --locked --jobs 2` from that directory.
 
@@ -48,11 +48,11 @@ launcher shutdown. Closing the app yourself leaves the watcher waiting for a
 source change. Stop an existing one-shot `dev` process and rerun the command once
 to switch to watching.
 
-Validation: `node --test scripts/dev-launcher-gpui.test.mjs` covers atomic saves,
+Validation: `node --test scripts/dev-launcher.test.mjs` covers atomic saves,
 new folders, ignored build output, build serialization, save/drain waits and
 failure recovery. Its end-to-end test uses real Cargo and disposable headless
 Rust processes; it does not launch the personal profile or control the desktop.
-The GPUI app tests compile the development pipe and existing shutdown path.
+The launcher app tests compile the development pipe and existing shutdown path.
 The headless watcher regression also keeps an ordinary executable running on
 Windows through startup, edits, compilation failures and shutdown, verifying
 that it stays alive while watch mode rebuilds its own target.
@@ -65,7 +65,7 @@ and [Node child processes](https://nodejs.org/api/child_process.html).
 ## What is in the build
 
 The Windows normal/build graph was 442 unique packages, including the three local
-app/backend/core crates, and is now 440. Most packages come through the GPUI
+app/backend/core crates, and is now 440. Most packages come through the framework
 framework/platform, the native code editor and backend functionality such as HTTP,
 crypto, archives, authentication and process management. The app has 12 direct
 normal dependencies and one build dependency on Windows. A large transitive graph
@@ -82,7 +82,7 @@ The safe feature reductions are:
   Zopfli encoder removes `zopfli` and `bumpalo`. An explicit flate2 dependency
   selects its Rust backend, so standalone backend/CLI builds also work.
 
-No package versions were upgraded by this change. GPUI currently hardcodes many
+No package versions were upgraded by this change. The framework currently hardcodes many
 image decoders, SVG support and core services; gpui-base also includes Markdown
 and HTML parsing. Removing those would require maintaining upstream forks or
 replacing the editor kit. They are potential future work, not achieved reductions.
@@ -91,7 +91,7 @@ replacing the editor kit. They are potential future work, not achieved reduction
 
 Incremental compilation is enabled only for the app crate in dev, with 32 codegen
 units. Backend and tests keep incremental compilation disabled; tests override
-the app setting explicitly. Limited debug information remains. GPUI's opt-level 3
+the app setting explicitly. Limited debug information remains. the framework's opt-level 3
 stays unchanged because it was needed for smooth window movement. Dev uses two
 build jobs, while test/package commands keep their existing limits.
 

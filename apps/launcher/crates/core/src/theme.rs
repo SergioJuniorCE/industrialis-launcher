@@ -1,6 +1,6 @@
 //! Port of `theme-presets.ts` + the pure parts of `theme-utils.ts`.
 //!
-//! These tokens are the single source of truth for 1:1 UI parity: every GPUI
+//! These tokens are the single source of truth for 1:1 UI parity: every UI
 //! view reads colors from here, never hardcoded values.
 
 use regex::Regex;

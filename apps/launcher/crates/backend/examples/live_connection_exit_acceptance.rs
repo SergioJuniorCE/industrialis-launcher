@@ -26,7 +26,7 @@ fn main() -> anyhow::Result<()> {
     }
     ensure!(
         cfg!(target_os = "linux")
-            && std::env::var("GPUI_ISOLATED_VIRTUAL_DESKTOP").as_deref() == Ok("1"),
+            && std::env::var("LAUNCHER_ISOLATED_VIRTUAL_DESKTOP").as_deref() == Ok("1"),
         "Requires the isolated Linux virtual desktop runner"
     );
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
         root.is_absolute()
             && !std::fs::symlink_metadata(&root)?.file_type().is_symlink()
             && std::fs::read_to_string(root.join(".gpui-live-acceptance"))?
-                == "industrialis-gpui-expendable-live-acceptance-v1",
+                == "industrialis-expendable-live-acceptance-v1",
         "Use a marked expendable profile"
     );
     let paths = LauncherPaths::new(root);
@@ -75,19 +75,19 @@ async fn run(paths: LauncherPaths, id: String, java: String) -> anyhow::Result<(
     launch::monitor_restored_game(&paths, &id, Arc::new(|_, _, _| {})).await?;
     let account = accounts
         .iter()
-        .find(|a| accounts::profile_identity(a).0 == "GpuiAcceptance")
+        .find(|a| accounts::profile_identity(a).0 == "LauncherAcceptance")
         .context("Create the expendable offline acceptance account first")?;
-    let server_world = std::env::var("GPUI_GAME_EXIT_MODE").as_deref() == Ok("server-world");
-    let ipv6_probe = std::env::var("GPUI_AUTO_JOIN_IPV6").as_deref() == Ok("1");
+    let server_world = std::env::var("LAUNCHER_GAME_EXIT_MODE").as_deref() == Ok("server-world");
+    let ipv6_probe = std::env::var("LAUNCHER_AUTO_JOIN_IPV6").as_deref() == Ok("1");
     ensure!(
         !ipv6_probe || !server_world,
         "IPv6 mode is a loopback protocol probe, not a Forge world test"
     );
     let probe_host = if ipv6_probe { "::1" } else { "127.0.0.1" };
     let delayed_server =
-        server_world && std::env::var("GPUI_FORGE_LATENCY_CONTROL").as_deref() == Ok("1");
+        server_world && std::env::var("LAUNCHER_FORGE_LATENCY_CONTROL").as_deref() == Ok("1");
     let proxy_delay_ms = if delayed_server {
-        std::env::var("GPUI_FORGE_PROXY_DELAY_MS")
+        std::env::var("LAUNCHER_FORGE_PROXY_DELAY_MS")
             .unwrap_or_else(|_| "200".into())
             .parse::<u64>()?
     } else {
@@ -98,18 +98,18 @@ async fn run(paths: LauncherPaths, id: String, java: String) -> anyhow::Result<(
         "Use the zero-delay baseline or 200 ms diagnostic control"
     );
     let server_host = if delayed_server {
-        "gpui-acceptance-proxy"
+        "launcher-acceptance-proxy"
     } else {
-        "gpui-acceptance-server"
+        "launcher-acceptance-server"
     };
     let world_marker = if server_world {
         let nonce =
-            std::env::var("GPUI_FORGE_WORLD_NONCE").context("Missing private-server nonce")?;
+            std::env::var("LAUNCHER_FORGE_WORLD_NONCE").context("Missing private-server nonce")?;
         ensure!(
             nonce.len() == 32 && nonce.bytes().all(|b| b.is_ascii_hexdigit()),
             "Private-server nonce must be 32 hexadecimal characters"
         );
-        Some(format!("GPUI_WORLD_{nonce}"))
+        Some(format!("LAUNCHER_WORLD_{nonce}"))
     } else {
         None
     };
@@ -249,7 +249,7 @@ async fn run(paths: LauncherPaths, id: String, java: String) -> anyhow::Result<(
         ready.load(Ordering::SeqCst),
         "Connection arrived before Forge completed"
     );
-    let exit_delay = std::env::var("GPUI_GAME_EXIT_DELAY_SECONDS")
+    let exit_delay = std::env::var("LAUNCHER_GAME_EXIT_DELAY_SECONDS")
         .ok()
         .map(|s| s.parse::<u64>())
         .transpose()?
@@ -265,7 +265,7 @@ async fn run(paths: LauncherPaths, id: String, java: String) -> anyhow::Result<(
     let game_pid = pid.load(Ordering::SeqCst);
     let creation =
         process_manager::get_process_creation_id(game_pid).context("Missing live game identity")?;
-    let abnormal = std::env::var("GPUI_GAME_EXIT_MODE").as_deref() == Ok("abnormal");
+    let abnormal = std::env::var("LAUNCHER_GAME_EXIT_MODE").as_deref() == Ok("abnormal");
     let exit_trigger = if abnormal {
         // Fault injection, not evidence of a naturally occurring Minecraft crash.
         ensure!(
@@ -277,7 +277,7 @@ async fn run(paths: LauncherPaths, id: String, java: String) -> anyhow::Result<(
             .status()?
     } else {
         let helper =
-            std::env::var("GPUI_VIRTUAL_WINDOW_HELPER").context("Missing virtual-window helper")?;
+            std::env::var("LAUNCHER_VIRTUAL_WINDOW_HELPER").context("Missing virtual-window helper")?;
         std::process::Command::new("python3")
             .arg(helper)
             .arg(game_pid.to_string())
@@ -467,7 +467,7 @@ async fn probe(
             ensure!(packet(&mut stream).await? == [0], "Invalid status request");
             let status = serde_json::to_vec(&serde_json::json!({
                 "version":{"name":"1.7.10","protocol":5},"players":{"max":1,"online":0,"sample":[]},
-                "description":{"text":"GPUI isolated connection probe"},"modinfo":{"type":"FML","modList":[]}
+                "description":{"text":"Launcher isolated connection probe"},"modinfo":{"type":"FML","modList":[]}
             }))?;
             let mut payload = vec![0];
             put_varint(status.len(), &mut payload); payload.extend_from_slice(&status);
@@ -480,8 +480,8 @@ async fn probe(
             return Ok(None);
         }
         let login = packet(&mut stream).await?; let mut login = login.as_slice();
-        ensure!(take_varint(&mut login)? == 0 && take_string(&mut login)? == "GpuiAcceptance" && login.is_empty(), "Unexpected login start");
-        let message = br#"{"text":"GPUI isolated connection probe complete"}"#;
+        ensure!(take_varint(&mut login)? == 0 && take_string(&mut login)? == "LauncherAcceptance" && login.is_empty(), "Unexpected login start");
+        let message = br#"{"text":"Launcher isolated connection probe complete"}"#;
         let mut disconnect = vec![0]; put_varint(message.len(), &mut disconnect);
         disconnect.extend_from_slice(message); send_packet(&mut stream, &disconnect).await?; stream.shutdown().await?;
         Ok(Some(serde_json::json!({"protocol":protocol,"host":host,"port":received_port,"login_start":true,"status_probes":status_probes})))

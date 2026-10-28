@@ -10,18 +10,18 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-const MARKER: &str = "industrialis-gpui-expendable-live-acceptance-v1";
+const MARKER: &str = "industrialis-expendable-live-acceptance-v1";
 const ID: &str = "LiveModern";
-const CONFIG: &str = "config/gpui-acceptance.cfg";
+const CONFIG: &str = "config/launcher-acceptance.cfg";
 const CONFIG_BYTES: &str =
     "# Live pack preservation fixture\r\ngeneral {\r\n    B:enabled=true\r\n}\r\n";
 const DATA: &[(&str, &[u8])] = &[
     (
-        ".minecraft/saves/gpui-acceptance/level.dat",
+        ".minecraft/saves/launcher-acceptance/level.dat",
         b"expendable save bytes\0\xff",
     ),
     (
-        ".minecraft/journeymap/data/sp/gpui-acceptance/test.bin",
+        ".minecraft/journeymap/data/sp/launcher-acceptance/test.bin",
         b"expendable map bytes",
     ),
     (".minecraft/options.txt", b"music:0.0\nsound:0.0\n"),
@@ -97,7 +97,7 @@ async fn assert_preserved(paths: &LauncherPaths, id: &str, kept_mod: bool) -> an
             "Config overlay changed: {id}/{root}/{CONFIG}"
         );
         let present =
-            tokio::fs::try_exists(instance.join(root).join("mods/gpui-acceptance-1.0.jar")).await?;
+            tokio::fs::try_exists(instance.join(root).join("mods/launcher-acceptance-1.0.jar")).await?;
         ensure!(
             present == kept_mod,
             "Custom mod preservation mismatch: {id}/{root}"
@@ -122,7 +122,7 @@ async fn run(paths: &LauncherPaths, target: &str, previous: &str) -> anyhow::Res
                 target,
                 java_type,
                 Some(id),
-                Some("GPUI acceptance"),
+                Some("Launcher acceptance"),
                 progress(),
             )
             .await?;
@@ -152,7 +152,7 @@ async fn run(paths: &LauncherPaths, target: &str, previous: &str) -> anyhow::Res
     }
     minecraft_files::write_file(paths, ID, CONFIG, CONFIG_BYTES.into(), true, None).await?;
     // A valid empty ZIP is used as an expendable custom mod; remove before gameplay.
-    let source = paths.base().join("gpui-acceptance-1.0.jar");
+    let source = paths.base().join("launcher-acceptance-1.0.jar");
     tokio::fs::write(&source, b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0").await?;
     let custom = custom_mods::add(paths, ID, &source).await?;
     let mut saved = settings::load_instance_settings(paths, ID).await?;

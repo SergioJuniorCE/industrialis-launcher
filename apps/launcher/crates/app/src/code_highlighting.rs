@@ -1,4 +1,4 @@
-//! Syntect grammars over the pinned native editor; the editing engine stays GPUI.
+//! Syntect grammars over the pinned native editor; the editing engine stays native.
 use gpui::{Context, HighlightStyle, SharedString, Window};
 use gpui_base::input::{
     EditorState, FoldRange, HighlightStyleResolver, InputEdit, InputHighlighter,

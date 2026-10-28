@@ -536,7 +536,7 @@ async fn remember_running(
     let entry = RunningGamePid {
         pid: running.pid,
         creation_id: running.creation_id.clone().unwrap_or_default(),
-        gpui_session: Some(session),
+        launcher_session: Some(session),
         extra_fields: Default::default(),
     };
     // TS only persists entries with a creation id; without one the record
@@ -569,7 +569,7 @@ async fn update_session(
     let id = id.to_string();
     crate::running_pids::update(paths, move |pids| {
         if let Some(entry) = pids.get_mut(&id).filter(|p| p.pid == pid) {
-            entry.gpui_session = Some(session);
+            entry.launcher_session = Some(session);
         }
     })
     .await
@@ -607,11 +607,11 @@ async fn recover_game(
         process_manager::RunningProcess::detached(entry.pid, Some(entry.creation_id.clone()));
     let sink = LogSink::new(paths, &id, emit)?;
     let directory = entry
-        .gpui_session
+        .launcher_session
         .as_ref()
         .map(|s| crate::game_capture::session_directory(paths, &id, &s.capture_id))
         .transpose()?;
-    if let (Some(directory), Some(session)) = (&directory, &entry.gpui_session) {
+    if let (Some(directory), Some(session)) = (&directory, &entry.launcher_session) {
         process_manager::attach_capture(
             &mut process,
             directory,
@@ -624,7 +624,7 @@ async fn recover_game(
         process_manager::wait_or_detach(&mut process, &crate::lifecycle::for_profile(paths))
             .await?;
     sink.finish().await?;
-    if let Some(mut session) = entry.gpui_session {
+    if let Some(mut session) = entry.launcher_session {
         session.stdout_offset = offsets[0];
         session.stderr_offset = offsets[1];
         let receipt =
@@ -860,7 +860,7 @@ mod log_tests {
                     RunningGamePid {
                         pid: 2147483646,
                         creation_id: "fixture".into(),
-                        gpui_session: Some(session),
+                        launcher_session: Some(session),
                         extra_fields: Default::default(),
                     },
                 );
@@ -942,7 +942,7 @@ mod log_tests {
                 RunningGamePid {
                     pid,
                     creation_id,
-                    gpui_session: Some(session),
+                    launcher_session: Some(session),
                     extra_fields: Default::default(),
                 },
             );
@@ -966,7 +966,7 @@ mod log_tests {
             .unwrap()
             .remove("game")
             .unwrap();
-        assert_eq!(entry.gpui_session.unwrap().stdout_offset, 6);
+        assert_eq!(entry.launcher_session.unwrap().stdout_offset, 6);
         assert_eq!(
             load_instance_settings(&paths, "game")
                 .await
