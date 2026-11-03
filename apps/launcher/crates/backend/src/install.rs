@@ -6,17 +6,20 @@
 //! Reinstalls acquire the target pack before touching installed player data.
 
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
+use anyhow::Context;
 use industrialis_core::instance_settings::InstanceSettings;
 
-use crate::fs_utils::{dir_size, remove_if_exists};
+use crate::fs_utils::{dir_size, exists, remove_if_exists, write_json};
 use crate::groups::set_instance_group;
 use crate::icons::install_default_instance_icon;
 use crate::instances::{known_instance_ids, load_instances};
 use crate::launch::is_already_running;
 use crate::migration::{
-    backup_player_data, restore_player_data, wipe_instance_for_reinstall, PRESERVE_DIR_NAME,
+    restore_modified_configs, restore_player_data_from_instance, PRESERVE_DIR_NAME,
 };
+use crate::pack_cache::find_cached_pack;
 use crate::pack_files::{
     build_update_preview, download_and_extract_to_staging, install_staging_contents,
     remove_custom_mods_except, ProgressCtx, UpdateModPreview,
@@ -85,6 +88,178 @@ fn progress_ctx(emit: crate::pack_files::EmitProgress, operation: &str, id: &str
         emit,
         operation: operation.to_string(),
         id: Some(id.to_string()),
+    }
+}
+
+const MAINTENANCE_ROLLBACK_DIR: &str = "maintenance-rollback";
+
+fn rollback_root(paths: &LauncherPaths) -> PathBuf {
+    paths.base().join(MAINTENANCE_ROLLBACK_DIR)
+}
+
+fn rollback_dir(paths: &LauncherPaths, id: &str) -> PathBuf {
+    rollback_root(paths).join(id)
+}
+
+fn rollback_ready_path(paths: &LauncherPaths, id: &str) -> PathBuf {
+    rollback_root(paths).join(format!("{id}.ready"))
+}
+
+async fn rename_with_retry(source: &Path, destination: &Path) -> Result<(), anyhow::Error> {
+    let mut last_error = None;
+    for attempt in 0..20 {
+        match tokio::fs::rename(source, destination).await {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                last_error = Some(error);
+                if attempt < 19 {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                }
+            }
+        }
+    }
+    Err(last_error
+        .unwrap_or_else(|| std::io::Error::other("rename did not run"))
+        .into())
+}
+
+/// Restore the previous instance if an update was interrupted before its
+/// completion marker was written. Safe to call on every startup.
+pub async fn recover_interrupted_update(
+    paths: &LauncherPaths,
+    id: &str,
+) -> Result<bool, anyhow::Error> {
+    let rollback = rollback_dir(paths, id);
+    let ready = rollback_ready_path(paths, id);
+    if !exists(&rollback).await {
+        remove_if_exists(&ready).await?;
+        return Ok(false);
+    }
+    let instance = paths.instance_dir(id)?;
+    if exists(&ready).await && exists(&instance).await {
+        // The new instance was fully committed; only cleanup was interrupted.
+        remove_if_exists(&rollback).await?;
+        remove_if_exists(&ready).await?;
+        return Ok(true);
+    }
+    // Anything else means the previous instance must come back.
+    remove_if_exists(&instance).await?;
+    if let Some(parent) = instance.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    rename_with_retry(&rollback, &instance).await.with_context(|| {
+        format!(
+            "Could not restore the previous instance from {}",
+            rollback.display()
+        )
+    })?;
+    let _ = remove_if_exists(&ready).await;
+    Ok(true)
+}
+
+/// Recover every interrupted update before instance state is loaded.
+pub async fn recover_interrupted_maintenance(
+    paths: &LauncherPaths,
+) -> Result<Vec<String>, anyhow::Error> {
+    let root = rollback_root(paths);
+    if !exists(&root).await {
+        return Ok(Vec::new());
+    }
+    let mut recovered = Vec::new();
+    let mut entries = tokio::fs::read_dir(&root).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(id) = name.strip_suffix(".ready") {
+            if !exists(&rollback_dir(paths, id)).await {
+                let _ = remove_if_exists(&entry.path()).await;
+            }
+            continue;
+        }
+        if !entry.file_type().await?.is_dir() {
+            continue;
+        }
+        let Ok(id) = validate_instance_id(&name) else {
+            continue;
+        };
+        if id != name {
+            continue;
+        }
+        if recover_interrupted_update(paths, &id).await? {
+            recovered.push(id);
+        }
+    }
+    Ok(recovered)
+}
+
+struct InstanceRollback {
+    instance: PathBuf,
+    rollback: PathBuf,
+    ready: PathBuf,
+    committed: bool,
+}
+
+impl InstanceRollback {
+    async fn begin(paths: &LauncherPaths, id: &str) -> Result<Self, anyhow::Error> {
+        let instance = paths.instance_dir(id)?;
+        anyhow::ensure!(exists(&instance).await, "instance not found");
+        let root = rollback_root(paths);
+        tokio::fs::create_dir_all(&root).await?;
+        let rollback = root.join(id);
+        let ready = rollback_ready_path(paths, id);
+        anyhow::ensure!(
+            !exists(&rollback).await,
+            "Recovery data from a previous update exists: {}. Restart the launcher to recover it.",
+            rollback.display()
+        );
+        remove_if_exists(&ready).await?;
+        rename_with_retry(&instance, &rollback)
+            .await
+            .context("Could not move the current instance into the update rollback area; close any apps using it and retry")?;
+        if let Err(error) = tokio::fs::create_dir_all(&instance).await {
+            let _ = rename_with_retry(&rollback, &instance).await;
+            return Err(error.into());
+        }
+        Ok(Self {
+            instance,
+            rollback,
+            ready,
+            committed: false,
+        })
+    }
+
+    fn previous(&self) -> &Path {
+        &self.rollback
+    }
+
+    async fn commit(mut self) -> Result<(), anyhow::Error> {
+        write_json(&self.ready, &serde_json::json!({"format": 1})).await?;
+        self.committed = true;
+        // The marker makes cleanup resumable; a locked rollback directory is
+        // not a reason to fail a completed update.
+        if remove_if_exists(&self.rollback).await.is_ok() {
+            let _ = remove_if_exists(&self.ready).await;
+        }
+        Ok(())
+    }
+
+    async fn restore(mut self) -> Result<(), anyhow::Error> {
+        self.committed = true;
+        remove_if_exists(&self.instance).await?;
+        rename_with_retry(&self.rollback, &self.instance)
+            .await
+            .context("Could not restore the previous instance")?;
+        let _ = remove_if_exists(&self.ready).await;
+        Ok(())
+    }
+}
+
+impl Drop for InstanceRollback {
+    fn drop(&mut self) {
+        if !self.committed {
+            let _ = std::fs::remove_dir_all(&self.instance);
+            let _ = std::fs::rename(&self.rollback, &self.instance);
+            let _ = std::fs::remove_file(&self.ready);
+        }
     }
 }
 
@@ -157,6 +332,7 @@ pub async fn preview_update(
 ) -> Result<UpdateModPreview, anyhow::Error> {
     let id = validate_instance_id(raw_id)?;
     let _lease = crate::instance_guard::reserve_instances(paths, &[&id])?;
+    recover_interrupted_update(paths, &id).await?;
     if is_already_running(paths, &id).await? {
         anyhow::bail!("cannot analyze an update while instance is running");
     }
@@ -196,6 +372,7 @@ pub async fn update_instance(
 ) -> Result<(), anyhow::Error> {
     let id = validate_instance_id(raw_id)?;
     let _lease = crate::instance_guard::reserve_instances(paths, &[&id])?;
+    recover_interrupted_update(paths, &id).await?;
     if is_already_running(paths, &id).await? {
         anyhow::bail!("cannot update while instance is running");
     }
@@ -225,6 +402,7 @@ pub async fn reinstall_instance(
 ) -> Result<(), anyhow::Error> {
     let id = validate_instance_id(raw_id)?;
     let _lease = crate::instance_guard::reserve_instances(paths, &[&id])?;
+    recover_interrupted_update(paths, &id).await?;
     if is_already_running(paths, &id).await? {
         anyhow::bail!("cannot reinstall while instance is running");
     }
@@ -266,7 +444,7 @@ async fn reinstall_core(
     }
     let ctx = progress_ctx(emit, operation, id);
     // Acquire a complete target pack before modifying the installed instance.
-    // Staging lives outside the instance so wiping cannot remove it.
+    // Staging lives outside the instance so the rollback swap cannot remove it.
     let staging_parent = paths.base().join("maintenance-staging").join(id);
     tokio::fs::create_dir_all(&staging_parent).await?;
     let staging = download_and_extract_to_staging(
@@ -303,66 +481,137 @@ async fn apply_reinstall_staging(
     keep_mods: Option<&HashSet<String>>,
     operation: &str,
     ctx: &ProgressCtx,
-    staging: &std::path::Path,
+    staging: &Path,
 ) -> anyhow::Result<()> {
     let instance = paths.instance_dir(id)?;
     let preserve = instance.join(PRESERVE_DIR_NAME);
-    // Validate before creating a backup or wiping the installed instance.
+    // Validate before touching the installed instance.
     let pack: serde_json::Value =
         serde_json::from_slice(&tokio::fs::read(staging.join("mmc-pack.json")).await?)?;
     if !pack.is_object() {
         anyhow::bail!("Target pack manifest is invalid");
     }
-    if tokio::fs::try_exists(&preserve).await? {
+    if exists(&preserve).await {
         anyhow::bail!(
             "Recovery data from a previous reinstall exists. Restore it before retrying: {}",
             preserve.display()
         );
     }
-    backup_player_data(&instance, &preserve).await?;
-    if let Some(keep) = keep_mods {
-        let removed =
-            remove_custom_mods_except(&persistent_custom_mods_dir(&preserve), keep).await?;
-        if removed > 0 {
-            ctx.progress("updating", 0.05, |p| {
-                p.log_line = Some(format!(
-                    "Removed {removed} custom mod(s) not selected to keep"
-                ))
-            });
-        }
-    }
+    recover_interrupted_update(paths, id).await?;
+    let previous_settings = load_instance_settings(paths, id).await?;
+    let previous_pack =
+        if operation == "update-pack" && !previous_settings.pack_version.is_empty() {
+            find_cached_pack(paths, &previous_settings.pack_version, java_type).await
+        } else {
+            None
+        };
     let stage = if operation == "update-pack" {
         "updating"
     } else {
         "reinstalling"
     };
+    // The old instance becomes the rollback copy. Nothing is deleted until the
+    // new instance has been installed, restored, and saved.
+    ctx.progress(stage, 0.02, |p| {
+        p.log_line = Some("Preparing a rollback copy of the previous instance…".to_string())
+    });
+    let rollback = InstanceRollback::begin(paths, id).await?;
     ctx.progress(stage, 0.05, |p| {
-        p.log_line = Some("Backing up saves, JourneyMap, and player settings".to_string())
+        p.log_line = Some("Rollback copy ready; starting the pack swap".to_string())
     });
-    wipe_instance_for_reinstall(&instance, &preserve).await?;
-    tokio::fs::create_dir_all(&instance).await?;
-    ctx.progress(stage, 0.75, |p| {
-        p.log_line = Some("Installing fresh pack files".to_string())
-    });
-    install_staging_contents(&staging, &instance).await?;
-    remove_if_exists(&staging).await?;
-    flatten_nested_pack(&instance).await?;
-    prepare_instance_configs(&instance, true).await?;
-    restore_player_data(&instance, &preserve).await?;
-    let mut settings = load_instance_settings(paths, id).await?;
-    settings.pack_version = pack_version.to_string();
-    settings.pack_java_type = java_type.to_string();
-    apply_persistent_custom_mods(&instance).await?;
-    apply_persistent_minecraft(&instance).await?;
-    save_and_refresh_size(paths, id, &mut settings).await?;
-    remove_if_exists(&preserve).await?;
-    let done_line = if operation == "update-pack" {
-        "Update complete"
-    } else {
-        "Clean reinstall complete"
-    };
-    ctx.progress("done", 1.0, |p| p.log_line = Some(done_line.to_string()));
-    Ok(())
+    let result = async {
+        ctx.progress(stage, 0.10, |p| {
+            p.log_line = Some("Copying fresh pack files into the instance…".to_string())
+        });
+        install_staging_contents(staging, &instance).await?;
+        // Staging cleanup is best effort; a locked file must not undo a
+        // successfully installed instance.
+        let _ = remove_if_exists(staging).await;
+        ctx.progress(stage, 0.55, |p| {
+            p.log_line = Some("Fresh pack files installed".to_string())
+        });
+        flatten_nested_pack(&instance).await?;
+        prepare_instance_configs(&instance, true).await?;
+        ctx.progress(stage, 0.62, |p| {
+            p.log_line = Some("Pack layout normalized and configs seeded".to_string())
+        });
+        ctx.progress(stage, 0.68, |p| {
+            p.log_line = Some("Restoring saves, options, and launcher data…".to_string())
+        });
+        restore_player_data_from_instance(&instance, rollback.previous()).await?;
+        ctx.progress(stage, 0.74, |p| {
+            p.log_line = Some("Player data restored".to_string())
+        });
+        if operation == "update-pack" {
+            ctx.progress(stage, 0.78, |p| {
+                p.log_line = Some("Merging modified configs and scripts…".to_string())
+            });
+            let restored =
+                restore_modified_configs(&instance, rollback.previous(), previous_pack.as_deref())
+                    .await?;
+            ctx.progress(stage, 0.82, |p| {
+                p.log_line = Some(if previous_pack.is_some() {
+                    format!("Restored {restored} modified config/script file(s)")
+                } else {
+                    format!(
+                        "Restored {restored} config/script file(s); the previous pack was not cached"
+                    )
+                })
+            });
+        }
+        if let Some(keep) = keep_mods {
+            ctx.progress(stage, 0.86, |p| {
+                p.log_line = Some("Applying custom mod selections…".to_string())
+            });
+            let removed =
+                remove_custom_mods_except(&persistent_custom_mods_dir(&instance), keep).await?;
+            ctx.progress(stage, 0.88, |p| {
+                p.log_line = Some(if removed > 0 {
+                    format!("Removed {removed} custom mod(s) not selected to keep")
+                } else {
+                    "All custom mods kept".to_string()
+                })
+            });
+        }
+        ctx.progress(stage, 0.90, |p| {
+            p.log_line = Some("Applying persistent launcher overlays…".to_string())
+        });
+        apply_persistent_custom_mods(&instance).await?;
+        apply_persistent_minecraft(&instance).await?;
+        ctx.progress(stage, 0.94, |p| {
+            p.log_line = Some("Launcher overlays applied".to_string())
+        });
+        ctx.progress(stage, 0.97, |p| {
+            p.log_line = Some("Saving instance settings and refreshing size…".to_string())
+        });
+        let mut settings = load_instance_settings(paths, id).await?;
+        settings.pack_version = pack_version.to_string();
+        settings.pack_java_type = java_type.to_string();
+        save_and_refresh_size(paths, id, &mut settings).await?;
+        ctx.progress(stage, 0.99, |p| {
+            p.log_line = Some("Settings saved and size refreshed".to_string())
+        });
+        Ok::<(), anyhow::Error>(())
+    }
+    .await;
+    match result {
+        Ok(()) => {
+            rollback.commit().await?;
+            let done_line = if operation == "update-pack" {
+                "Update complete"
+            } else {
+                "Clean reinstall complete"
+            };
+            ctx.progress("done", 1.0, |p| p.log_line = Some(done_line.to_string()));
+            Ok(())
+        }
+        Err(error) => match rollback.restore().await {
+            Ok(()) => Err(error),
+            Err(restore_error) => Err(error.context(format!(
+                "The previous instance could not be restored automatically: {restore_error:#}"
+            ))),
+        },
+    }
 }
 
 /// Convenience for UIs/CLIs: current instances with refreshed sizes.
@@ -760,5 +1009,182 @@ mod tests {
             get_instance_group(&paths, "gtnh", &empty).await.unwrap(),
             ""
         );
+    }
+
+    #[tokio::test]
+    async fn interrupted_update_restores_the_previous_instance() {
+        let paths = temp_paths("recover-interrupted");
+        let instance = paths.instance_dir("gtnh").unwrap();
+        tokio::fs::create_dir_all(&instance).await.unwrap();
+        tokio::fs::write(instance.join("sentinel.txt"), "original")
+            .await
+            .unwrap();
+        let rollback_root = paths.base().join("maintenance-rollback");
+        tokio::fs::create_dir_all(&rollback_root).await.unwrap();
+        tokio::fs::rename(&instance, rollback_root.join("gtnh"))
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(&instance).await.unwrap();
+        tokio::fs::write(instance.join("partial.txt"), "partial")
+            .await
+            .unwrap();
+
+        let recovered = recover_interrupted_maintenance(&paths).await.unwrap();
+        assert_eq!(recovered, vec!["gtnh".to_string()]);
+        assert_eq!(
+            tokio::fs::read_to_string(instance.join("sentinel.txt"))
+                .await
+                .unwrap(),
+            "original"
+        );
+        assert!(!instance.join("partial.txt").exists());
+        assert!(!rollback_root.join("gtnh").exists());
+        std::fs::remove_dir_all(paths.base()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn committed_update_cleanup_preserves_the_new_instance() {
+        let paths = temp_paths("recover-committed");
+        let instance = paths.instance_dir("gtnh").unwrap();
+        tokio::fs::create_dir_all(&instance).await.unwrap();
+        tokio::fs::write(instance.join("old.txt"), "old")
+            .await
+            .unwrap();
+        let rollback_root = paths.base().join("maintenance-rollback");
+        tokio::fs::create_dir_all(&rollback_root).await.unwrap();
+        tokio::fs::rename(&instance, rollback_root.join("gtnh"))
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(&instance).await.unwrap();
+        tokio::fs::write(instance.join("new.txt"), "new").await.unwrap();
+        crate::fs_utils::write_json(
+            &rollback_root.join("gtnh.ready"),
+            &serde_json::json!({"format": 1}),
+        )
+        .await
+        .unwrap();
+
+        let recovered = recover_interrupted_maintenance(&paths).await.unwrap();
+        assert_eq!(recovered, vec!["gtnh".to_string()]);
+        assert_eq!(
+            tokio::fs::read_to_string(instance.join("new.txt"))
+                .await
+                .unwrap(),
+            "new"
+        );
+        assert!(!instance.join("old.txt").exists());
+        assert!(!rollback_root.join("gtnh").exists());
+        assert!(!rollback_root.join("gtnh.ready").exists());
+        std::fs::remove_dir_all(paths.base()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_preserves_modified_configs_and_uses_new_defaults_elsewhere() {
+        let paths = temp_paths("update-configs");
+        let instance = paths.instance_dir("gtnh").unwrap();
+        let old_pack = paths.base().join("old-pack");
+        let staging = paths.base().join("new-pack");
+        for dir in [
+            old_pack.join("config"),
+            staging.join("config"),
+            instance.join(".minecraft/config"),
+        ] {
+            tokio::fs::create_dir_all(dir).await.unwrap();
+        }
+        tokio::fs::write(old_pack.join("mmc-pack.json"), "{}")
+            .await
+            .unwrap();
+        tokio::fs::write(old_pack.join("config/edited.cfg"), "old default")
+            .await
+            .unwrap();
+        tokio::fs::write(old_pack.join("config/untouched.cfg"), "old default")
+            .await
+            .unwrap();
+        tokio::fs::write(staging.join("mmc-pack.json"), "{}")
+            .await
+            .unwrap();
+        tokio::fs::write(staging.join("config/edited.cfg"), "new default")
+            .await
+            .unwrap();
+        tokio::fs::write(staging.join("config/untouched.cfg"), "new default")
+            .await
+            .unwrap();
+        tokio::fs::write(instance.join("mmc-pack.json"), "{}")
+            .await
+            .unwrap();
+        tokio::fs::write(instance.join(".minecraft/config/edited.cfg"), "user value")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            instance.join(".minecraft/config/untouched.cfg"),
+            "old default",
+        )
+        .await
+        .unwrap();
+        tokio::fs::write(instance.join(".minecraft/config/created.cfg"), "user created")
+            .await
+            .unwrap();
+        let mut settings = InstanceSettings::default();
+        settings.pack_version = "2.8.0".into();
+        settings.pack_java_type = "java17+".into();
+        save_instance_settings(&paths, "gtnh", &settings)
+            .await
+            .unwrap();
+        crate::pack_cache::store_pack_cache(
+            &paths,
+            "2.8.0",
+            "java17+",
+            "https://example.test/old.zip",
+            &old_pack,
+        )
+        .await
+        .unwrap();
+
+        let ctx = progress_ctx(std::sync::Arc::new(|_| {}), "update-pack", "gtnh");
+        apply_reinstall_staging(
+            &paths,
+            "gtnh",
+            "2.9.0",
+            "java17+",
+            None,
+            "update-pack",
+            &ctx,
+            &staging,
+        )
+        .await
+        .unwrap();
+
+        let config = instance.join(".minecraft/config");
+        assert_eq!(
+            tokio::fs::read_to_string(config.join("edited.cfg"))
+                .await
+                .unwrap(),
+            "user value"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(config.join("untouched.cfg"))
+                .await
+                .unwrap(),
+            "new default"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(config.join("created.cfg"))
+                .await
+                .unwrap(),
+            "user created"
+        );
+        assert_eq!(
+            load_instance_settings(&paths, "gtnh")
+                .await
+                .unwrap()
+                .pack_version,
+            "2.9.0"
+        );
+        assert!(!paths
+            .base()
+            .join("maintenance-rollback")
+            .join("gtnh")
+            .exists());
+        std::fs::remove_dir_all(paths.base()).unwrap();
     }
 }

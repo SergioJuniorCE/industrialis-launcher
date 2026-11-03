@@ -1,3 +1,4 @@
 # Taste
 
+- Expects multi-step operations that mutate user data (installs, updates, migration/reinstall paths) to be atomic and recoverable rather than in-place destruction: a verified rollback copy, automatic restore on any failure, recovery of interrupted runs on next startup, and preservation of user-modified files (configs/scripts) instead of wiping back to pack defaults. Approved a plan built around rollback + preservation over the existing backup-wipe-restore flow. Confidence: 0.5
 - When told to remove a deprecated name/codename, expects an exhaustive repo-wide sweep of product surfaces (installer identity, scripts, env vars, fixtures, docs, CI) rather than a minimal one-line patch; treating leftover legacy strings as incomplete work. Confidence: 0.5

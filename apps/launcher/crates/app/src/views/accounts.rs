@@ -638,11 +638,12 @@ impl LauncherRoot {
                             let is_default = Some(&id) == self.data.default_account_id.as_ref();
                             let mut row = action(
                                 t,
-                                account_label(account),
-                                ButtonVariant::Ghost,
+                                "",
+                                ButtonVariant::MenuItem,
                                 !self.accounts_ui.is_busy(),
                             )
                             .id(format!("account-choice:{id}"))
+                            .aria_label(account_label(account))
                             .flex()
                             .items_center()
                             .gap_2()
@@ -682,7 +683,7 @@ impl LauncherRoot {
                     .border_t_1()
                     .border_color(t.border())
                     .child(
-                        action(t, "Manage accounts…", ButtonVariant::Ghost, true)
+                        action(t, "Manage accounts…", ButtonVariant::MenuItem, true)
                             .w_full()
                             .on_click(cx.listener(
                                 |v, _: &gpui::ClickEvent, _: &mut Window, cx| {

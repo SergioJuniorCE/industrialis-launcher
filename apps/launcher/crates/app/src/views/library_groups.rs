@@ -1,5 +1,5 @@
 use super::*;
-use crate::ui::btn;
+use crate::ui::{btn, icon};
 use industrialis_backend::groups::{GroupChange, GroupsState};
 
 #[derive(Default)]
@@ -433,7 +433,7 @@ impl LauncherRoot {
         count: usize,
         collapsed: bool,
         cx: &mut Context<Self>,
-    ) -> gpui::Div {
+    ) -> gpui::Stateful<gpui::Div> {
         let click = group.clone();
         let drop_group = group.clone();
         let hover_group = group.clone();
@@ -443,11 +443,13 @@ impl LauncherRoot {
         let anchor = std::rc::Rc::new(std::cell::Cell::new(gpui::point(px(0.), px(44.))));
         let measured = anchor.clone();
         let delete_label = format!("Delete group {label}");
+        let row_theme = self.theme.clone();
         div()
+            .id(format!("group-row:{group}"))
             .flex()
             .items_center()
             .gap_1()
-            .bg(crate::ui::tint(self.theme.card(), 0.9))
+            .hover(move |style| style.bg(row_theme.secondary()))
             .on_mouse_down(
                 gpui::MouseButton::Right,
                 cx.listener(move |v, event: &gpui::MouseDownEvent, _, cx| {
@@ -464,7 +466,7 @@ impl LauncherRoot {
                 v.drop_library_drag(&drag.id, &drop_group, cx);
             }))
             .child(
-                btn(&self.theme, "", ButtonVariant::Ghost)
+                btn(&self.theme, "", ButtonVariant::Row)
                     .id(format!("group-collapse:{group}"))
                     .debug_selector({
                         let group = group.clone();
@@ -523,7 +525,7 @@ impl LauncherRoot {
             )
             .when(!group.is_empty(), |row| {
                 row.child(
-                    btn(&self.theme, "Delete", ButtonVariant::Ghost)
+                    btn(&self.theme, "Delete", ButtonVariant::Row)
                         .id(format!("group-delete:{group}"))
                         .aria_label(delete_label)
                         .text_xs()
@@ -547,36 +549,44 @@ impl LauncherRoot {
     }
     pub(super) fn group_menu_items(&self, group: &str, cx: &mut Context<Self>) -> gpui::Div {
         div().flex().flex_col().children(
-            [("Create instance", false), ("Rename group", true)]
-                .into_iter()
-                .map(|(label, rename)| {
-                    let target = group.to_owned();
-                    let disabled = self.groups_ui.busy || self.closing.is_some();
-                    let selector = if rename {
-                        "group-menu-rename"
-                    } else {
-                        "group-menu-create-instance"
-                    };
-                    btn(&self.theme, label, ButtonVariant::Ghost)
-                        .id(selector)
-                        .debug_selector(move || selector.into())
-                        .role(gpui::accesskit::Role::MenuItem)
-                        .tab_stop(!disabled)
-                        .w_full()
-                        .justify_start()
-                        .text_xs()
-                        .when(disabled, |button| button.opacity(0.5).cursor_default())
-                        .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                            if disabled {
-                                return;
-                            }
-                            if rename {
-                                v.open_group_dialog(GroupDialogKind::Rename(target.clone()), cx);
-                            } else {
-                                v.open_new_instance_in_group(target.clone(), cx);
-                            }
-                        }))
-                }),
+            [
+                ("plus", "Create instance", false),
+                ("file-text", "Rename group", true),
+            ]
+            .into_iter()
+            .map(|(glyph, label, rename)| {
+                let target = group.to_owned();
+                let disabled = self.groups_ui.busy || self.closing.is_some();
+                let selector = if rename {
+                    "group-menu-rename"
+                } else {
+                    "group-menu-create-instance"
+                };
+                btn(&self.theme, "", ButtonVariant::MenuItem)
+                    .id(selector)
+                    .debug_selector(move || selector.into())
+                    .aria_label(label)
+                    .role(gpui::accesskit::Role::MenuItem)
+                    .tab_stop(!disabled)
+                    .w_full()
+                    .justify_start()
+                    .text_xs()
+                    .px_2()
+                    .gap_2()
+                    .when(disabled, |button| button.opacity(0.5).cursor_default())
+                    .child(icon(glyph, 14.0))
+                    .child(label)
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        if disabled {
+                            return;
+                        }
+                        if rename {
+                            v.open_group_dialog(GroupDialogKind::Rename(target.clone()), cx);
+                        } else {
+                            v.open_new_instance_in_group(target.clone(), cx);
+                        }
+                    }))
+            }),
         )
     }
     fn apply_groups(&mut self, state: GroupsState) {

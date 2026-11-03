@@ -2,11 +2,12 @@
 use super::{instance_actions::MaintenanceKind, DetailTab, LauncherRoot};
 use crate::state::format_bytes;
 use crate::ui::{
-    badge, btn, icon, icon_btn, mix, progress_bar, tab_btn, tint, BadgeKind, ButtonVariant,
+    badge, btn, icon, icon_btn, mix, progress_bar, progress_ring, spinner, tab_btn, tint, BadgeKind,
+    ButtonVariant,
 };
 use gpui::{
-    div, img, prelude::*, px, relative, Context, Div, FontWeight, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Point, Window,
+    div, img, prelude::*, px, relative, Animation, AnimationExt, Context, Div, FontWeight,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, Window,
 };
 use industrialis_backend::{instances::InstanceInfo, paths::LauncherPaths};
 use industrialis_core::{
@@ -180,14 +181,6 @@ impl LauncherRoot {
             self.open_icon_dialog(id, cx);
         } else if action == 7 {
             self.open_group_dialog(super::library_groups::GroupDialogKind::Assign(id), cx);
-        } else if action == 8 || action == 9 {
-            self.edit_groups(
-                industrialis_backend::groups::GroupChange::Move {
-                    id,
-                    up: action == 8,
-                },
-                cx,
-            );
         } else if action == 5 {
             self.select_instance(id, cx);
             self.instance_ui.detail_tab = DetailTab::Settings;
@@ -227,33 +220,42 @@ impl LauncherRoot {
         }
         if matches!(target, MenuTarget::Library) {
             let disabled = self.groups_ui.busy || self.closing.is_some();
-            let item = btn(&self.theme, "New group", ButtonVariant::Ghost)
+            let item = btn(&self.theme, "", ButtonVariant::MenuItem)
                 .id("library-new-group")
                 .debug_selector(|| "library-new-group".into())
+                .aria_label("New group")
                 .role(gpui::accesskit::Role::MenuItem)
                 .tab_stop(!disabled)
                 .w_full()
                 .justify_start()
                 .text_xs()
+                .px_2()
+                .gap_2()
                 .when(disabled, |button| button.opacity(0.5).cursor_default())
+                .child(icon("folder", 14.0))
+                .child("New group")
                 .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
                     if !disabled {
                         v.open_group_dialog(super::library_groups::GroupDialogKind::Create, cx);
                     }
                 }));
             let import_disabled = self.closing.is_some();
-            let import = btn(&self.theme, "Import from Prism…", ButtonVariant::Ghost)
+            let import = btn(&self.theme, "", ButtonVariant::MenuItem)
                 .id("library-import-prism")
                 .debug_selector(|| "library-import-prism".into())
+                .aria_label("Import from Prism…")
                 .role(gpui::accesskit::Role::MenuItem)
                 .tab_stop(!import_disabled)
                 .w_full()
                 .justify_start()
                 .text_xs()
+                .px_2()
                 .gap_2()
                 .when(import_disabled, |button| {
                     button.opacity(0.5).cursor_default()
                 })
+                .child(icon("archive", 14.0))
+                .child("Import from Prism…")
                 .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
                     if !import_disabled {
                         v.open_prism_import(None, false, cx);
@@ -306,17 +308,15 @@ impl LauncherRoot {
                 ("trash-2", "Delete instance", 3),
                 ("image", "Change icon...", 10),
                 ("folder-open", "Change group...", 7),
-                ("chevron-up", "Move earlier", 8),
-                ("chevron-down", "Move later", 9),
             ]
             .into_iter()
             .map(|(glyph, label, action)| {
                 let id = id.clone();
-                let disabled = (busy && !matches!(action, 1 | 5 | 6 | 7 | 8 | 9 | 12))
-                    || (matches!(action, 7 | 8 | 9) && self.groups_ui.busy)
+                let disabled = (busy && !matches!(action, 1 | 5 | 6 | 7 | 12))
+                    || (action == 7 && self.groups_ui.busy)
                     || (action == 12 && self.catalog_ui.loading)
                     || (frozen && matches!(action, 0 | 4 | 12));
-                btn(t, "", ButtonVariant::Ghost)
+                btn(t, "", ButtonVariant::MenuItem)
                     .id(format!("instance-menu-action:{action}"))
                     .aria_label(label)
                     .debug_selector(move || format!("instance-menu-action:{action}").into())
@@ -336,7 +336,7 @@ impl LauncherRoot {
                     }))
             }),
         );
-        Some(self.library_menu_overlay(menu, *position, 408., window, cx))
+        Some(self.library_menu_overlay(menu, *position, 328., window, cx))
     }
     fn library_menu_overlay(
         &self,
@@ -446,19 +446,28 @@ impl LauncherRoot {
         let right_id = id.clone();
         let running = self.data.running.get(&id).is_some_and(|(_, alive)| *alive);
         let starting = self.data.launching.contains(&id);
-        let active = self
+        let active_entry = self
             .processes_ui
             .history
             .sorted()
             .into_iter()
             .find(|(_, p)| {
                 p.id == id && p.status == Status::Running && p.operation != Operation::Copy
-            })
-            .map(|(_, p)| p);
-        let caption = if let Some(p) = active {
-            format!("{} · {}", p.operation.label(), p.progress_text())
+            });
+        let (active_key, active) = match active_entry {
+            Some((key, p)) => (Some(key.to_string()), Some(p)),
+            None => (None, None),
+        };
+        let update = self.pack_status(pack_version(info));
+        let update_available = !imported_frozen(info)
+            && update.status
+                == industrialis_core::pack_version::PackUpdateStatus::UpdateAvailable;
+        let caption = if starting {
+            vec!["Launching…".to_string()]
+        } else if let Some(p) = active {
+            vec![p.operation.label().to_string(), p.progress_text()]
         } else {
-            format!("{} · {}", pack_version(info), format_bytes(info.size_bytes))
+            vec![pack_version(info).to_string(), format_bytes(info.size_bytes)]
         };
         let drag_owner = cx.entity().downgrade();
         let dragged = super::library_groups::DraggedInstance {
@@ -503,6 +512,8 @@ impl LauncherRoot {
             .group("instance-tile")
             .child(self.workspace_ui.drag.measure_tile(info.id.clone()))
             .w(px(144.0))
+            .h(px(117.0))
+            .overflow_hidden()
             .flex_shrink_0()
             .p(px(10.0))
             .rounded(px(6.0))
@@ -550,14 +561,21 @@ impl LauncherRoot {
                     )
                     .child(
                         div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .gap_1()
+                            .w_full()
                             .text_size(px(10.0))
                             .text_color(t.muted_foreground())
-                            .text_center()
-                            .child(caption),
+                            .children(caption.into_iter().map(|part| {
+                                div().min_w_0().text_ellipsis().child(part)
+                            })),
                     ),
             )
             .child(
                 icon_btn(t, "ellipsis", ButtonVariant::Ghost)
+                    .id(format!("instance-menu:{}", info.id))
                     .aria_label(format!("Instance actions: {}", display_name(info)))
                     .absolute()
                     .top(px(6.0))
@@ -587,11 +605,104 @@ impl LauncherRoot {
                     v.play(id.clone(), cx);
                 }
             }));
-        if !imported_frozen(info)
-            && self.pack_status(pack_version(info)).status
-                == industrialis_core::pack_version::PackUpdateStatus::UpdateAvailable
-        {
-            tile = tile.child(div().text_xs().child("Update available"));
+        let status_badge = if let Some(p) = active {
+            let process_key = active_key.clone().unwrap_or_default();
+            let selector = format!("instance-progress:{}", info.id);
+            let ring_key = format!("instance-progress-ring:{}", info.id);
+            let spinner_key = format!("instance-progress-spinner:{}", info.id);
+            let glyph = match p.operation {
+                Operation::Update | Operation::Install => "download",
+                Operation::Reinstall => "refresh-cw",
+                Operation::Delete => "trash-2",
+                Operation::Copy => "copy",
+                Operation::Import => "archive",
+            };
+            let label = format!(
+                "{} {:.0}% — open process",
+                p.operation.label(),
+                p.pct * 100.0
+            );
+            Some(
+                btn(t, "", ButtonVariant::Ghost)
+                    .id(selector.clone())
+                    .aria_label(label)
+                    .debug_selector(move || selector.clone().into())
+                    .absolute()
+                    .top(px(6.0))
+                    .left(px(6.0))
+                    .size(px(28.0))
+                    .px_0()
+                    .gap(px(0.0))
+                    .rounded_full()
+                    .bg(tint(t.primary(), 0.12))
+                    .border_color(gpui::rgba(0x00000000))
+                    .text_color(t.primary())
+                    .child(
+                        div()
+                            .absolute()
+                            .top(px(-4.0))
+                            .left(px(-4.0))
+                            .size(px(36.0))
+                            .rounded_full()
+                            .bg(t.primary())
+                            .with_animation(
+                                format!("instance-progress-halo:{}", info.id),
+                                Animation::new(std::time::Duration::from_millis(1600)).repeat(),
+                                |halo, phase| {
+                                    let pulse = ((phase * std::f32::consts::TAU).sin() + 1.0) / 2.0;
+                                    halo.opacity(0.06 + 0.12 * pulse)
+                                },
+                            ),
+                    )
+                    .child(spinner(spinner_key, glyph, 16.0))
+                    .child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .child(progress_ring(
+                                ring_key,
+                                p.pct as f32,
+                                tint(t.primary(), 0.28),
+                                t.primary(),
+                            )),
+                    )
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        v.select_process(process_key.clone(), cx);
+                    }))
+                    .into_any_element(),
+            )
+        } else if update_available {
+            let update_id = info.id.clone();
+            let update_selector = format!("instance-update:{}", info.id);
+            let label = update
+                .latest_version
+                .as_deref()
+                .map(|version| format!("Pack update available: {version}"))
+                .unwrap_or_else(|| "Pack update available".to_string());
+            Some(
+                icon_btn(t, "download", ButtonVariant::Ghost)
+                    .id(update_selector.clone())
+                    .aria_label(label)
+                    .debug_selector(move || update_selector.clone().into())
+                    .absolute()
+                    .top(px(6.0))
+                    .left(px(6.0))
+                    .size(px(28.0))
+                    .rounded_full()
+                    .bg(tint(t.primary(), 0.12))
+                    .text_color(t.primary())
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        v.open_maintenance(update_id.clone(), MaintenanceKind::Update, cx);
+                    }))
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
+        if let Some(badge) = status_badge {
+            tile = tile.child(badge);
         }
         if running {
             tile = tile.child(
@@ -603,17 +714,6 @@ impl LauncherRoot {
                     .rounded_full()
                     .bg(gpui::rgb(0x37d67a)),
             );
-        }
-        if starting {
-            tile = tile.child(
-                div()
-                    .text_size(px(10.0))
-                    .text_color(t.muted_foreground())
-                    .child("Launching…"),
-            );
-        }
-        if let Some(p) = active {
-            tile = tile.child(progress_bar(t, p.pct).h(px(4.0)));
         }
         tile.into_any_element()
     }
@@ -1326,6 +1426,80 @@ mod tests {
     use super::*;
     use crate::views::test_support::Fixture;
     use gpui::{size, TestAppContext, VisualTestContext};
+
+    #[gpui::test]
+    fn update_badge_keeps_instance_tiles_the_same_height(cx: &mut TestAppContext) {
+        let fixture = Fixture::new(&["current", "outdated"]);
+        for (id, version) in [("current", "2.9.0"), ("outdated", "2.8.0")] {
+            std::fs::write(
+                fixture.paths.settings_path(id).unwrap(),
+                serde_json::json!({
+                    "name": id,
+                    "pack_version": version,
+                    "pack_java_type": "java17+"
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+        let (window, _root) = fixture.open(cx, |v| {
+            v.catalog_ui.versions = Some(std::collections::HashMap::from([
+                (
+                    "2.8.0".to_string(),
+                    industrialis_core::pack_version::PackVersionMeta {
+                        title: "Stable release".to_string(),
+                        release_date: "2025/01/01".to_string(),
+                        max_java_version: 25,
+                    },
+                ),
+                (
+                    "2.9.0".to_string(),
+                    industrialis_core::pack_version::PackVersionMeta {
+                        title: "Stable release".to_string(),
+                        release_date: "2026/01/01".to_string(),
+                        max_java_version: 25,
+                    },
+                ),
+            ]));
+        });
+        cx.update_window(window.into(), |_, w, cx| w.draw(cx).clear(cx))
+            .unwrap();
+        let mut visual = VisualTestContext::from_window(window.into(), cx);
+        let current = visual.debug_bounds("instance-tile:current").unwrap();
+        let outdated = visual.debug_bounds("instance-tile:outdated").unwrap();
+        assert_eq!(current.size.height, outdated.size.height);
+        assert!(visual.debug_bounds("instance-update:outdated").is_some());
+        assert!(visual.debug_bounds("instance-update:current").is_none());
+        fixture.cleanup();
+    }
+
+    #[gpui::test]
+    fn updating_instance_renders_a_progress_badge(cx: &mut TestAppContext) {
+        let fixture = Fixture::new(&["pack"]);
+        let (window, _root) = fixture.open(cx, |v| {
+            let token =
+                v.processes_ui
+                    .history
+                    .start(Operation::Update, "pack", "GTNH SSP");
+            v.processes_ui.history.progress(
+                &token,
+                "updating",
+                0.5,
+                Some("Half way".into()),
+                (None, None, None),
+            );
+        });
+        cx.update_window(window.into(), |_, w, cx| w.draw(cx).clear(cx))
+            .unwrap();
+        let mut visual = VisualTestContext::from_window(window.into(), cx);
+        let badge = visual
+            .debug_bounds("instance-progress:pack")
+            .expect("active instance must show its progress badge");
+        let tile = visual.debug_bounds("instance-tile:pack").unwrap();
+        assert_eq!(badge.size.width, px(28.0));
+        assert_eq!(tile.size.height, px(117.0));
+        fixture.cleanup();
+    }
 
     #[gpui::test]
     async fn closing_details_expands_library_and_reopening_preserves_split(

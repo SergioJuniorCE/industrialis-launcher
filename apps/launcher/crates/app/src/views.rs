@@ -979,7 +979,18 @@ impl LauncherRoot {
         footer: gpui::Div,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let frame = crate::ui::dialog_shell(&self.theme, title, body, footer);
+        self.dialog_frame_with_width(460.0, title, body, footer, cx)
+    }
+
+    fn dialog_frame_with_width(
+        &self,
+        width: f32,
+        title: &str,
+        body: gpui::Div,
+        footer: gpui::Div,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let frame = crate::ui::dialog_shell_with_width(&self.theme, title, width, body, footer);
         frame.on_key_down(cx.listener(
             |this: &mut Self, event: &KeyDownEvent, _window: &mut Window, cx| {
                 if event.keystroke.key == "escape" {
@@ -1005,7 +1016,7 @@ impl LauncherRoot {
             .justify_between()
             .gap_2()
             .child(
-                crate::ui::btn(&self.theme, cancel_label, ButtonVariant::Ghost).on_click(
+                crate::ui::btn(&self.theme, cancel_label, ButtonVariant::Outline).on_click(
                     cx.listener(
                         |this: &mut Self, _event: &gpui::ClickEvent, _window: &mut Window, cx| {
                             this.close_dialog(cx)

@@ -71,6 +71,16 @@ fn main() {
     // Synchronous boot: local files only, no network.
     let (instances, accounts, running, settings, issues) = rt.block_on(async {
         let mut issues = Vec::new();
+        match industrialis_backend::install::recover_interrupted_maintenance(&paths).await {
+            Ok(recovered) if !recovered.is_empty() => issues.push(format!(
+                "Recovered an interrupted pack update for {}.",
+                recovered.join(", ")
+            )),
+            Err(error) => issues.push(format!(
+                "Could not recover an interrupted pack update: {error:#}"
+            )),
+            _ => {}
+        }
         let instances =
             match industrialis_backend::instances::load_instances_with_issues(&paths).await {
                 Ok((instances, warnings)) => {

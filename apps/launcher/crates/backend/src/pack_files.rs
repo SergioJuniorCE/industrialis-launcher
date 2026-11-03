@@ -5,6 +5,7 @@
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -13,7 +14,7 @@ use std::time::{Duration, Instant};
 use crate::fs_utils::{copy_tree, exists, remove_if_exists};
 use crate::pack_cache::{copy_cached_pack_to_staging, lookup_pack_cache, store_pack_cache};
 use crate::pack_prep::{flatten_nested_pack, persistent_custom_mods_dir};
-use crate::paths::LauncherPaths;
+use crate::paths::{sanitize_name, LauncherPaths};
 
 pub const VERSIONS_URL: &str =
     "https://raw.githubusercontent.com/GTNewHorizons/GTNewHorizons.github.io/refs/heads/master/public/versions.json";
@@ -361,67 +362,209 @@ impl ProgressCtx {
     }
 }
 
+const DOWNLOAD_ATTEMPTS: u32 = 3;
+const DOWNLOAD_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+const DOWNLOAD_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_PACK_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
 async fn download_file(
     ctx: &ProgressCtx,
     url: &str,
     destination: &Path,
 ) -> Result<(), anyhow::Error> {
-    ctx.progress("downloading", 0.0, |p| {
-        p.log_line = Some("Downloading pack archive…".to_string())
-    });
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(60))
+        .connect_timeout(DOWNLOAD_CONNECT_TIMEOUT)
         .user_agent("IndustrialisLauncher/0.1")
         .build()?;
-    let mut response = client
-        .get(url)
-        .send()
+    download_with_retry(ctx, &client, url, destination).await
+}
+
+async fn download_with_retry(
+    ctx: &ProgressCtx,
+    client: &reqwest::Client,
+    url: &str,
+    destination: &Path,
+) -> Result<(), anyhow::Error> {
+    let mut last_error = None;
+    for attempt in 0..DOWNLOAD_ATTEMPTS {
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_secs(1 << (attempt - 1))).await;
+            ctx.progress("downloading", 0.0, |p| {
+                p.log_line = Some(format!(
+                    "Retrying pack download ({}/{DOWNLOAD_ATTEMPTS})",
+                    attempt + 1
+                ))
+            });
+        }
+        match download_attempt(ctx, client, url, destination).await {
+            Ok(()) => return Ok(()),
+            Err((error, retryable)) => {
+                last_error = Some(error);
+                if !retryable {
+                    break;
+                }
+            }
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("pack download failed")))
+}
+
+fn content_range_total(value: &str) -> Option<u64> {
+    value.rsplit_once('/')?.1.parse().ok()
+}
+
+async fn download_attempt(
+    ctx: &ProgressCtx,
+    client: &reqwest::Client,
+    url: &str,
+    destination: &Path,
+) -> Result<(), (anyhow::Error, bool)> {
+    let existing = tokio::fs::metadata(destination)
         .await
-        .map_err(|e| anyhow::anyhow!("pack download failed: {e}"))?;
-    if !response.status().is_success() {
-        anyhow::bail!("pack download failed: HTTP {}", response.status());
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    let mut request = client.get(url);
+    if existing > 0 {
+        request = request.header(reqwest::header::RANGE, format!("bytes={existing}-"));
     }
-    let total = response.content_length().unwrap_or(0);
+    let response = tokio::time::timeout(DOWNLOAD_IDLE_TIMEOUT, request.send())
+        .await
+        .map_err(|_| (anyhow::anyhow!("pack download timed out while connecting"), true))?
+        .map_err(|error| (anyhow::anyhow!("pack download failed: {error}"), true))?;
+    let status = response.status();
+    if status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE && existing > 0 {
+        let _ = tokio::fs::remove_file(destination).await;
+        return Err((
+            anyhow::anyhow!("pack download resume point was rejected"),
+            true,
+        ));
+    }
+    if !status.is_success() {
+        let retryable = status.is_server_error()
+            || status == reqwest::StatusCode::REQUEST_TIMEOUT
+            || status == reqwest::StatusCode::TOO_MANY_REQUESTS;
+        return Err((
+            anyhow::anyhow!("pack download failed: HTTP {status}"),
+            retryable,
+        ));
+    }
+    let resuming = status == reqwest::StatusCode::PARTIAL_CONTENT && existing > 0;
+    if status == reqwest::StatusCode::PARTIAL_CONTENT && !resuming {
+        return Err((
+            anyhow::anyhow!("pack server returned an unexpected partial response"),
+            true,
+        ));
+    }
+    let total = if resuming {
+        response
+            .headers()
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|value| value.to_str().ok())
+            .and_then(content_range_total)
+            .or_else(|| response.content_length().map(|length| existing + length))
+    } else {
+        response.content_length()
+    };
+    if total.is_some_and(|total| total > MAX_PACK_BYTES) {
+        return Err((
+            anyhow::anyhow!("pack archive is larger than the supported limit"),
+            false,
+        ));
+    }
+    let mut response = response;
+    let mut downloaded = if resuming { existing } else { 0 };
     if let Some(parent) = destination.parent() {
-        tokio::fs::create_dir_all(parent).await?;
+        tokio::fs::create_dir_all(parent).await.map_err(|error| {
+            (
+                anyhow::anyhow!("could not create the pack download directory: {error}"),
+                false,
+            )
+        })?;
     }
-    let mut file = tokio::fs::File::create(destination).await?;
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(resuming)
+        .truncate(!resuming)
+        .open(destination)
+        .await
+        .map_err(|error| {
+            (
+                anyhow::anyhow!("could not open the pack download: {error}"),
+                false,
+            )
+        })?;
+    let pct = total
+        .filter(|total| *total > 0)
+        .map(|total| downloaded as f64 / total as f64)
+        .unwrap_or(0.0);
+    ctx.progress("downloading", pct, |p| {
+        p.log_line = Some(if resuming {
+            format!("Resuming pack archive at {downloaded} bytes…")
+        } else {
+            "Downloading pack archive…".to_string()
+        });
+        p.downloaded_mb = Some(downloaded as f64 / 1024.0 / 1024.0);
+        p.total_mb = total.map(|total| total as f64 / 1024.0 / 1024.0);
+    });
     let started = Instant::now();
-    let mut downloaded = 0u64;
     let mut last_emit = Instant::now() - Duration::from_secs(1);
     loop {
-        let chunk = response
-            .chunk()
+        let chunk = tokio::time::timeout(DOWNLOAD_IDLE_TIMEOUT, response.chunk())
             .await
-            .map_err(|e| anyhow::anyhow!("pack download failed: {e}"))?;
+            .map_err(|_| (anyhow::anyhow!("pack download stalled"), true))?
+            .map_err(|error| (anyhow::anyhow!("pack download failed: {error}"), true))?;
         let Some(bytes) = chunk else { break };
-        tokio::io::AsyncWriteExt::write_all(&mut file, &bytes).await?;
+        if downloaded + bytes.len() as u64 > MAX_PACK_BYTES {
+            return Err((
+                anyhow::anyhow!("pack download exceeded the supported size limit"),
+                false,
+            ));
+        }
+        tokio::io::AsyncWriteExt::write_all(&mut file, &bytes)
+            .await
+            .map_err(|error| {
+                (
+                    anyhow::anyhow!("could not write the pack download: {error}"),
+                    false,
+                )
+            })?;
         downloaded += bytes.len() as u64;
-        let pct = if total > 0 {
-            downloaded as f64 / total as f64
-        } else {
-            0.0
-        };
+        let pct = total
+            .filter(|total| *total > 0)
+            .map(|total| downloaded as f64 / total as f64)
+            .unwrap_or(0.0);
         let now = Instant::now();
         if now - last_emit >= Duration::from_millis(500) || (pct * 100.0).floor() as u64 % 5 == 0 {
             let elapsed = now.duration_since(started).as_secs_f64().max(0.05);
-            let speed = downloaded as f64 / elapsed / 1024.0 / 1024.0;
-            let mb = downloaded as f64 / 1024.0 / 1024.0;
+            let transferred = downloaded.saturating_sub(if resuming { existing } else { 0 });
+            let speed = transferred as f64 / elapsed / 1024.0 / 1024.0;
             ctx.progress("downloading", pct, |p| {
                 p.speed_mbps = Some(speed);
-                p.downloaded_mb = Some(mb);
-                p.total_mb = if total > 0 {
-                    Some(total as f64 / 1024.0 / 1024.0)
-                } else {
-                    None
-                };
+                p.downloaded_mb = Some(downloaded as f64 / 1024.0 / 1024.0);
+                p.total_mb = total.map(|total| total as f64 / 1024.0 / 1024.0);
             });
             last_emit = now;
         }
     }
     // Extraction opens a new handle immediately after this function returns.
-    tokio::io::AsyncWriteExt::flush(&mut file).await?;
+    tokio::io::AsyncWriteExt::flush(&mut file)
+        .await
+        .map_err(|error| {
+            (
+                anyhow::anyhow!("could not flush the pack download: {error}"),
+                false,
+            )
+        })?;
     drop(file);
+    if let Some(total) = total {
+        if downloaded != total {
+            return Err((
+                anyhow::anyhow!("pack download stopped at {downloaded} of {total} bytes"),
+                true,
+            ));
+        }
+    }
     let elapsed = started.elapsed().as_secs_f64().max(0.05);
     let mb = downloaded as f64 / 1024.0 / 1024.0;
     ctx.progress("downloading", 1.0, |p| {
@@ -431,11 +574,7 @@ async fn download_file(
         ));
         p.speed_mbps = Some(downloaded as f64 / elapsed / 1024.0 / 1024.0);
         p.downloaded_mb = Some(mb);
-        p.total_mb = if total > 0 {
-            Some(total as f64 / 1024.0 / 1024.0)
-        } else {
-            None
-        };
+        p.total_mb = total.map(|total| total as f64 / 1024.0 / 1024.0);
     });
     Ok(())
 }
@@ -522,13 +661,28 @@ pub async fn download_and_extract_to_staging(
     staging_parent: &Path,
     operation: &str,
 ) -> Result<PathBuf, anyhow::Error> {
+    ctx.progress("downloading", 0.0, |p| {
+        p.log_line = Some("Fetching the GTNH pack catalog…".to_string())
+    });
     let versions = fetch_gtnh_versions().await?;
     let version = versions
         .get(pack_version)
         .ok_or_else(|| anyhow::anyhow!("pack version not found"))?;
     let url = resolve_pack_download_url(version, java_type);
+    ctx.progress("downloading", 0.0, |p| {
+        p.log_line = Some(format!("Resolved pack {pack_version} ({java_type})"))
+    });
     let staging = staging_parent.join("staging");
-    if let Some(cached) = lookup_pack_cache(paths, pack_version, java_type, &url).await? {
+    let cached = match lookup_pack_cache(paths, pack_version, java_type, &url).await {
+        Ok(cached) => cached,
+        Err(error) => {
+            ctx.progress("cached", 0.0, |p| {
+                p.log_line = Some(format!("Local pack cache is unavailable: {error:#}"))
+            });
+            None
+        }
+    };
+    if let Some(cached) = cached {
         ctx.progress("cached", 1.0, |p| {
             p.log_line = Some(format!(
                 "Using cached pack {pack_version} ({java_type}) — skipping download"
@@ -545,13 +699,30 @@ pub async fn download_and_extract_to_staging(
         }
         return Ok(staging);
     }
-    let zip_path = staging_parent.join("pack.zip");
+    let url_hash = format!("{:x}", Sha256::digest(url.as_bytes()));
+    let zip_path = staging_parent.join(format!(
+        "pack-{}-{}-{}.zip",
+        sanitize_name(pack_version),
+        sanitize_name(java_type),
+        &url_hash[..12]
+    ));
     remove_if_exists(&staging).await?;
     tokio::fs::create_dir_all(&staging).await?;
     download_file(ctx, &url, &zip_path).await?;
-    extract_pack_zip(ctx, &zip_path, &staging).await?;
+    if let Err(error) = extract_pack_zip(ctx, &zip_path, &staging).await {
+        let _ = tokio::fs::remove_file(&zip_path).await;
+        return Err(error);
+    }
     flatten_nested_pack(&staging).await?;
-    store_pack_cache(paths, pack_version, java_type, &url, &staging).await?;
+    // The cache is an optimization; a full disk must not discard a good pack.
+    match store_pack_cache(paths, pack_version, java_type, &url, &staging).await {
+        Ok(()) => ctx.progress("extracting", 1.0, |p| {
+            p.log_line = Some(format!("Pack {pack_version} cached for future installs"))
+        }),
+        Err(error) => ctx.progress("cached", 0.0, |p| {
+            p.log_line = Some(format!("Pack cache could not be updated: {error:#}"))
+        }),
+    }
     if operation == "update-pack" {
         ctx.progress("updating", 0.55, |p| {
             p.log_line = Some("Pack downloaded and extracted to staging".to_string())
@@ -742,5 +913,124 @@ mod tests {
             .unwrap()
             .iter()
             .any(|p| p.stage == "extracting" && p.pct == 1.0));
+    }
+
+    fn serve_download(
+        body: Vec<u8>,
+        honor_range: bool,
+    ) -> (std::net::SocketAddr, std::thread::JoinHandle<String>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0u8; 1024];
+            loop {
+                let read = std::io::Read::read(&mut socket, &mut buffer).unwrap();
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let request = String::from_utf8_lossy(&request).into_owned();
+            let start = request
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    if !name.eq_ignore_ascii_case("range") {
+                        return None;
+                    }
+                    value
+                        .trim()
+                        .strip_prefix("bytes=")?
+                        .strip_suffix('-')?
+                        .parse::<usize>()
+                        .ok()
+                })
+                .unwrap_or(0);
+            if honor_range && start > 0 && start < body.len() {
+                let remaining = &body[start..];
+                let header = format!(
+                    "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nConnection: close\r\n\r\n",
+                    remaining.len(),
+                    start,
+                    body.len() - 1,
+                    body.len()
+                );
+                std::io::Write::write_all(&mut socket, header.as_bytes()).unwrap();
+                std::io::Write::write_all(&mut socket, remaining).unwrap();
+            } else {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                std::io::Write::write_all(&mut socket, header.as_bytes()).unwrap();
+                std::io::Write::write_all(&mut socket, &body).unwrap();
+            }
+            request
+        });
+        (address, handle)
+    }
+
+    #[tokio::test]
+    async fn resumes_a_partial_pack_download() {
+        let dir =
+            std::env::temp_dir().join(format!("industrialis-resume-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let destination = dir.join("pack.zip");
+        let body = b"hello world".to_vec();
+        tokio::fs::write(&destination, b"hello ").await.unwrap();
+        let (address, server) = serve_download(body.clone(), true);
+        let ctx = ProgressCtx {
+            emit: Arc::new(|_| {}),
+            operation: "install".to_string(),
+            id: None,
+        };
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        download_with_retry(
+            &ctx,
+            &client,
+            &format!("http://{address}/pack.zip"),
+            &destination,
+        )
+        .await
+        .unwrap();
+        assert_eq!(tokio::fs::read(&destination).await.unwrap(), body);
+        let request = server.join().unwrap().to_ascii_lowercase();
+        assert!(request.contains("range: bytes=6-"), "{request}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn restarts_when_the_server_ignores_the_resume_range() {
+        let dir =
+            std::env::temp_dir().join(format!("industrialis-restart-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let destination = dir.join("pack.zip");
+        let body = b"complete pack".to_vec();
+        tokio::fs::write(&destination, b"partial").await.unwrap();
+        let (address, server) = serve_download(body.clone(), false);
+        let ctx = ProgressCtx {
+            emit: Arc::new(|_| {}),
+            operation: "install".to_string(),
+            id: None,
+        };
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        download_with_retry(
+            &ctx,
+            &client,
+            &format!("http://{address}/pack.zip"),
+            &destination,
+        )
+        .await
+        .unwrap();
+        assert_eq!(tokio::fs::read(&destination).await.unwrap(), body);
+        server.join().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

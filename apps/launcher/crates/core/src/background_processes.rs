@@ -1,8 +1,13 @@
 //! Background operation history, matching the Electron Processes tab.
 
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 const MAX_LOG_LINES: usize = 5_000;
+
+fn stamped(elapsed: f32, line: impl Into<String>) -> String {
+    format!("[{elapsed:>6.1}s] {}", line.into())
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operation {
@@ -78,16 +83,26 @@ pub struct Process {
     pub total_mb: Option<f64>,
     pub logs: Vec<String>,
     pub status: Status,
+    pub started_at: Instant,
+    pub finished_at: Option<Instant>,
     generation: u64,
 }
 
 impl Process {
     fn append(&mut self, line: String) {
-        self.logs.push(line);
+        self.logs
+            .push(stamped(self.started_at.elapsed().as_secs_f32(), line));
         if self.logs.len() > MAX_LOG_LINES {
             self.logs.drain(..self.logs.len() - MAX_LOG_LINES);
         }
     }
+
+    pub fn elapsed(&self) -> Duration {
+        self.finished_at
+            .unwrap_or_else(Instant::now)
+            .duration_since(self.started_at)
+    }
+
     pub fn progress_text(&self) -> String {
         let mut parts = vec![format!("{:.0}%", self.pct * 100.0)];
         if matches!(self.stage.as_str(), "downloading" | "copying" | "importing") {
@@ -132,8 +147,10 @@ impl Processes {
                 speed_mbps: None,
                 downloaded_mb: None,
                 total_mb: None,
-                logs: vec![format!("{} {name}", operation.label())],
+                logs: vec![stamped(0.0, format!("{} {name}", operation.label()))],
                 status: Status::Running,
+                started_at: Instant::now(),
+                finished_at: None,
                 generation: self.generation,
             },
         );
@@ -179,6 +196,7 @@ impl Processes {
         let Some(p) = self.current(token).filter(|p| p.status == Status::Running) else {
             return false;
         };
+        p.finished_at = Some(Instant::now());
         if error.is_some_and(|e|{
             e.starts_with("Deletion cancelled;") || e.starts_with("Import cancelled;")
         }){p.status=Status::Cancelled;p.stage="cancelled".into();p.append(error.unwrap().into());

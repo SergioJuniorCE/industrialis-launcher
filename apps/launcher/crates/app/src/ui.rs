@@ -2,9 +2,12 @@
 //! rows, all colored from [`ActiveTheme`]. Views attach click handlers with
 //! `cx.listener`; these helpers only build styled elements.
 
+use std::time::Duration;
+
 use gpui::{
-    div, prelude::*, px, relative, App, Div, FontWeight, Hsla, IntoElement, RenderOnce, Rgba, Svg,
-    Window,
+    canvas, div, point, prelude::*, px, relative, Animation, AnimationExt, App, Bounds, Div,
+    ElementId, FontWeight, Hsla, IntoElement, PathBuilder, Pixels, RenderOnce, Rgba, SpringAnimation,
+    SpringConfig, Svg, Transformation, Window,
 };
 
 use crate::theme::{readable_color, ActiveTheme};
@@ -60,28 +63,163 @@ pub enum ButtonVariant {
     Ghost,
     Danger,
     Outline,
+    /// A borderless row inside a bordered menu surface.
+    MenuItem,
+    /// A quiet section row: transparent until it is hovered.
+    Row,
 }
 
 #[derive(IntoElement)]
 pub struct Icon {
     name: &'static str,
     size: f32,
+    rotation: Option<f32>,
 }
 
 pub fn icon(name: &'static str, size: f32) -> Icon {
-    Icon { name, size }
+    Icon {
+        name,
+        size,
+        rotation: None,
+    }
 }
 
 impl Icon {
+    fn with_rotation(mut self, radians: f32) -> Self {
+        self.rotation = Some(radians);
+        self
+    }
+
     fn into_svg(self, inherited_color: Hsla) -> Svg {
-        gpui::svg()
+        let svg = gpui::svg()
             .path(format!("icons/{}.svg", self.name))
             .size(px(self.size))
             .flex_shrink_0()
             // Svg::paint requires its own color in GPUI 0.3.8. Resolve the
             // parent's text style during layout, including button/hover colors.
-            .text_color(inherited_color)
+            .text_color(inherited_color);
+        match self.rotation {
+            Some(rotation) => {
+                svg.with_transformation(Transformation::rotate(gpui::radians(rotation)))
+            }
+            None => svg,
+        }
     }
+}
+
+/// Rotates a loader glyph while an operation is active. The id must stay
+/// stable while the operation runs and be unique for each visible spinner.
+pub fn spinner(
+    id: impl Into<ElementId>,
+    name: &'static str,
+    size: f32,
+) -> impl IntoElement {
+    icon(name, size).with_animation(
+        id,
+        Animation::new(Duration::from_millis(900)).repeat(),
+        |icon, phase| icon.with_rotation(phase * std::f32::consts::TAU),
+    )
+}
+
+#[derive(IntoElement)]
+struct ProgressRing {
+    progress: f32,
+    track: Rgba,
+    fill: Rgba,
+}
+
+impl ProgressRing {
+    fn with_progress(mut self, progress: f32) -> Self {
+        self.progress = progress.clamp(0.0, 1.0);
+        self
+    }
+}
+
+impl RenderOnce for ProgressRing {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        let progress = self.progress;
+        let track = self.track;
+        let fill = self.fill;
+        canvas(
+            move |bounds, _, _| bounds,
+            move |bounds, _, window, _| {
+                paint_progress_ring(bounds, progress, track, fill, window);
+            },
+        )
+        .absolute()
+        .inset_0()
+    }
+}
+
+fn paint_progress_ring(
+    bounds: Bounds<Pixels>,
+    progress: f32,
+    track: Rgba,
+    fill: Rgba,
+    window: &mut Window,
+) {
+    const STROKE: f32 = 2.5;
+    let size = f32::from(bounds.size.width).min(f32::from(bounds.size.height));
+    if size <= STROKE {
+        return;
+    }
+    let center = bounds.center();
+    let radius = (size - STROKE) / 2.0;
+    let top = point(center.x, center.y - px(radius));
+    let bottom = point(center.x, center.y + px(radius));
+    let radii = point(px(radius), px(radius));
+
+    let mut track_path = PathBuilder::stroke(px(STROKE));
+    track_path.move_to(top);
+    track_path.arc_to(radii, px(0.0), false, true, bottom);
+    track_path.arc_to(radii, px(0.0), false, true, top);
+    if let Ok(path) = track_path.build() {
+        window.paint_path(path, track);
+    }
+
+    if progress <= 0.0 {
+        return;
+    }
+    let mut progress_path = PathBuilder::stroke(px(STROKE));
+    progress_path.move_to(top);
+    if progress >= 1.0 {
+        progress_path.arc_to(radii, px(0.0), false, true, bottom);
+        progress_path.arc_to(radii, px(0.0), false, true, top);
+    } else {
+        let angle = -std::f32::consts::FRAC_PI_2 + progress * std::f32::consts::TAU;
+        let end = point(
+            center.x + px(radius * angle.cos()),
+            center.y + px(radius * angle.sin()),
+        );
+        progress_path.arc_to(radii, px(0.0), progress > 0.5, true, end);
+    }
+    if let Ok(path) = progress_path.build() {
+        window.paint_path(path, fill);
+    }
+}
+
+/// A circular progress indicator that springs toward each new target. The id
+/// must stay stable for the lifetime of the indicator.
+pub fn progress_ring(
+    id: impl Into<ElementId>,
+    progress: f32,
+    track: Rgba,
+    fill: Rgba,
+) -> impl IntoElement {
+    let target = progress.clamp(0.0, 1.0);
+    ProgressRing {
+        progress: target,
+        track,
+        fill,
+    }
+    .with_spring(
+        id,
+        SpringAnimation::new(SpringConfig::new(170.0, 26.0, 1.0))
+            .to(target)
+            .from(0.0)
+            .with_epsilon(0.002),
+        |ring, progress| ring.with_progress(progress),
+    )
 }
 
 impl RenderOnce for Icon {
@@ -226,6 +364,8 @@ pub fn tab_btn(theme: &ActiveTheme, label: &str, selected: bool) -> gpui::Statef
         })
 }
 
+/// The button baseline. Filled and outlined variants share the same height,
+/// radius, focus ring and 1px token border; Ghost and menu rows stay quiet.
 #[track_caller]
 pub fn btn(theme: &ActiveTheme, label: &str, variant: ButtonVariant) -> gpui::Stateful<Div> {
     let (bg, fg, hover) = match variant {
@@ -254,23 +394,70 @@ pub fn btn(theme: &ActiveTheme, label: &str, variant: ButtonVariant) -> gpui::St
             readable_color(theme.card_foreground(), theme.card(), 4.5),
             theme.accent(),
         ),
+        ButtonVariant::MenuItem => (
+            gpui::rgba(0x00000000),
+            theme.foreground(),
+            tint(theme.primary(), 0.14),
+        ),
+        ButtonVariant::Row => (
+            gpui::rgba(0x00000000),
+            theme.foreground(),
+            theme.secondary(),
+        ),
     };
-    button_base(label)
-        .bg(bg)
-        .text_color(fg)
-        .when(variant == ButtonVariant::Outline, |el| {
-            el.border_1().border_color(theme.control_border(bg))
-        })
-        .hover(move |style| {
-            let style = style.bg(hover);
-            if variant == ButtonVariant::Outline {
-                style
-                    .border_color(theme.control_border(hover))
-                    .text_color(readable_color(theme.accent_foreground(), hover, 4.5))
-            } else {
-                style
-            }
-        })
+    let bordered = !matches!(
+        variant,
+        ButtonVariant::Ghost | ButtonVariant::MenuItem | ButtonVariant::Row
+    );
+    let border = match variant {
+        ButtonVariant::Primary => {
+            readable_color(theme.primary_foreground(), bg, 3.0)
+        }
+        ButtonVariant::Secondary => {
+            readable_color(theme.secondary_foreground(), bg, 3.0)
+        }
+        ButtonVariant::Danger => {
+            readable_color(theme.destructive_foreground(), bg, 3.0)
+        }
+        ButtonVariant::Outline => theme.control_border(bg),
+        ButtonVariant::Ghost | ButtonVariant::MenuItem | ButtonVariant::Row => {
+            gpui::rgba(0x00000000)
+        }
+    };
+    let hover_border = match variant {
+        ButtonVariant::Primary => {
+            readable_color(theme.primary_foreground(), hover, 3.0)
+        }
+        ButtonVariant::Secondary => {
+            readable_color(theme.secondary_foreground(), hover, 3.0)
+        }
+        ButtonVariant::Danger => {
+            readable_color(theme.destructive_foreground(), hover, 3.0)
+        }
+        ButtonVariant::Outline => theme.control_border(hover),
+        ButtonVariant::Ghost | ButtonVariant::MenuItem | ButtonVariant::Row => {
+            gpui::rgba(0x00000000)
+        }
+    };
+    let button = button_base(label).bg(bg).text_color(fg);
+    let button = if bordered {
+        button.border_1().border_color(border)
+    } else {
+        button
+    };
+    button.hover(move |style| {
+        let style = style.bg(hover);
+        let style = if bordered {
+            style.border_color(hover_border)
+        } else {
+            style
+        };
+        if variant == ButtonVariant::Outline {
+            style.text_color(readable_color(theme.accent_foreground(), hover, 4.5))
+        } else {
+            style
+        }
+    })
 }
 
 // GPUI permits one hover refinement per element, so tabs and buttons each
@@ -336,7 +523,7 @@ pub fn badge(theme: &ActiveTheme, label: &str, kind: BadgeKind) -> Div {
         .px(px(10.0))
         .py(px(2.0))
         .border_1()
-        .border_color(gpui::rgba(0x00000000))
+        .border_color(readable_color(fg, bg, 3.0))
         .rounded(px(6.0))
         .font_weight(FontWeight::SEMIBOLD)
         .bg(bg)
@@ -412,6 +599,77 @@ pub fn list_item(theme: &ActiveTheme, label: &str, selected: bool) -> gpui::Stat
                 } else {
                     theme.control_border(theme.accent())
                 })
+        })
+}
+
+/// A row inside a shared list surface. The surface owns the outline; the row
+/// only carries its selection and hover state, so long lists stay quiet.
+#[track_caller]
+pub fn select_row(theme: &ActiveTheme, selected: bool) -> gpui::Stateful<Div> {
+    button_base("")
+        .w_full()
+        .min_w_0()
+        .flex_shrink_0()
+        .justify_between()
+        .h(px(34.0))
+        .px(px(12.0))
+        .rounded(px(0.0))
+        .bg(if selected {
+            tint(theme.primary(), 0.12)
+        } else {
+            gpui::rgba(0x00000000)
+        })
+        .text_color(theme.foreground())
+        .hover(move |style| {
+            style
+                .bg(if selected {
+                    tint(theme.primary(), 0.16)
+                } else {
+                    tint(theme.accent(), 0.3)
+                })
+                .text_color(theme.foreground())
+        })
+}
+
+/// The single surface around mutually exclusive choices. Use with [`segment`].
+pub fn segmented_control(theme: &ActiveTheme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(2.0))
+        .p(px(2.0))
+        .rounded(px(8.0))
+        .bg(tint(theme.muted(), 0.45))
+        .border_1()
+        .border_color(tint(theme.border(), 0.4))
+}
+
+/// One choice inside a [`segmented_control`]. No border of its own.
+#[track_caller]
+pub fn segment(theme: &ActiveTheme, label: &str, selected: bool) -> gpui::Stateful<Div> {
+    button_base(label)
+        .h(px(28.0))
+        .px(px(12.0))
+        .rounded(px(6.0))
+        .text_xs()
+        .bg(if selected {
+            tint(theme.primary(), 0.14)
+        } else {
+            gpui::rgba(0x00000000)
+        })
+        .text_color(if selected {
+            theme.foreground()
+        } else {
+            theme.muted_foreground()
+        })
+        .hover(move |style| {
+            style
+                .bg(if selected {
+                    tint(theme.primary(), 0.18)
+                } else {
+                    tint(theme.accent(), 0.3)
+                })
+                .text_color(theme.foreground())
         })
 }
 
