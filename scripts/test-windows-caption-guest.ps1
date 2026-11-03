@@ -6,7 +6,7 @@ if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $env:COMPUTERNAME -eq $marker.hos
     $marker.kind -ne 'launcher-caption-acceptance-v1') { throw 'Disposable caption guest required' }
 $report = @{ nonce=$marker.nonce; guest=$true; passed=$false }
 try {
-  # GPUI debug builds compile shaders from their baked-in source path. Create
+  # UI framework debug builds compile shaders from their baked-in source path. Create
   # that path only inside this disposable guest, from read-only input copies.
   New-Item -ItemType Directory -Path $marker.shaderPath -Force | Out-Null
   Get-ChildItem -LiteralPath "$inputRoot/shaders" -File | Copy-Item -Destination $marker.shaderPath

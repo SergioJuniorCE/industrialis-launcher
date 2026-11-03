@@ -140,7 +140,7 @@ industrialis/
 ## Tech stack
 
 - **Monorepo:** pnpm workspaces, Turborepo
-- **Launcher:** Rust, Tokio, native gpui-base editor and Syntect
+- **Launcher:** Rust, Tokio, native code editor and Syntect
 - **Website:** Next.js 16, React 19
 - **Server:** Node, Fastify, Dockerode, Commander
 - **Dashboard:** Astro 5, React islands, Tailwind CSS 4

@@ -11,7 +11,7 @@ export XDG_RUNTIME_DIR="$runtime" LAUNCHER_ISOLATED_VIRTUAL_DESKTOP=1 PYTHONDONT
 # presents a black client; the same binary paints normally with Mesa OpenGL.
 # Select that software backend explicitly for this owned virtual desktop only.
 # Both names are needed for newer and older Vulkan loaders. Real desktop runs
-# keep GPUI's default Vulkan/OpenGL selection; the portable PNG check stays strict.
+# keep the UI framework's default Vulkan/OpenGL selection; the portable PNG check stays strict.
 export LIBGL_ALWAYS_SOFTWARE=1 VK_DRIVER_FILES=/dev/null VK_ICD_FILENAMES=/dev/null
 dbus-run-session -- xvfb-run -a -s '-screen 0 1600x900x24' sh -c '
   openbox >"$XDG_RUNTIME_DIR/openbox.log" 2>&1 &

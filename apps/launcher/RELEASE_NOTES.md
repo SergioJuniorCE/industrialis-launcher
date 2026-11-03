@@ -12,7 +12,7 @@ This release makes GTNH pack updates atomic and recoverable, preserves user-modi
 - The update and clean-reinstall dialog has been redesigned with pack mod change counts, custom mod selection, live analysis progress, searchable Stable/Beta version lists, and an optional instance copy before the operation.
 - Process cards show animated spinners and progress rings while pack operations run.
 - The status bar reports launcher update state and opens the update dialog. Settings → About and the update dialog include a changelog viewer with recent published stable release notes.
-- The retired internal codename no longer appears in scripts, packaging paths, or the Windows install marker. Existing native installations that still use `gpui-install.json` upgrade in place.
+- Existing native installations upgrade in place, including installations created before the public product name change.
 
 ## Downloads
 

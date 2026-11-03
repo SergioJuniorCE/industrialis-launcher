@@ -94,7 +94,7 @@ mod tests {
     #[tokio::test]
     async fn bundled_custom_patch_is_authoritative_and_missing_custom_components_fail_closed() {
         let root =
-            std::env::temp_dir().join(format!("gpui-metadata-bundled-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("industrialis-metadata-bundled-{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(root.join("patches"))
             .await
             .unwrap();

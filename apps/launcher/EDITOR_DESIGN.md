@@ -68,7 +68,7 @@ shared profile. Design variance 3, motion intensity 1, visual density 7.
 
 The supplied screenshot uses Sandstone: bronze actions, warm near-black surfaces,
 small system text, a fixed file-list height and almost indistinguishable panels.
-The previous UI editor already uses gpui-base's native EditorState, with line
+The previous UI editor already uses the native editor framework's EditorState, with line
 numbers, a search engine, selection and undo; it never installs a syntax highlighter
 or renders the search input.
 Forge's lossless Easy editor exists, but a single conditional mode-switch button
@@ -77,7 +77,7 @@ the layout lets rows shrink and spill outside the usable scrolling area.
 
 Use the design-taste-frontend skill's audit, contrast and preservation guidance.
 Its marketing layouts and web editor recommendations do not apply to this native
-product. Keep the pinned framework/gpui-base editing engine; Syntect supplies maintained
+product. Keep the pinned native editing engine; Syntect supplies maintained
 grammars through the engine's supported InputHighlighter seam. Forge gets a small
 bundled syntax definition for its property types, comments, values and sections.
 This is real native editing with syntax-colored spans, not an overlay over a

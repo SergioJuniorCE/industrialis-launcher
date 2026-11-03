@@ -25,7 +25,7 @@ sha1 = "0.11"
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "fs", "time", "sync", "io-util", "net"] }
 # ZIP needs ordinary deflate, not the optional Zopfli encoder. The explicit
-# flate2 backend also makes backend-only/CLI builds independent of GPUI features.
+# flate2 backend also makes backend-only/CLI builds independent of UI framework features.
 zip = { version = "2", default-features = false, features = ["deflate-flate2", "flate2"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 uuid = { version = "1", features = ["v4"] }
@@ -38,7 +38,7 @@ walkdir = "2"
 debug = 1
 incremental = false
 
-# GPUI rebuilds layout during native window moves. Optimize the framework in
+# The UI framework rebuilds layout during native window moves. Optimize it in
 # development too, while keeping launcher code unoptimized and debuggable.
 [profile.dev.package.gpui-pre]
 opt-level = 3

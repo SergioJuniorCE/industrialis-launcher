@@ -257,7 +257,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn atomically_creates_and_replaces_files_beyond_windows_max_path() {
-        let root = std::env::temp_dir().join(format!("gpui-long-path-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("industrialis-long-path-{}", uuid::Uuid::new_v4()));
         let mut parent = root.clone();
         while parent.as_os_str().len() < 280 {
             parent = parent.join("long-component-directory");

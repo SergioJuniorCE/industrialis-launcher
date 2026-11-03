@@ -72,7 +72,7 @@ mod tests {
             "C:/outside.bin",
         ] {
             let root =
-                std::env::temp_dir().join(format!("gpui-native-unsafe-{}", uuid::Uuid::new_v4()));
+                std::env::temp_dir().join(format!("industrialis-native-unsafe-{}", uuid::Uuid::new_v4()));
             std::fs::create_dir_all(&root).unwrap();
             let jar = root.join("native.jar");
             let mut archive = zip::ZipWriter::new(std::fs::File::create(&jar).unwrap());

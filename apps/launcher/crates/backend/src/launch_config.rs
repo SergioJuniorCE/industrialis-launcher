@@ -1095,7 +1095,7 @@ mod tests {
     #[tokio::test]
     async fn resolves_reference_only_pack_components_from_versioned_metadata_cache() {
         let root = std::env::temp_dir().join(format!(
-            "gpui-component-resolution-{}",
+            "industrialis-component-resolution-{}",
             uuid::Uuid::new_v4()
         ));
         tokio::fs::create_dir_all(root.join("component-cache/net.minecraft"))
@@ -1127,7 +1127,7 @@ mod tests {
     async fn extracts_legacy_native_classifier_without_adding_it_to_classpath() {
         use std::io::Write;
         let root =
-            std::env::temp_dir().join(format!("gpui-native-resolution-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("industrialis-native-resolution-{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(root.join("patches"))
             .await
             .unwrap();

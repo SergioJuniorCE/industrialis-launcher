@@ -111,7 +111,7 @@ Launcher now exposes Info, Settings, Logs, Files and Mods for an instance.
       Repaired 2026-10-12: persistent Easy/Advanced tabs, syntax highlighting, readable editor surfaces and a visible focused Find bar. Earlier checks did not cover large lists or the missing search presentation; new regressions and isolated native dark/light checks cover both. Physical/platform acceptance remains F20/F38.
 
       **Accept:** edit a scalar and list in Easy mode, edit raw text, save both game
-                                                          file and overlay, restart, then update the pack and verify the override survives.
+                                                              file and overlay, restart, then update the pack and verify the override survives.
 
 - [x] **F03 — P1 · Done · Open a file in the OS editor.**
       Verified 2026-10-11: the installed Windows app dispatches the default editor, observes its actual atomic save and mirrors the bytes into the original overlay. Native override removal stops mirroring and does not recreate the removed override after another external edit. Shutdown/maintenance guards pass in backend tests; recorded actual GTNH pack maintenance preserves paired config overrides. Physical and other-platform editor behavior remains F38.
@@ -122,7 +122,7 @@ Launcher now exposes Info, Settings, Logs, Files and Mods for an instance.
       Verified 2026-10-11: the installed app opens a native editor window, repeated file opening foregrounds that same window without a duplicate, and normal editor close leaves the launcher and saved override intact. Launcher multi-window paired saves, independent close/reuse, shared drafts and launch-time detached-draft saves pass. Physical and other-platform lifecycle checks remain F31/F38.
 
       **Accept:** pop out a file, focus the existing matching window on repeat,
-                                                          synchronize edits, and close either window without losing saved data.
+                                                              synchronize edits, and close either window without losing saved data.
 
 - [x] **F05 — P1 · Done · Custom-mod management.**
       Verified 2026-10-11: actual installed native picker Cancel and two-file .jar/.zip import pass byte checks in game/overlay copies; confirmed removal retains the other custom mod and pack-owned file. The OS folder action opens the original persistent mods directory. Launcher/backend disk reload, failed removal and running/busy guards pass; real GTNH copy/update/reinstall preservation is recorded below.
@@ -167,10 +167,10 @@ Reference: [App.tsx](https://github.com/SergioJuniorCE/industrialis-launcher/blo
       Verified: complete searchable catalogs and All/Stable/Beta filters serve install and maintenance. Launcher tests exercise filtering, unavailable variants and selections beyond the former eight-row limit. Error/reload controls remain reachable. Actual supported Java 8/17+ archives install in expendable instances.
 
       **Accept:** select any supported catalog version, search/filter releases, see
-                                                          available Java variants, reject unavailable variants before installation, and
-                                                          retry a failed catalog fetch. The maintenance picker already has a full list
-                                                          and archive-availability checks; do not replace that with the limited picker.
-                                                          Actual 2.9.0-RC-2 Java 8/17+ and 2.8.4 Java 17+ archive installation passes in expendable instances.
+                                                              available Java variants, reject unavailable variants before installation, and
+                                                              retry a failed catalog fetch. The maintenance picker already has a full list
+                                                              and archive-availability checks; do not replace that with the limited picker.
+                                                              Actual 2.9.0-RC-2 Java 8/17+ and 2.8.4 Java 17+ archive installation passes in expendable instances.
 
 - [x] **F12 — P1 · Done · Pack update status.**
       Updated 2026-10-12: one shared catalog checks at startup and every hour. Manual checks live in the instance context menu; ordinary library/detail check buttons are removed. Unknown/current status is informational; available updates open the matching maintenance workflow. The root owns the polling task and duplicate starts/in-flight requests are guarded. Fake-clock tests verify the hourly boundaries, repeated ticks and cancellation; actual native menu dispatch passes in dark/light. Failed checks retain cached versions and cannot turn unknown status into Up to date. Real catalogs and maintenance were exercised in the earlier GTNH acceptance fixtures.
@@ -211,31 +211,31 @@ Backup services, provider and durable manager now have reachable Launcher workfl
       Implemented: OAuth PKCE loopback authorization, encrypted refresh-token reuse, paginated Drive folder operations and resumable uploads are implemented. Actual Electron 43.3.0/Rust Windows DPAPI, isolated Linux GNOME Secret Service and native KWallet 6 interoperability pass in both directions with the original generated key unchanged. The native Linux regression caught and fixed libsecret unloading between calls. macOS Keychain support compiles; CBC vectors match independent Node crypto. Live Google and Keychain acceptance remain open; older KWallet versions are not certified by the KWallet 6 fixture.
 
       **Accept:** connect,
-                                                          restart, refresh, disconnect and handle denied/expired authorization without
-                                                          exposing credentials or falsely displaying Connected.
+                                                              restart, refresh, disconnect and handle denied/expired authorization without
+                                                              exposing credentials or falsely displaying Connected.
 
 - [ ] **F17 — P1 · Verify · Manual backup management.**
       Implemented: Local/cloud lists, manifest-last verified uploads, verified collision-safe restores into the existing backups folder, confirmed cloud deletion, folder actions and transfer errors/progress are reachable in Launcher. Synthetic integrity/collision/failure tests pass. Live Drive transfer acceptance remains open.
 
       **Accept:** upload/download a real archive byte-for-byte, reject a corrupt
-                                                          remote artifact, handle an interrupted upload and delete only the selected
-                                                          snapshot. Electron's Restore action downloads an archive into the backups
-                                                          directory; it does not unpack or replace a running world's saves.
+                                                              remote artifact, handle an interrupted upload and delete only the selected
+                                                              snapshot. Electron's Restore action downloads an archive into the backups
+                                                              directory; it does not unpack or replace a running world's saves.
 
 - [x] **F18 — P1 · Done · Automatic backup manager.**
       Implemented: Automatic settling/deduplication, original backup-state.json queue, retry/backoff/restart recovery, manual retry/scan, deletion tombstones and cloud-only retention are implemented. At most two instances upload concurrently; same-instance retention is serialized. Settling, bounded concurrency, durable delivery and empty-progress completion regressions pass.
 
       **Accept:** new completed archives upload automatically, partial files do not,
-                                                          failures survive restart and can retry, deleted snapshots do not reappear, and
-                                                          retention never deletes local archives.
+                                                              failures survive restart and can retry, deleted snapshots do not reappear, and
+                                                              retention never deletes local archives.
 
 - [x] **F19 — P1 · Done · Backup controls and health.**
       Verified: global/per-instance policy, inheritance and retention edits round-trip through native launcher fields into the original settings files without losing extensions. The panel reads existing archives; manager tests cover queued/failed/retried/healthy progress. Retry/scan, transfer progress and the local OAuth setup guide are reachable. Actual Google authorization/transfers remain independently gated by F16/F17.
 
       **Accept:** enable/disable one instance, inherit/override retention, observe
-                                                          queued/failed/healthy states and transfer progress, retry, and open the guide.
-                                                          Planned provider cards in Electron are not implementations: SFTP or other
-                                                          providers need not be invented to complete this port.
+                                                              queued/failed/healthy states and transfer progress, retry, and open the guide.
+                                                              Planned provider cards in Electron are not implementations: SFTP or other
+                                                              providers need not be invented to complete this port.
 
 ### Input and settings features
 
@@ -244,7 +244,7 @@ Reference: [Launcher input](crates/app/src/input.rs),
 [theme editor](https://github.com/SergioJuniorCE/industrialis-launcher/blob/launcher-v0.3.0/apps/launcher/src/components/ThemeEditor.tsx).
 
 - [ ] **F20 — P1 · Verify · Native text editing.**
-      Implemented: pinned gpui-base 0.7.1 native InputState/TextareaState used by account, path, group and settings fields; raw printable-key handlers removed. Launcher tests cover UTF-16 composition with emoji, selection, clipboard and undo/redo. Physical IME/dead-key/caret/drag checks remain.
+      Implemented: the pinned native editor framework's 0.7.1 InputState/TextareaState used by account, path, group and settings fields; raw printable-key handlers removed. Launcher tests cover UTF-16 composition with emoji, selection, clipboard and undo/redo. Physical IME/dead-key/caret/drag checks remain.
       **Accept:** native composition/dead keys,
       Unicode editing, caret placement, selection, copy/cut/paste and undo/redo work
       in account names, paths and settings without misrouting shortcuts.
@@ -270,8 +270,8 @@ Reference: [Launcher input](crates/app/src/input.rs),
       Verified: an Electron-shaped custom preset loads, edits/saves all supported tokens and overrides, reloads from disk and can be selected again. Launcher pointer reset/delete/fallback preserves unknown root/token/override fields. Platform rendering remains in F38 and visual matching in UI_PARITY.
 
       **Accept:** load an Electron custom preset, edit/save it and its overrides,
-                                                          restart and select it again, then reset/delete safely. Visual matching can wait;
-                                                          preserve user-authored settings now (F25).
+                                                              restart and select it again, then reset/delete safely. Visual matching can wait;
+                                                              preserve user-authored settings now (F25).
 
 ### Persistence, process lifetime, and desktop behavior
 
@@ -1560,7 +1560,7 @@ Early harness probes used incorrect tile/focus assumptions; a repeat exposed
 new-copy ordering, so the final runner uses one known tile in separate success
 and failure profiles. A failed run removes the prior passing receipt.
 
-Pinned `gpui-pre` 0.3.8 dispatches Windows `MessageBeep(MB_OK)`, macOS `NSBeep`, X11
+The pinned native UI framework (0.3.8) dispatches Windows `MessageBeep(MB_OK)`, macOS `NSBeep`, X11
 `xcb.bell(0)` or the available Wayland system-bell protocol. The Windows route is
 the user-configured [Default Beep](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebeep).
 [XKB bell notifications](https://xorg.freedesktop.org/archive/current/doc/libX11/XKB/xkblib.html)
@@ -1582,7 +1582,7 @@ sidebar and a stacked narrow layout. The launcher regression reaches the last en
 in 120 generated configs, opens it and saves an Easy edit in both copies. A wide
 layout regression also checks that the clickable bounds match the painted row.
 
-F02 retains the pinned native gpui-base editing engine and adds Syntect token
+F02 retains the pinned native editing engine and adds Syntect token
 styles with Forge and common-language grammars. The code view has line numbers,
 wrapping, selection, clipboard and undo. Persistent Easy/Advanced tabs expose the
 lossless Forge controls; unsupported formats explain why Easy is disabled. Code

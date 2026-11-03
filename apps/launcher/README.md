@@ -7,7 +7,7 @@ for downloads, accepted limitations and rollback.
 replacing the former Electron + React launcher. Single native binary, no Chromium,
 no Node runtime.
 
-The Files panel uses the native gpui-base code editor with Syntect syntax
+The Files panel uses the native code editor with Syntect syntax
 highlighting, line numbers, search, wrapping, selection and undo. Forge configs
 also have lossless Easy controls. The browser and editor scroll independently;
 wide panels place them side by side, with a stacked layout for smaller windows.

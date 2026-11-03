@@ -83,8 +83,8 @@ The safe feature reductions are:
   selects its Rust backend, so standalone backend/CLI builds also work.
 
 No package versions were upgraded by this change. The framework currently hardcodes many
-image decoders, SVG support and core services; gpui-base also includes Markdown
-and HTML parsing. Removing those would require maintaining upstream forks or
+image decoders, SVG support and core services; the editor framework also includes
+Markdown and HTML parsing. Removing those would require maintaining upstream forks or
 replacing the editor kit. They are potential future work, not achieved reductions.
 
 ## Faster edit/rebuild cycle
