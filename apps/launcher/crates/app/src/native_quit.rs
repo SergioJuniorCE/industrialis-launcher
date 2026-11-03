@@ -1,5 +1,5 @@
 //! Route macOS Dock/menu Quit through the same save guards and asynchronous drain.
-//! GPUI 0.3.8's final on_app_quit futures have a 200 ms timeout, so they cannot
+//! The pinned framework's final on_app_quit futures have a 200 ms timeout, so they cannot
 //! safely own maintenance/backup shutdown. Cancel native termination first.
 //! https://developer.apple.com/documentation/appkit/nsapplication/terminate(_:)
 //! https://developer.apple.com/documentation/objectivec/class_addmethod(_:_:_:_:)
@@ -58,7 +58,7 @@ pub fn install() -> Result<(), String> {
                 c"Q@:@".as_ptr(),
             )
         {
-            return Err("Could not install safe macOS quit handling for this GPUI version.".into());
+            return Err("Could not install safe macOS quit handling for this framework version.".into());
         }
     }
     Ok(())

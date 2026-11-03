@@ -122,7 +122,7 @@ fn run(request_path: &Path) -> anyhow::Result<()> {
         },
     )
 }
-/// Call before ownership, CLI parsing or GPUI initialization in every executable.
+/// Call before ownership, CLI parsing or UI framework initialization in every executable.
 pub fn run_if_requested() -> bool {
     let mut args = std::env::args_os().skip(1);
     if args.next().as_deref() != Some(std::ffi::OsStr::new(FLAG)) {

@@ -24,7 +24,7 @@ impl FieldState {
         Self::new("")
     }
 }
-/// Presentation and form events over the pinned GPUI native editing engine.
+/// Presentation and form events over the pinned native editing engine.
 /// Initialization is deferred until rendering supplies the owning Window.
 pub enum NativeFieldEvent {
     Change(String),

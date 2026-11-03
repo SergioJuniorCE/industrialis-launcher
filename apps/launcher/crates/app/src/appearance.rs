@@ -67,10 +67,10 @@ fn apply_native(window: &Window, material: WindowMaterial, mode: ThemeMode) -> R
         WindowMaterial::Mica => DWMSBT_MAINWINDOW,
     };
 
-    // GPUI's Blurred variant uses legacy accent-policy Acrylic. Use the
+    // The UI framework's Blurred variant uses legacy accent-policy Acrylic. Use the
     // supported DWM system backdrops instead, including when changing modes.
     // Opaque first clears any legacy accent policy. Explicitly clear DWM too:
-    // GPUI 0.3.8 doesn't reset that attribute when switching back to Opaque.
+    // The pinned framework doesn't reset that attribute when switching back to Opaque.
     window.set_background_appearance(WindowBackgroundAppearance::Opaque);
     unsafe {
         let _ = DwmSetWindowAttribute(
@@ -100,7 +100,7 @@ fn apply_native(window: &Window, material: WindowMaterial, mode: ThemeMode) -> R
         );
     }
 
-    // This enables GPUI's transparent swap-chain clear without the legacy
+    // This enables the framework's transparent swap-chain clear without the legacy
     // Acrylic path. Override its Mica attribute with the selected DWM material.
     window.set_background_appearance(WindowBackgroundAppearance::MicaBackdrop);
     let margins = MARGINS {

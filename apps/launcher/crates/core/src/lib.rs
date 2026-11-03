@@ -1,6 +1,6 @@
 //! Pure launcher logic ported from the Electron app's TypeScript.
 //!
-//! No GPUI dependency here: this crate is testable headless and reused by
+//! No UI framework dependency here: this crate is testable headless and reused by
 //! the app shell and any future CLI tooling. Serde shapes match the existing
 //! on-disk JSON so user data dirs stay compatible.
 

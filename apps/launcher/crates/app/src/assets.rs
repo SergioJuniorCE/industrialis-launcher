@@ -82,7 +82,7 @@ mod tests {
                     .unwrap()
                     .chunks_exact(4)
                     .any(|pixel| pixel[3] > 0),
-                "{key} must have visible pixels in GPUI's rasterizer"
+                "{key} must have visible pixels in the UI rasterizer"
             );
         }
     }

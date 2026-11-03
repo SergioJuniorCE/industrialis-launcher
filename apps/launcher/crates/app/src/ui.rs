@@ -95,7 +95,7 @@ impl Icon {
             .path(format!("icons/{}.svg", self.name))
             .size(px(self.size))
             .flex_shrink_0()
-            // Svg::paint requires its own color in GPUI 0.3.8. Resolve the
+            // Svg::paint requires its own color in the pinned framework. Resolve the
             // parent's text style during layout, including button/hover colors.
             .text_color(inherited_color);
         match self.rotation {
@@ -233,8 +233,8 @@ mod icon_tests {
     use super::*;
 
     #[test]
-    fn icon_supplies_the_color_required_by_gpui_svg_paint() {
-        // GPUI 0.3.8 Svg::paint skips drawing when its own text color is None,
+    fn icon_supplies_the_color_required_by_svg_paint() {
+        // The pinned Svg::paint skips drawing when its own text color is None,
         // even when an ancestor supplies a text color.
         for color in [
             gpui::rgb(0xfafafa),
@@ -245,7 +245,7 @@ mod icon_tests {
             assert_eq!(
                 glyph.style().text.color,
                 Some(color.into()),
-                "GPUI will skip painting this icon or use the wrong theme color"
+                "The framework will skip painting this icon or use the wrong theme color"
             );
         }
     }
@@ -460,7 +460,7 @@ pub fn btn(theme: &ActiveTheme, label: &str, variant: ButtonVariant) -> gpui::St
     })
 }
 
-// GPUI permits one hover refinement per element, so tabs and buttons each
+// The framework permits one hover refinement per element, so tabs and buttons each
 // attach their own hover style to this shared, non-interactive base.
 #[track_caller]
 pub(crate) fn button_base(label: &str) -> gpui::Stateful<Div> {

@@ -17,7 +17,7 @@ impl LauncherRoot {
             Tab::Accounts => "users",
             Tab::Settings => "settings",
         };
-        // GPUI keeps hover transition state only for elements with stable IDs.
+        // The framework keeps hover transition state only for elements with stable IDs.
         let mut button = div()
             .id(("toolbar-nav", tab as usize)).role(gpui::accesskit::Role::Tab).aria_label(tab.label()).aria_selected(selected).focusable().tab_stop(true)
             .debug_selector(move || format!("toolbar-nav-{}", tab.label().to_ascii_lowercase()))
@@ -295,7 +295,7 @@ impl LauncherRoot {
                                     .p_0()
                                     .rounded_none()
                                     // Let Windows retain the native caption-button
-                                    // fallback when a GPUI click is not dispatched.
+                                    // fallback when a framework click is not dispatched.
                                     // Keep on_click for keyboard/accessibility activation.
                                     .when(action == 0, |button| {
                                         button.window_control_area(WindowControlArea::Min)
