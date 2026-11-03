@@ -1,6 +1,6 @@
 //! LauncherToolbar / LauncherFooter dimensions and responsive controls.
 use super::{LauncherRoot, Tab};
-use crate::ui::{badge, btn, icon, icon_btn, tint, BadgeKind, ButtonVariant};
+use crate::ui::{badge, btn, icon, icon_btn, spinner, tint, BadgeKind, ButtonVariant};
 use gpui::{
     div, img, prelude::*, px, Context, Div, FontWeight, MouseButton, Window,
     WindowControlArea,
@@ -105,6 +105,12 @@ impl LauncherRoot {
         if !compact {
             add = add.child("Add");
         }
+        let running = self.processes_ui.history.running_count();
+        let process_icon = if running > 0 {
+            spinner("toolbar-process-spinner", "loader-circle", 16.0).into_any_element()
+        } else {
+            icon("loader-circle", 16.0).into_any_element()
+        };
         let mut process = btn(t, "", ButtonVariant::Ghost)
             .aria_label("Background processes")
             .id("toolbar-processes")
@@ -113,14 +119,13 @@ impl LauncherRoot {
             .px(px(10.0))
             .text_xs()
             .gap(px(6.0))
-            .child(icon("loader-circle", 16.0));
+            .child(process_icon);
         if !compact {
             process = process.child("Processes");
         }
-        let count = self.processes_ui.history.running_count();
-        if count > 0 {
+        if running > 0 {
             process = process.child(
-                badge(t, &count.to_string(), BadgeKind::Normal)
+                badge(t, &running.to_string(), BadgeKind::Normal)
                     .h(px(20.0))
                     .px(px(6.0))
                     .py_0(),
@@ -337,7 +342,7 @@ impl LauncherRoot {
             return None;
         }
         let t = &self.theme;
-        let install = btn(t, "", ButtonVariant::Ghost)
+        let install = btn(t, "", ButtonVariant::MenuItem)
             .id("add-menu-install")
             .debug_selector(|| "add-menu-install".into())
             .aria_label("Install new GTNH pack")
@@ -354,7 +359,7 @@ impl LauncherRoot {
                 v.tab = Tab::Instances;
                 v.open_new_instance(cx);
             }));
-        let import = btn(t, "", ButtonVariant::Ghost)
+        let import = btn(t, "", ButtonVariant::MenuItem)
             .id("add-menu-import")
             .debug_selector(|| "add-menu-import".into())
             .aria_label("Import from Prism")

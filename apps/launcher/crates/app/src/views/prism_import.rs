@@ -836,7 +836,7 @@ impl LauncherRoot {
                             .child(format!("Found: {}", install.instances_dir.display())),
                     )
                     .child(
-                        btn(t, "Change folder…", ButtonVariant::Ghost)
+                        btn(t, "Change folder…", ButtonVariant::Outline)
                             .text_xs()
                             .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
                                 if let Some(Dialog::PrismImport(dialog)) = &mut v.dialog {
@@ -901,7 +901,7 @@ impl LauncherRoot {
                                     }),
                             )
                             .child(
-                                btn(t, "Set all GTNH versions…", ButtonVariant::Ghost)
+                                btn(t, "Set all GTNH versions…", ButtonVariant::Outline)
                                     .text_xs()
                                     .debug_selector(|| "prism-version-all".into())
                                     .when(dialog.catalog.is_none(), |button| {
@@ -998,7 +998,7 @@ impl LauncherRoot {
                         )
                         .into_any_element()
                 } else {
-                    btn(t, "Cancel", ButtonVariant::Ghost)
+                    btn(t, "Cancel", ButtonVariant::Outline)
                         .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| v.close_dialog(cx)))
                         .into_any_element()
                 })
@@ -1029,7 +1029,7 @@ impl LauncherRoot {
                         )
                         .into_any_element()
                 } else {
-                    btn(t, "Cancel", ButtonVariant::Ghost)
+                    btn(t, "Cancel", ButtonVariant::Outline)
                         .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| v.close_dialog(cx)))
                         .into_any_element()
                 })
@@ -1495,7 +1495,7 @@ impl LauncherRoot {
             }
         }
         let footer = div().child(
-            btn(t, "Cancel", ButtonVariant::Ghost)
+            btn(t, "Cancel", ButtonVariant::Outline)
                 .debug_selector(|| "import-version-cancel".into())
                 .when(dialog.saving, |button| button.opacity(0.5).cursor_default())
                 .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| v.close_dialog(cx))),

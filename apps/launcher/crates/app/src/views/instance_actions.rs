@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use gpui::{div, prelude::*, px, Context, Div, Window};
+use gpui::{div, prelude::*, px, Context, Div, FontWeight, Window};
 use industrialis_backend::install::{preview_update, reinstall_instance, update_instance};
 use industrialis_backend::instance_ops::copy_instance_with_progress;
 use industrialis_backend::pack_files::{
@@ -15,7 +15,10 @@ use industrialis_core::background_processes::{Operation, ProcessToken, Processes
 
 use super::{Dialog, LauncherRoot};
 use crate::input::FieldState;
-use crate::ui::{btn, progress_bar, ButtonVariant};
+use crate::ui::{
+    btn, checkbox, icon, progress_bar, section_title, segment, segmented_control, select_row, tint,
+    ButtonVariant,
+};
 
 /// Both copy workflows notify only after a current worker finishes successfully.
 /// Progress (including 100%) never completes a run or plays a notification.
@@ -476,214 +479,402 @@ impl LauncherRoot {
         } else {
             "Clean reinstall"
         };
-        let mut body = div().flex().flex_col().gap_2().child(
+        let mut body = div().flex().flex_col().gap_4().child(
             div()
-                .text_sm()
-                .child(format!("Current pack: {}", d.current)),
+                .text_xs()
+                .text_color(t.muted_foreground())
+                .child(if d.current.is_empty() {
+                    "No pack version assigned".to_string()
+                } else {
+                    format!("Installed {}", d.current)
+                }),
         );
         if d.loading {
-            body = body.child("Loading pack versions…");
-        } else if d.analyzing {
-            body = body.child("Analyzing pack and custom mods…");
-            if let Some(p) = self.operation_progress.get(&d.id) {
-                body = body.child(progress_bar(t, p.pct)).child(
-                    div()
-                        .text_xs()
-                        .child(p.log_line.clone().unwrap_or_else(|| p.stage.clone())),
-                );
-            }
-        } else if let Some(preview) = &d.preview {
-            body = body
-                .child(
-                    div()
-                        .text_sm()
-                        .child(format!("{} → {}", d.current, d.version)),
-                )
-                .child(div().text_xs().child(format!(
-                    "Pack mods: {} new, {} changed, {} removed",
-                    preview.new_pack_mods_count,
-                    preview.updated_pack_mods_count,
-                    preview.removed_from_pack_count
-                )))
-                .child(div().text_sm().child("Custom mods to keep"))
-                .child(
-                    div()
-                        .id("update-custom-mods")
-                        .max_h(px(180.0))
-                        .overflow_y_scroll()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .children(preview.custom_mods.iter().map(|entry| {
-                            let identity = entry.entry.identity.clone();
-                            let checked = d.keep.contains(&identity);
-                            btn(
-                                t,
-                                &format!(
-                                    "{} {}",
-                                    if checked { "☑" } else { "☐" },
-                                    entry.entry.filename
-                                ),
-                                ButtonVariant::Ghost,
-                            )
-                            .text_xs()
-                            .on_click(cx.listener(
-                                move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                                    if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
-                                        if !d.keep.remove(&identity) {
-                                            d.keep.insert(identity.clone());
-                                        }
-                                        cx.notify();
-                                    }
-                                },
-                            ))
-                        })),
-                );
-            if preview.custom_mods.is_empty() {
-                body = body.child(div().text_xs().child("No custom mods found."));
-            }
             body = body.child(
-                btn(t, "Change version", ButtonVariant::Ghost)
-                    .text_xs()
-                    .on_click(cx.listener(|v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                        if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
-                            d.preview = None;
-                            cx.notify();
-                        }
-                    })),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_sm()
+                    .text_color(t.muted_foreground())
+                    .child(icon("loader-circle", 14.0))
+                    .child("Loading pack versions…"),
             );
-        } else {
-            body = body
-                .child(div().text_sm().child("Pack version"))
-                .child(self.field("maintenance-search", "Search versions", cx))
-                .child(
-                    div().flex().gap_2().children(
-                        [
-                            (super::pack_catalog::ReleaseFilter::All, "All"),
-                            (super::pack_catalog::ReleaseFilter::Stable, "Stable"),
-                            (super::pack_catalog::ReleaseFilter::Beta, "Beta"),
-                        ]
-                        .into_iter()
-                        .map(|(filter, label)| {
-                            btn(
-                                t,
-                                label,
-                                if d.filter == filter {
-                                    ButtonVariant::Secondary
-                                } else {
-                                    ButtonVariant::Ghost
-                                },
-                            )
+        } else if d.analyzing {
+            let mut progress = div().flex().flex_col().gap_2().child(
+                div()
+                    .text_sm()
+                    .text_color(t.foreground())
+                    .child("Analyzing the update…"),
+            );
+            if let Some(p) = self.operation_progress.get(&d.id) {
+                progress = progress
+                    .child(progress_bar(t, p.pct).h(px(6.0)))
+                    .child(
+                        div()
                             .text_xs()
-                            .on_click(cx.listener(
-                                move |v, _: &gpui::ClickEvent, _, cx| {
-                                    if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
-                                        d.filter = filter;
-                                    }
-                                    cx.notify();
-                                },
-                            ))
-                        }),
-                    ),
-                )
+                            .text_color(t.muted_foreground())
+                            .child(p.log_line.clone().unwrap_or_else(|| p.stage.clone())),
+                    );
+            }
+            body = body.child(progress);
+        } else if let Some(preview) = &d.preview {
+            let stat = |count: usize, label: &'static str| {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.0))
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(t.foreground())
+                            .child(count.to_string()),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(t.muted_foreground())
+                            .child(label),
+                    )
+            };
+            body = body
                 .child(
                     div()
-                        .id("maintenance-versions")
-                        .max_h(px(160.0))
-                        .overflow_y_scroll()
                         .flex()
                         .flex_col()
-                        .gap_1()
-                        .children(
-                            d.versions
-                                .iter()
-                                .filter(|version| {
-                                    d.filter.matches(version)
-                                        && version
-                                            .name
-                                            .to_lowercase()
-                                            .contains(&d.search.text.to_lowercase())
-                                })
-                                .map(|version| {
-                                    let name = version.name.clone();
-                                    let java8 = version.java8;
-                                    let java17 = version.java17;
-                                    btn(
-                                        t,
-                                        &version.name,
-                                        if version.name == d.version {
-                                            ButtonVariant::Secondary
-                                        } else {
-                                            ButtonVariant::Ghost
-                                        },
-                                    )
-                                    .text_xs()
-                                    .on_click(cx.listener(
-                                        move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                                            if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
-                                                d.version = name.clone();
-                                                d.error = None;
-                                                if !java17 {
-                                                    d.java = "java8".into();
-                                                } else if !java8 {
-                                                    d.java = "java17+".into();
-                                                }
-                                                cx.notify();
-                                            }
-                                        },
-                                    ))
-                                }),
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(t.foreground())
+                                .child(format!("{} to {}", d.current, d.version)),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_4()
+                                .child(stat(preview.new_pack_mods_count, "New"))
+                                .child(
+                                    div()
+                                        .w(px(1.0))
+                                        .h(px(30.0))
+                                        .bg(tint(t.border(), 0.3)),
+                                )
+                                .child(stat(preview.updated_pack_mods_count, "Changed"))
+                                .child(
+                                    div()
+                                        .w(px(1.0))
+                                        .h(px(30.0))
+                                        .bg(tint(t.border(), 0.3)),
+                                )
+                                .child(stat(preview.removed_from_pack_count, "Removed")),
                         ),
                 )
                 .child(
-                    div().flex().gap_1().children(
-                        [("java8", "Java 8"), ("java17+", "Java 17+")]
-                            .into_iter()
-                            .map(|(value, label)| {
-                                btn(
-                                    t,
-                                    label,
-                                    if d.java == value {
-                                        ButtonVariant::Secondary
-                                    } else {
-                                        ButtonVariant::Ghost
-                                    },
-                                )
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(section_title(t, "Custom mods to keep"))
+                        .child(if preview.custom_mods.is_empty() {
+                            div()
                                 .text_xs()
-                                .on_click(cx.listener(
-                                    move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                                        if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
-                                            d.java = value.into();
-                                            cx.notify();
-                                        }
-                                    },
-                                ))
-                            }),
-                    ),
+                                .text_color(t.muted_foreground())
+                                .child("No custom mods. Pack mods update automatically.")
+                                .into_any_element()
+                        } else {
+                            div()
+                                .id("update-custom-mods")
+                                .max_h(px(140.0))
+                                .overflow_y_scroll()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .children(preview.custom_mods.iter().map(|entry| {
+                                    let identity = entry.entry.identity.clone();
+                                    let checked = d.keep.contains(&identity);
+                                    checkbox(t, &entry.entry.filename, checked)
+                                        .w_full()
+                                        .h(px(30.0))
+                                        .px(px(8.0))
+                                        .rounded(px(4.0))
+                                        .hover(|style| style.bg(tint(t.accent(), 0.4)))
+                                        .on_click(cx.listener(
+                                            move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                                if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
+                                                    if !d.keep.remove(&identity) {
+                                                        d.keep.insert(identity.clone());
+                                                    }
+                                                    cx.notify();
+                                                }
+                                            },
+                                        ))
+                                }))
+                                .into_any_element()
+                        })
+                )
+                .child(
+                    btn(t, "Change version", ButtonVariant::Outline)
+                        .h(px(28.0))
+                        .px(px(10.0))
+                        .text_xs()
+                        .on_click(cx.listener(|v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                            if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
+                                d.preview = None;
+                                cx.notify();
+                            }
+                        })),
+                );
+        } else {
+            let visible: Vec<_> = d
+                .versions
+                .iter()
+                .filter(|version| {
+                    d.filter.matches(version)
+                        && version
+                            .name
+                            .to_lowercase()
+                            .contains(&d.search.text.to_lowercase())
+                })
+                .collect();
+            let count = visible.len();
+            body = body
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(section_title(t, "Pack version"))
+                        .child(self.field("maintenance-search", "Search versions", cx))
+                        .child(
+                            segmented_control(t).children(
+                                [
+                                    (super::pack_catalog::ReleaseFilter::All, "All"),
+                                    (super::pack_catalog::ReleaseFilter::Stable, "Stable"),
+                                    (super::pack_catalog::ReleaseFilter::Beta, "Beta"),
+                                ]
+                                .into_iter()
+                                .map(|(filter, label)| {
+                                    segment(t, label, d.filter == filter).on_click(
+                                        cx.listener(
+                                            move |v, _: &gpui::ClickEvent, _, cx| {
+                                                if let Some(Dialog::Maintenance(d)) = &mut v.dialog
+                                                {
+                                                    d.filter = filter;
+                                                }
+                                                cx.notify();
+                                            },
+                                        ),
+                                    )
+                                }),
+                            ),
+                        )
+                        .child(if visible.is_empty() {
+                            div()
+                                .p_4()
+                                .rounded(px(8.0))
+                                .border_1()
+                                .border_color(tint(t.border(), 0.3))
+                                .text_xs()
+                                .text_color(t.muted_foreground())
+                                .child("No versions match this search.")
+                                .into_any_element()
+                        } else {
+                            div()
+                                .id("maintenance-versions")
+                                .max_h(px(172.0))
+                                .overflow_y_scroll()
+                                .rounded(px(8.0))
+                                .border_1()
+                                .border_color(tint(t.border(), 0.35))
+                                .bg(tint(t.muted(), 0.35))
+                                .flex()
+                                .flex_col()
+                                .children(visible.iter().enumerate().map(|(index, version)| {
+                                    let selected = version.name == d.version;
+                                    let name = version.name.clone();
+                                    let selector =
+                                        format!("maintenance-version:{}", version.name);
+                                    let row_label = if version.name == d.current {
+                                        format!("{} (installed)", version.name)
+                                    } else {
+                                        version.name.clone()
+                                    };
+                                    let java8 = version.java8;
+                                    let java17 = version.java17;
+                                    let available = java8 || java17;
+                                    select_row(t, selected)
+                                        .id(selector.clone())
+                                        .aria_label(row_label)
+                                        .debug_selector(move || selector.clone().into())
+                                        .when(index + 1 < count, |row| {
+                                            row.border_b_1()
+                                                .border_color(tint(t.border(), 0.28))
+                                        })
+                                        .when(!available, |row| {
+                                            row.opacity(0.45).cursor_default()
+                                        })
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .text_sm()
+                                                .text_ellipsis()
+                                                .child(version.name.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .w(px(84.0))
+                                                .text_right()
+                                                .text_xs()
+                                                .text_color(t.muted_foreground())
+                                                .text_ellipsis()
+                                                .child(if version.name == d.current {
+                                                    "Installed".to_string()
+                                                } else {
+                                                    version.date.clone()
+                                                }),
+                                        )
+                                        .child(
+                                            div()
+                                                .w(px(18.0))
+                                                .flex()
+                                                .items_center()
+                                                .justify_end()
+                                                .when(selected, |check| {
+                                                    check.child(
+                                                        div()
+                                                            .text_color(t.primary())
+                                                            .child(icon("check", 14.0)),
+                                                    )
+                                                }),
+                                        )
+                                        .on_click(cx.listener(
+                                            move |v,
+                                                  _: &gpui::ClickEvent,
+                                                  _: &mut Window,
+                                                  cx| {
+                                                if !available {
+                                                    return;
+                                                }
+                                                if let Some(Dialog::Maintenance(d)) =
+                                                    &mut v.dialog
+                                                {
+                                                    d.version = name.clone();
+                                                    d.error = None;
+                                                    if !java17 {
+                                                        d.java = "java8".into();
+                                                    } else if !java8 {
+                                                        d.java = "java17+".into();
+                                                    }
+                                                    cx.notify();
+                                                }
+                                            },
+                                        ))
+                                }))
+                                .into_any_element()
+                        })
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(section_title(t, "Java"))
+                        .child(
+                            segmented_control(t).children(
+                                [("java8", "Java 8"), ("java17+", "Java 17+")]
+                                    .into_iter()
+                                    .map(|(value, label)| {
+                                        segment(t, label, d.java == value).on_click(
+                                            cx.listener(
+                                                move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                                    if let Some(Dialog::Maintenance(d)) =
+                                                        &mut v.dialog
+                                                    {
+                                                        d.java = value.into();
+                                                        cx.notify();
+                                                    }
+                                                },
+                                            ),
+                                        )
+                                    }),
+                            ),
+                        ),
                 );
             if !Self::selected_pack_available(d) && !d.versions.is_empty() {
                 body = body.child(
                     div()
-                        .text_xs()
-                        .text_color(t.destructive())
-                        .child("This pack does not provide the selected Java variant."),
+                        .flex()
+                        .items_start()
+                        .gap_2()
+                        .child(
+                            div()
+                                .pt(px(1.0))
+                                .text_color(t.destructive())
+                                .child(icon("info", 12.0)),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(t.destructive())
+                                .child("This pack does not provide the selected Java variant."),
+                        ),
                 );
             }
         }
         if !d.loading && !d.analyzing {
             let checked = d.copy_before;
-            body = body.child(btn(t, &format!("{} Copy instance before {title}", if checked { "☑" } else { "☐" }), ButtonVariant::Ghost).text_xs()
-                .on_click(cx.listener(|v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                    if let Some(Dialog::Maintenance(d)) = &mut v.dialog { d.copy_before = !d.copy_before; cx.notify(); }
-                })))
-                .child(div().text_xs().text_color(t.muted_foreground()).child(if checked { "The operation runs on a new copy; the original stays intact." } else { "Replaces pack files. Preserves saves, JourneyMap, screenshots, resource packs, and player options." }));
+            body = body.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        checkbox(t, &format!("Copy instance before {title}"), checked)
+                            .debug_selector(|| "maintenance-copy-before".into())
+                            .cursor_pointer()
+                            .on_click(cx.listener(
+                                |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                    if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
+                                        d.copy_before = !d.copy_before;
+                                        cx.notify();
+                                    }
+                                },
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(t.muted_foreground())
+                            .child(if checked {
+                                "Runs on a new copy. The original stays intact."
+                            } else {
+                                "Saves, configs, and player data are preserved. A failed update restores the previous instance."
+                            }),
+                    ),
+            );
         }
         if let Some(error) = &d.error {
             body = body.child(
                 div()
-                    .text_xs()
-                    .text_color(t.destructive())
-                    .child(error.clone()),
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(
+                        div()
+                            .pt(px(1.0))
+                            .text_color(t.destructive())
+                            .child(icon("info", 12.0)),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(t.destructive())
+                            .child(error.clone()),
+                    ),
             );
         }
         let label = if d.analyzing {
@@ -706,7 +897,7 @@ impl LauncherRoot {
             |v, cx| v.submit_maintenance(cx),
             cx,
         );
-        self.dialog_frame(title, body, footer, cx)
+        self.dialog_frame_with_width(520.0, title, body, footer, cx)
     }
 
     pub(super) fn finish_instance_process(

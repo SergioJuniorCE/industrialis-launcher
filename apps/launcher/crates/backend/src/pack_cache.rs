@@ -86,7 +86,8 @@ pub async fn lookup_pack_cache(
     java_type: &str,
     url: &str,
 ) -> Result<Option<PathBuf>, anyhow::Error> {
-    evict_expired_pack_cache(paths).await?;
+    // Cache maintenance is an optimization; never let it block an install.
+    let _ = evict_expired_pack_cache(paths).await;
     let entry = entry_dir(paths, &pack_cache_key(version, java_type));
     if !entry_valid(&entry, url).await {
         if exists(&entry).await {
@@ -101,6 +102,24 @@ pub async fn lookup_pack_cache(
         }
     }
     Ok(Some(entry.join("pack")))
+}
+
+/// Returns the cached pack for a version without requiring its download URL.
+/// Updates use this to compare the installed configs against the pack they
+/// came from, so only files the user actually changed are restored.
+pub async fn find_cached_pack(
+    paths: &LauncherPaths,
+    version: &str,
+    java_type: &str,
+) -> Option<PathBuf> {
+    let entry = entry_dir(paths, &pack_cache_key(version, java_type));
+    let meta_value = read_json_value(&entry.join("meta.json")).await?;
+    let meta: CacheMeta = serde_json::from_value(meta_value).ok()?;
+    (meta.pack_version == version
+        && meta.java_type == java_type
+        && now_secs() - meta.cached_at_secs <= TTL_SECONDS
+        && exists(&entry.join("pack")).await)
+        .then(|| entry.join("pack"))
 }
 
 pub async fn store_pack_cache(
@@ -215,6 +234,28 @@ mod tests {
         .unwrap();
         evict_expired_pack_cache(&paths).await.unwrap();
         assert!(!entry.exists());
+    }
+
+    #[tokio::test]
+    async fn finds_a_cached_pack_without_the_download_url() {
+        let paths = temp_paths("find");
+        let staging = paths.base().join("staging");
+        tokio::fs::create_dir_all(&staging).await.unwrap();
+        tokio::fs::write(staging.join("mmc-pack.json"), "{}")
+            .await
+            .unwrap();
+        store_pack_cache(&paths, "2.8.0", "java17+", "https://x/pack.zip", &staging)
+            .await
+            .unwrap();
+        let expected = entry_dir(&paths, &pack_cache_key("2.8.0", "java17+")).join("pack");
+        assert_eq!(
+            find_cached_pack(&paths, "2.8.0", "java17+").await,
+            Some(expected)
+        );
+        assert!(find_cached_pack(&paths, "2.8.0", "java8").await.is_none());
+        assert!(find_cached_pack(&paths, "2.9.0", "java17+")
+            .await
+            .is_none());
     }
 
     #[test]

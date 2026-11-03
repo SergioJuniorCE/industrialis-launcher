@@ -36,6 +36,7 @@ impl AssetSource for LauncherAssets {
             "icons/folder-open.svg" => include_bytes!("../assets/icons/folder-open.svg"),
             "icons/arrow-up-circle.svg" => include_bytes!("../assets/icons/arrow-up-circle.svg"),
             "icons/refresh-cw.svg" => include_bytes!("../assets/icons/refresh-cw.svg"),
+            "icons/download.svg" => include_bytes!("../assets/icons/download.svg"),
             "icons/play.svg" => include_bytes!("../assets/icons/play.svg"),
             "icons/ellipsis.svg" => include_bytes!("../assets/icons/ellipsis.svg"),
             "icons/grip-vertical.svg" => include_bytes!("../assets/icons/grip-vertical.svg"),

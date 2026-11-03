@@ -1,7 +1,9 @@
 //! Background process list and virtualized operation logs.
 
 use super::{LauncherRoot, Tab};
-use crate::ui::{badge, btn, empty_state, icon, progress_bar, tint, BadgeKind, ButtonVariant};
+use crate::ui::{
+    badge, btn, empty_state, icon, progress_bar, spinner, tint, BadgeKind, ButtonVariant,
+};
 use gpui::{
     div, prelude::*, px, uniform_list, Context, Div, FontWeight, MouseButton, MouseDownEvent,
     UniformListScrollHandle, Window,
@@ -9,6 +11,26 @@ use gpui::{
 use industrialis_core::background_processes::{
     stage_label, Operation, Process, Processes, Status,
 };
+
+fn line_count_label(count: usize) -> String {
+    format!("{count} line{}", if count == 1 { "" } else { "s" })
+}
+
+fn elapsed_label(elapsed: std::time::Duration) -> String {
+    let secs = elapsed.as_secs();
+    if secs >= 3600 {
+        format!(
+            "{}h {:02}m {:02}s",
+            secs / 3600,
+            (secs % 3600) / 60,
+            secs % 60
+        )
+    } else if secs >= 60 {
+        format!("{}m {:02}s", secs / 60, secs % 60)
+    } else {
+        format!("{secs}s")
+    }
+}
 
 #[derive(Default)]
 pub(super) struct ProcessesUi {
@@ -46,18 +68,16 @@ impl LauncherRoot {
         let t = &self.theme;
         let selected = self.processes_ui.selected.as_ref() == Some(&key);
         let select = key.clone();
-        let description = format!(
-            "{} · {}",
-            p.operation.label(),
-            if p.status == Status::Done {
-                "Complete"
-            } else if p.status==Status::Cancelled {"Cancelled"
-            } else if p.status == Status::Failed {
-                "Failed"
-            } else {
-                stage_label(&p.stage)
-            }
-        );
+        let description = p
+            .logs
+            .last()
+            .map(|line| {
+                line.split_once("] ")
+                    .map(|(_, text)| text)
+                    .unwrap_or(line.as_str())
+            })
+            .unwrap_or_else(|| stage_label(&p.stage))
+            .to_string();
         let mut card = div()
             .flex()
             .flex_col()
@@ -85,7 +105,11 @@ impl LauncherRoot {
                             .items_center()
                             .gap_2()
                             .when(p.status == Status::Running, |el| {
-                                el.child(icon("loader-circle", 14.0))
+                                el.child(spinner(
+                                    format!("process-spinner:{key}"),
+                                    "loader-circle",
+                                    14.0,
+                                ))
                             })
                             .child(
                                 div()
@@ -96,7 +120,7 @@ impl LauncherRoot {
                                     .child(p.name.clone()),
                             )
                             .child(
-                                badge(t, &format!("{} lines", p.logs.len()), BadgeKind::Normal)
+                                badge(t, &line_count_label(p.logs.len()), BadgeKind::Normal)
                                     .h(px(20.0))
                                     .py_0()
                                     .text_size(px(10.0)),
@@ -104,8 +128,10 @@ impl LauncherRoot {
                     )
                     .child(
                         div()
+                            .w_full()
                             .text_size(px(11.0))
                             .text_color(t.muted_foreground())
+                            .text_ellipsis()
                             .child(description),
                     )
                     .when(p.status == Status::Running, |el| {
@@ -190,6 +216,28 @@ impl LauncherRoot {
                 .when(items.is_empty(), |el| el.child(div().p_3().text_xs().text_color(t.muted_foreground()).child("Install a pack, update a pack, or delete an instance to see progress here."))));
         let detail = if let Some(p) = selected {
             let instance = p.id.clone();
+            let detail_spinner = format!(
+                "process-detail-spinner:{}",
+                self.processes_ui.selected.as_deref().unwrap_or_default()
+            );
+            let meta = |label: &'static str, value: String| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(t.muted_foreground())
+                            .child(label),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(value),
+                    )
+            };
             let mut header = div()
                 .px_3()
                 .py_2()
@@ -204,7 +252,7 @@ impl LauncherRoot {
                         .gap_2()
                         .items_center()
                         .when(p.status == Status::Running, |el| {
-                            el.child(icon("loader-circle", 16.0))
+                            el.child(spinner(detail_spinner.clone(), "loader-circle", 16.0))
                         })
                         .child(div().font_weight(FontWeight::MEDIUM).child(p.name.clone()))
                         .child(badge(
@@ -213,6 +261,8 @@ impl LauncherRoot {
                                 "Complete"
                             } else if p.status == Status::Failed {
                                 "Failed"
+                            } else if p.status == Status::Cancelled {
+                                "Cancelled"
                             } else {
                                 stage_label(&p.stage)
                             },
@@ -225,9 +275,12 @@ impl LauncherRoot {
                 )
                 .child(
                     div()
-                        .text_xs()
-                        .text_color(t.muted_foreground())
-                        .child(format!("{} · {}", p.operation.label(), p.id)),
+                        .flex()
+                        .flex_wrap()
+                        .gap_4()
+                        .child(meta("Operation", p.operation.label().to_string()))
+                        .child(meta("Elapsed", elapsed_label(p.elapsed())))
+                        .child(meta("Instance", p.id.clone())),
                 );
             if p.status == Status::Running {
                 header = header
@@ -252,6 +305,8 @@ impl LauncherRoot {
                 );
             }
             let lines = p.logs.clone();
+            let copy_text = lines.join("\n");
+            let line_count = lines.len();
             let error_color = t.destructive();
             let normal_color = t.muted_foreground();
             div()
@@ -262,25 +317,91 @@ impl LauncherRoot {
                 .flex_col()
                 .child(header)
                 .child(
-                    uniform_list("background-process-log", lines.len(), move |range, _, _| {
-                        range
-                            .map(|index| {
-                                let line = &lines[index];
-                                div()
-                                    .px_3()
-                                    .h(px(20.0))
-                                    .whitespace_nowrap()
-                                    .text_size(px(11.0))
-                                    .font_family("Consolas")
-                                    .text_color(if line.starts_with("Error:") {
-                                        error_color
-                                    } else {
-                                        normal_color
-                                    })
-                                    .child(line.clone())
-                            })
-                            .collect()
-                    })
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px_3()
+                        .py_1()
+                        .border_b_1()
+                        .border_color(tint(t.border(), 0.5))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child("Log"),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(t.muted_foreground())
+                                        .child(line_count_label(line_count)),
+                                ),
+                        )
+                        .child(
+                            btn(t, "Copy log", ButtonVariant::Ghost)
+                                .debug_selector(|| "process-copy-log".into())
+                                .h(px(24.0))
+                                .px(px(8.0))
+                                .text_xs()
+                                .on_click(move |_, _, cx| {
+                                    cx.write_to_clipboard(
+                                        gpui::ClipboardItem::new_string(copy_text.clone()),
+                                    )
+                                }),
+                        ),
+                )
+                .child(
+                    uniform_list(
+                        "background-process-log",
+                        line_count,
+                        move |range, _, _| {
+                            range
+                                .map(|index| {
+                                    let line = &lines[index];
+                                    let (stamp, text) = line
+                                        .split_once("] ")
+                                        .map(|(stamp, text)| (format!("{stamp}]"), text))
+                                        .unwrap_or_else(|| (String::new(), line.as_str()));
+                                    let is_error = text.contains("Error:");
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .px_3()
+                                        .h(px(20.0))
+                                        .whitespace_nowrap()
+                                        .text_size(px(11.0))
+                                        .font_family("Consolas")
+                                        .child(
+                                            div()
+                                                .w(px(68.0))
+                                                .flex_shrink_0()
+                                                .text_right()
+                                                .text_color(tint(normal_color, 0.55))
+                                                .child(stamp),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .text_ellipsis()
+                                                .text_color(if is_error {
+                                                    error_color
+                                                } else {
+                                                    normal_color
+                                                })
+                                                .child(text.to_string()),
+                                        )
+                                })
+                                .collect()
+                        },
+                    )
                     .track_scroll(&self.processes_ui.scroll)
                     .flex_1()
                     .min_h_0()

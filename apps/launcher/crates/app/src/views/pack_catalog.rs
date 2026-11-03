@@ -1,6 +1,6 @@
 //! One cached catalog for status, searchable installation and maintenance choices.
 use super::*;
-use crate::ui::{btn, list_item};
+use crate::ui::{btn, icon, segment, segmented_control, select_row, tint};
 use industrialis_backend::pack_files::{fetch_gtnh_versions, GtnhVersion};
 use industrialis_core::pack_version::{get_pack_version_info, PackVersionInfo, PackVersionMeta};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -490,26 +490,16 @@ impl LauncherRoot {
             .child(self.field("new-name", "Instance name", cx))
             .child(section_title(t, "Pack version"))
             .child(self.field("new-version-search", "Search all pack versions", cx));
-        body = body.child(
-            div().flex().gap_2().children(
-                [
-                    (ReleaseFilter::All, "All"),
-                    (ReleaseFilter::Stable, "Stable"),
-                    (ReleaseFilter::Beta, "Beta"),
-                ]
-                .into_iter()
-                .map(|(filter, label)| {
-                    btn(
-                        t,
-                        label,
-                        if state.filter == filter {
-                            ButtonVariant::Secondary
-                        } else {
-                            ButtonVariant::Ghost
-                        },
-                    )
+        body = body.child(segmented_control(t).children(
+            [
+                (ReleaseFilter::All, "All"),
+                (ReleaseFilter::Stable, "Stable"),
+                (ReleaseFilter::Beta, "Beta"),
+            ]
+            .into_iter()
+            .map(|(filter, label)| {
+                segment(t, label, state.filter == filter)
                     .debug_selector(move || format!("install-filter:{label}").into())
-                    .text_xs()
                     .on_click(cx.listener(
                         move |v, _: &gpui::ClickEvent, _, cx| {
                             if let Some(Dialog::NewInstance(d)) = &mut v.dialog {
@@ -518,11 +508,19 @@ impl LauncherRoot {
                             cx.notify();
                         },
                     ))
-                }),
-            ),
-        );
+            }),
+        ));
         if state.versions_loading {
-            body = body.child("Loading pack versions...");
+            body = body.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_sm()
+                    .text_color(t.muted_foreground())
+                    .child(icon("loader-circle", 14.0))
+                    .child("Loading pack versions…"),
+            );
         } else {
             let versions = state.versions.clone().unwrap_or_default();
             let visible: Vec<_> = versions
@@ -535,60 +533,113 @@ impl LauncherRoot {
                             .contains(&state.search.text.to_lowercase())
                 })
                 .collect();
-            body = body.child(
-                div()
-                    .id("install-version-list")
-                    .h(px(150.0))
-                    .overflow_y_scroll()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .children(visible.iter().map(|version| {
-                        let name = version.name.clone();
-                        let selector = format!("install-version:{}", version.name);
-                        let java8 = version.java8;
-                        let java17 = version.java17;
-                        list_item(
-                            t,
-                            &format!(
-                                "{}  | {}  | {}",
-                                version.name,
-                                version.date,
-                                match (java8, java17) {
-                                    (true, true) => "Java 8 / 17+",
-                                    (true, false) => "Java 8",
-                                    (false, true) => "Java 17+",
-                                    _ => "No archive",
-                                }
-                            ),
-                            version.name == state.version,
-                        )
-                        .debug_selector(move || selector.clone().into())
-                        .w_full()
-                        .justify_start()
-                        .text_xs()
-                        .when(!java8 && !java17, |button| button.opacity(0.5))
-                        .on_click(cx.listener(
-                            move |v, _: &gpui::ClickEvent, _, cx| {
-                                if !java8 && !java17 {
-                                    return;
-                                }
-                                if let Some(Dialog::NewInstance(dialog)) = &mut v.dialog {
-                                    dialog.version = name.clone();
-                                    dialog.error = None;
-                                    if !java17 {
-                                        dialog.java_type = "java8".into();
-                                    } else if !java8 {
-                                        dialog.java_type = "java17+".into();
-                                    }
-                                }
-                                cx.notify();
-                            },
-                        ))
-                    })),
-            );
             if visible.is_empty() {
-                body = body.child("No matching versions.");
+                body = body.child(
+                    div()
+                        .p_4()
+                        .rounded(px(8.0))
+                        .border_1()
+                        .border_color(tint(t.border(), 0.3))
+                        .text_xs()
+                        .text_color(t.muted_foreground())
+                        .child("No matching versions."),
+                );
+            } else {
+                let count = visible.len();
+                body = body.child(
+                    div()
+                        .id("install-version-list")
+                        .max_h(px(172.0))
+                        .overflow_y_scroll()
+                        .rounded(px(8.0))
+                        .border_1()
+                        .border_color(tint(t.border(), 0.35))
+                        .bg(tint(t.muted(), 0.35))
+                        .flex()
+                        .flex_col()
+                        .children(visible.iter().enumerate().map(|(index, version)| {
+                            let name = version.name.clone();
+                            let selector = format!("install-version:{}", version.name);
+                            let java8 = version.java8;
+                            let java17 = version.java17;
+                            let available = java8 || java17;
+                            let selected = version.name == state.version;
+                            let java_label = match (java8, java17) {
+                                (true, true) => "Java 8 / 17+",
+                                (true, false) => "Java 8",
+                                (false, true) => "Java 17+",
+                                _ => "No archive",
+                            };
+                            select_row(t, selected)
+                                .id(selector.clone())
+                                .aria_label(name.clone())
+                                .debug_selector(move || selector.clone().into())
+                                .when(index + 1 < count, |row| {
+                                    row.border_b_1()
+                                        .border_color(tint(t.border(), 0.28))
+                                })
+                                .when(!available, |row| {
+                                    row.opacity(0.45).cursor_default()
+                                })
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_sm()
+                                        .text_ellipsis()
+                                        .child(version.name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .w(px(78.0))
+                                        .text_right()
+                                        .text_xs()
+                                        .text_color(t.muted_foreground())
+                                        .text_ellipsis()
+                                        .child(version.date.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .w(px(104.0))
+                                        .text_right()
+                                        .text_xs()
+                                        .text_color(t.muted_foreground())
+                                        .text_ellipsis()
+                                        .child(java_label),
+                                )
+                                .child(
+                                    div()
+                                        .w(px(18.0))
+                                        .flex()
+                                        .items_center()
+                                        .justify_end()
+                                        .when(selected, |check| {
+                                            check.child(
+                                                div()
+                                                    .text_color(t.primary())
+                                                    .child(icon("check", 14.0)),
+                                            )
+                                        }),
+                                )
+                                .on_click(cx.listener(
+                                    move |v, _: &gpui::ClickEvent, _, cx| {
+                                        if !available {
+                                            return;
+                                        }
+                                        if let Some(Dialog::NewInstance(dialog)) = &mut v.dialog {
+                                            dialog.version = name.clone();
+                                            dialog.error = None;
+                                            if !java17 {
+                                                dialog.java_type = "java8".into();
+                                            } else if !java8 {
+                                                dialog.java_type = "java17+".into();
+                                            }
+                                        }
+                                        cx.notify();
+                                    },
+                                ))
+                        })),
+                );
             }
         }
         let selected = state
@@ -596,22 +647,13 @@ impl LauncherRoot {
             .as_ref()
             .and_then(|versions| versions.iter().find(|choice| choice.name == state.version));
         body = body
-            .child(div().child(format!("Selected: {}", state.version)))
-            .child(
-                div().flex().gap_2().children(
-                    [("java17+", "Java 17+"), ("java8", "Java 8")]
-                        .into_iter()
-                        .map(|(java, label)| {
-                            let available = selected.is_some_and(|choice| choice.available(java));
-                            btn(
-                                t,
-                                label,
-                                if state.java_type == java {
-                                    ButtonVariant::Primary
-                                } else {
-                                    ButtonVariant::Secondary
-                                },
-                            )
+            .child(section_title(t, "Java"))
+            .child(segmented_control(t).children(
+                [("java17+", "Java 17+"), ("java8", "Java 8")]
+                    .into_iter()
+                    .map(|(java, label)| {
+                        let available = selected.is_some_and(|choice| choice.available(java));
+                        segment(t, label, state.java_type == java)
                             .debug_selector(move || format!("install-java:{java}").into())
                             .when(!available, |button| button.opacity(0.5).cursor_default())
                             .on_click(cx.listener(
@@ -624,15 +666,31 @@ impl LauncherRoot {
                                     }
                                 },
                             ))
-                        }),
-                ),
-            )
+                    }),
+            ))
             .child(section_title(t, "Group (optional)"))
             .child(self.field("new-group", "Ungrouped", cx));
         if let Some(error) = &state.error {
             body = body
-                .child(error.clone())
-                .child(btn(t, "Reload catalog", ButtonVariant::Ghost).on_click(
+                .child(
+                    div()
+                        .flex()
+                        .items_start()
+                        .gap_2()
+                        .child(
+                            div()
+                                .pt(px(1.0))
+                                .text_color(t.destructive())
+                                .child(icon("info", 12.0)),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(t.destructive())
+                                .child(error.clone()),
+                        ),
+                )
+                .child(btn(t, "Reload catalog", ButtonVariant::Outline).on_click(
                     cx.listener(|v, _: &gpui::ClickEvent, _, cx| v.load_new_catalog(cx)),
                 ));
         }
@@ -643,7 +701,7 @@ impl LauncherRoot {
             .flex()
             .gap_2()
             .child(
-                btn(t, "Cancel", ButtonVariant::Ghost)
+                btn(t, "Cancel", ButtonVariant::Outline)
                     .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| v.close_dialog(cx))),
             )
             .child(
@@ -656,7 +714,7 @@ impl LauncherRoot {
                         }
                     })),
             );
-        self.dialog_frame("New instance", body, footer, cx)
+        self.dialog_frame_with_width(520.0, "New instance", body, footer, cx)
     }
     pub(super) fn pack_status_view(
         &self,

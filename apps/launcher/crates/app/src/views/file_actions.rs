@@ -1,6 +1,6 @@
 //! Context actions keep the chosen path independent of the open editor draft.
 use super::{minecraft_files::instance_id, LauncherRoot};
-use crate::ui::{btn, ButtonVariant};
+use crate::ui::{btn, icon, ButtonVariant};
 use gpui::{div, prelude::*, Context, Div};
 use industrialis_backend::{
     file_actions,
@@ -144,41 +144,50 @@ impl LauncherRoot {
         div().flex().flex_col().children(
             [
                 (
+                    "external-link",
                     "Open in external editor",
                     "file-menu-editor",
                     FileAction::External,
                 ),
                 (
+                    "copy",
                     "Copy relative path",
                     "file-menu-relative",
                     FileAction::Relative,
                 ),
                 (
+                    "copy",
                     "Copy absolute path",
                     "file-menu-absolute",
                     FileAction::Absolute,
                 ),
                 (
+                    "folder-open",
                     "Open file location",
                     "file-menu-location",
                     FileAction::Location,
                 ),
             ]
             .into_iter()
-            .map(|(label, selector, action)| {
+            .map(|(glyph, label, selector, action)| {
                 let id = id.to_owned();
                 let entry = entry.clone();
                 let disabled =
                     matches!(action, FileAction::External) && (entry.is_dir || !entry.editable);
-                btn(&self.theme, label, ButtonVariant::Ghost)
+                btn(&self.theme, "", ButtonVariant::MenuItem)
                     .id(selector)
                     .debug_selector(move || selector.into())
+                    .aria_label(label)
                     .role(gpui::accesskit::Role::MenuItem)
                     .w_full()
                     .justify_start()
                     .text_xs()
+                    .px_2()
+                    .gap_2()
                     .tab_stop(!disabled)
                     .when(disabled, |c| c.opacity(0.5).cursor_default())
+                    .child(icon(glyph, 14.0))
+                    .child(label)
                     .on_click(cx.listener(move |v, _, _, cx| {
                         if !disabled {
                             v.file_context_action(id.clone(), entry.clone(), action, cx);
