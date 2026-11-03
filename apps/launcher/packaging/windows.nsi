@@ -57,8 +57,8 @@ Function .onInit
 
   ; Older updaters pass /D=<existing directory>. If that directory is the
   ; retired default, install to the current one and remove the old copy.
-  ${GetFileName} $R0 $INSTDIR
-  ${GetParent} $R1 $INSTDIR
+  ${GetFileName} $INSTDIR $R0
+  ${GetParent} $INSTDIR $R1
   ${If} $R0 == "${LEGACY_FOLDER_NAME}"
   ${AndIf} $R1 == "$LOCALAPPDATA\Programs"
     StrCpy $MigrateLegacy "1"
@@ -72,8 +72,8 @@ Function .onInit
   ${If} $R2 == ""
     ReadRegStr $R2 HKCU "${LEGACY_REGKEY}" "InstallDir"
     ${If} $R2 != ""
-      ${GetFileName} $R0 $R2
-      ${GetParent} $R1 $R2
+      ${GetFileName} $R2 $R0
+      ${GetParent} $R2 $R1
       ${If} $R0 == "${LEGACY_FOLDER_NAME}"
       ${AndIf} $R1 == "$LOCALAPPDATA\Programs"
         StrCpy $MigrateLegacy "1"
