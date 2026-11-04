@@ -24,6 +24,38 @@ function Assert-Throws([scriptblock]$Action) {
 }
 $install = Get-LegacyInstall $local $profile
 if ($install.Executables.Count -ne 2 -or $install.Updater -ne (Join-Path $root 'Update.exe')) { throw 'Legacy detection failed to include app and shortcut stub' }
+$broker = [pscustomobject]@{
+  ProcessId = 101
+  Name = 'industrialis.exe'
+  ExecutablePath = "$root\app-1.0.0\industrialis.exe"
+  CommandLine = '"C:\fixture\industrialis.exe" --industrialis-game-broker request.json'
+}
+if (-not (Test-GameBrokerProcess $broker)) { throw 'Game broker command line was not recognized' }
+$window = [pscustomobject]@{
+  ProcessId = 102
+  Name = 'industrialis.exe'
+  ExecutablePath = "$root\app-1.0.0\industrialis.exe"
+  CommandLine = '"C:\fixture\industrialis.exe"'
+}
+if (Test-GameBrokerProcess $window) { throw 'Launcher window was classified as a game broker' }
+$unknown = [pscustomobject]@{
+  ProcessId = 103
+  Name = 'industrialis.exe'
+  ExecutablePath = "$root\app-1.0.0\industrialis.exe"
+  CommandLine = $null
+}
+if (Test-GameBrokerProcess $unknown) { throw 'Unknown command line was classified as a game broker' }
+$electron = [pscustomobject]@{
+  ProcessId = 104
+  Name = 'industrialis-launcher.exe'
+  ExecutablePath = $exe
+  CommandLine = '"' + $exe + '"'
+}
+$filtered = @(Get-RunningLaunchers -Root $root -Processes @($broker, $window, $unknown, $electron))
+if ($filtered.Count -ne 3) { throw "Running-launcher filter returned $($filtered.Count) processes" }
+if (@($filtered | Where-Object { $_.ProcessId -eq 101 }).Count -ne 0) { throw 'Game broker was treated as a running launcher' }
+if (@($filtered | Where-Object { $_.ProcessId -eq 102 }).Count -ne 1) { throw 'Launcher window was filtered out' }
+if (@($filtered | Where-Object { $_.ProcessId -eq 104 }).Count -ne 1) { throw 'Legacy executable was filtered out' }
 Assert-Throws { Get-LegacyInstall $local (Join-Path $root 'user-profile') }
 [IO.File]::WriteAllText((Join-Path $root 'accounts.json'), '{}')
 Assert-Throws { Get-LegacyInstall $local $profile }

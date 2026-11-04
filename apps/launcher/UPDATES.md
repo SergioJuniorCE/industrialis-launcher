@@ -52,6 +52,13 @@ CFBundleURLTypes, and the Linux desktop entry declares the scheme for installati
 with `xdg-mime`. These registration paths need native installed acceptance before
 cutover; normal preview builds do not change the current protocol handler.
 
+An in-app update from the retired `%LOCALAPPDATA%\Programs\Industrialis GPUI`
+directory is recognized by the old marker there even though the installer moves
+the files to the current directory. Running games do not block the update: the
+detached broker can keep the old executable mapped, the installer tolerates the
+locked copy, and the current launcher reattaches to the running game. The
+retired folder can remain until that game exits.
+
 The stable Windows installer first extracts the new launcher executable, retaining
 an existing launcher executable for rollback. It then runs the bundled retirement
 helper against the exact old `%LOCALAPPDATA%\IndustrialisLauncher` installation.
@@ -70,7 +77,9 @@ never imported, moved or recursively deleted by the launcher installer.
 
 For an installed Windows x64 build:
 
-1. Stop games and finish file/account operations and settings saves.
+1. Finish file/account operations and settings saves. Running games stay open:
+   they are supervised by a detached broker that the installer and retirement
+   helper ignore.
 2. Confirm the launcher update. The dialog blocks background input and closing
    the launcher during download/handoff. Busy state is checked again after the
    download, before installation.
@@ -194,20 +203,28 @@ powershell -NoProfile -File scripts/verify-windows-artifacts.ps1
 powershell -NoProfile -File scripts/test-windows-process-exit.ps1
 powershell -NoProfile -File scripts/test-windows-updater.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
 powershell -NoProfile -File scripts/test-windows-retirement.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
+powershell -NoProfile -File scripts/test-windows-migration.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
 ```
 
 Backend tests cover version/channel/platform selection, trusted URLs, mandatory
 digests, valid installation markers, download progress, truncated/corrupt/invalid
 executables, and cleanup. Native pointer/keyboard tests cover discovering failed
 checks, modal input blocking, progress, and closing after failure at 800/1100 px
-in light/dark modes. Busy guards cover games, instance operations and preferences.
+in light/dark modes. Busy guards cover instance operations, account work and
+preferences; a running game does not block an update. The legacy migration
+check accepts the marker in the retired install folder so an update from it can
+still proceed.
 
 The Windows smoke test compiles an isolated installer with registry/shortcut
-writes disabled. It exercises fresh install, the real Rust readiness handoff,
-rejection of a process that never acknowledges readiness, replacement after a
-running old executable exits, restart into the new executable, and uninstall
-while preserving an unrelated data file. It uses fixture executables, not a real
-GitHub release, and does not touch the user's launcher installation/profile.
+writes disabled and registry adoption skipped, so a developer's installed
+launcher is never migrated or cleaned by a fixture. It exercises fresh install,
+the real Rust readiness handoff, rejection of a process that never acknowledges
+readiness, replacement after a running old executable exits, restart into the
+new executable, and uninstall while preserving an unrelated data file. The
+legacy-migration fixture starts from a retired-folder marker and runs both with
+and without the old executable mapped, verifying readiness, migration, target
+preservation, restart, and cleanup. Both use fixture executables, not a real
+GitHub release, and unique folders that are removed afterwards.
 
 Retirement fixtures additionally cover profile overlap/data guards, running
 launchers, unsuccessful/incomplete uninstall, native NSIS extraction rollback,

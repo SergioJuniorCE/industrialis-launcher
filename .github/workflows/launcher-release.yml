@@ -192,6 +192,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: powershell -NoProfile -File scripts/test-windows-retirement.ps1 -MakeNSIS "$env:MAKENSIS"
+      - name: Windows legacy-folder migration
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -File scripts/test-windows-migration.ps1 -MakeNSIS "$env:MAKENSIS"
       - uses: actions/upload-artifact@v4
         with:
           name: launcher-${{ matrix.artifact }}
