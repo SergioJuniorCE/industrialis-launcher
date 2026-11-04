@@ -61,7 +61,7 @@ test("stable native release and optional previews use the correct update channel
   assert.match(workflow, /launcher-v\*/);
   assert.ok(workflow.includes("prerelease: ${{ startsWith(github.ref_name, 'launcher-preview-v') }}"));
   assert.ok(workflow.includes("make_latest: ${{ startsWith(github.ref_name, 'launcher-v') }}"));
-  assert.match(workflow, /pull_request:/);
+  assert.ok(!workflow.includes("pull_request"));
   assert.ok(!workflow.includes("electron-forge"));
   assert.ok(!workflow.toLowerCase().includes("gpui"));
   assert.ok(!installer.includes("RETIRE_SCRIPT_FILE"));
