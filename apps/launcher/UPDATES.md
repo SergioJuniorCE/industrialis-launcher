@@ -26,8 +26,9 @@ data stays in its original location.
 
 Optional `launcher-preview-vX.Y.Z` tags publish prereleases with `make_latest: false`
 and the preview update feature. They remain outside the stable feed.
-Pull requests build and test all three platforms without publication;
-workflow_dispatch also builds artifacts only. Tag pushes alone publish releases.
+The three-platform build matrix runs only for release tags and manual
+`workflow_dispatch`; pull requests do not trigger builds. Tag pushes alone
+publish releases.
 
 Development builds omit the `packaged-updates` feature and perform no launcher
 update network requests. Packaging enables the feature. Portable Windows builds
@@ -163,9 +164,11 @@ Stable builds compile the stable update channel and register
 preview build.
 
 The canonical `.github/workflows/launcher-release.yml` tests and builds all
-three native platforms. `launcher-v*` tags publish stable releases and
-`launcher-preview-v*` tags publish optional isolated previews after every build
-succeeds. `workflow_dispatch` builds CI artifacts without publishing a release.
+three native platforms only for release tags and manual `workflow_dispatch`;
+pull requests do not trigger builds. `launcher-v*` tags publish stable releases
+and `launcher-preview-v*` tags publish optional isolated previews after every
+build succeeds. `workflow_dispatch` builds CI artifacts without publishing a
+release.
 Root launcher development, packaging and version commands select the native
 launcher. The immutable `launcher-v0.3.0` tag preserves the historical release.
 
