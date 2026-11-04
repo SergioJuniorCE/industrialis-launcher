@@ -10,9 +10,17 @@ use industrialis_backend::{
 };
 use std::{collections::HashMap, path::PathBuf};
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum AddOnTab {
+    #[default]
+    Mods,
+    Browse,
+    ResourcePacks,
+}
+
 #[derive(Default)]
 pub(super) struct ContentUi {
-    resources: bool,
+    pub(super) tab: AddOnTab,
     states: HashMap<String, ContentState>,
 }
 #[derive(Default)]
@@ -38,9 +46,10 @@ impl LauncherRoot {
         if let Some(state) = self.content_ui.states.get_mut(id) {
             state.loaded = false;
         }
+        self.mod_browser_ui.invalidate_target(id);
     }
     pub(super) fn add_ons_view(&mut self, id: &str, cx: &mut Context<Self>) -> Div {
-        let resources = self.content_ui.resources;
+        let tab = self.content_ui.tab;
         let tabs = div()
             .flex()
             .gap_2()
@@ -50,15 +59,31 @@ impl LauncherRoot {
                 btn(
                     &self.theme,
                     "Mods",
-                    if resources {
-                        ButtonVariant::Ghost
-                    } else {
+                    if tab == AddOnTab::Mods {
                         ButtonVariant::Primary
+                    } else {
+                        ButtonVariant::Ghost
                     },
                 )
                 .debug_selector(|| "content-mods-tab".into())
                 .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                    v.content_ui.resources = false;
+                    v.content_ui.tab = AddOnTab::Mods;
+                    cx.notify();
+                })),
+            )
+            .child(
+                btn(
+                    &self.theme,
+                    "Browse mods",
+                    if tab == AddOnTab::Browse {
+                        ButtonVariant::Primary
+                    } else {
+                        ButtonVariant::Ghost
+                    },
+                )
+                .debug_selector(|| "content-browse-tab".into())
+                .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                    v.content_ui.tab = AddOnTab::Browse;
                     cx.notify();
                 })),
             )
@@ -66,7 +91,7 @@ impl LauncherRoot {
                 btn(
                     &self.theme,
                     "Resource packs",
-                    if resources {
+                    if tab == AddOnTab::ResourcePacks {
                         ButtonVariant::Primary
                     } else {
                         ButtonVariant::Ghost
@@ -74,14 +99,14 @@ impl LauncherRoot {
                 )
                 .debug_selector(|| "content-resources-tab".into())
                 .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                    v.content_ui.resources = true;
+                    v.content_ui.tab = AddOnTab::ResourcePacks;
                     cx.notify();
                 })),
             );
-        let body = if resources {
-            self.resource_packs_view(id, cx)
-        } else {
-            self.mods_view(id, cx)
+        let body = match tab {
+            AddOnTab::Mods => self.mods_view(id, cx),
+            AddOnTab::Browse => self.mod_browser_view(id, cx),
+            AddOnTab::ResourcePacks => self.resource_packs_view(id, cx),
         };
         div()
             .flex_1()
@@ -435,7 +460,7 @@ mod tests {
                 v.selected_id = Some("pack".into());
                 v.instance_ui.detail_tab = DetailTab::Mods;
                 v.data.instances[0].settings.pack_version = "2.9.0-RC-2".into();
-                v.content_ui.resources = true;
+                v.content_ui.tab = AddOnTab::ResourcePacks;
                 v.content_ui.states.insert(
                     "pack".into(),
                     ContentState {

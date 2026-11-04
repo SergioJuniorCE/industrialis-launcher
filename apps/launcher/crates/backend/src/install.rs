@@ -820,6 +820,9 @@ mod tests {
                 url: "fixture".into(),
                 archive_sha256: "fixture".into(),
                 pack_series: None,
+                provider: None,
+                project_id: None,
+                version_id: None,
             }),
         )
         .await

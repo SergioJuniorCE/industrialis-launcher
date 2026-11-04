@@ -9,6 +9,7 @@ pub mod config_presets;
 pub mod fs_utils;
 pub mod game_broker;
 mod game_capture;
+pub mod game_target;
 pub mod groups;
 pub mod http;
 pub mod icons;
@@ -41,6 +42,7 @@ pub mod custom_mods;
 pub mod content;
 mod content_archive;
 pub mod modernity;
+pub mod modrinth;
 
 pub mod credentials;
 
