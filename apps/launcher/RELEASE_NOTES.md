@@ -1,18 +1,20 @@
 <!-- industrialis-launcher-release-v1 -->
 
-# Industrialis Launcher 0.4.3
+# Industrialis Launcher 0.4.4
 
-This release makes GTNH pack updates atomic and recoverable, preserves user-modified configs and scripts, and expands launcher update visibility with a status-bar indicator and changelog viewer. It builds on the 0.4.2 native stable release without changing launcher data or user settings.
+This patch fixes launcher self-updates: installed builds can update while a game keeps running, and installations still using the retired `Industrialis GPUI` folder can move to the current directory without aborting. It builds on the 0.4.3 native stable release without changing launcher data or user settings.
 
-## Features
+## Fixes
 
-- Pack updates now build the new version beside the live instance and swap it in only after it completes. A verified rollback copy restores the previous instance if any step fails.
-- If the launcher closes mid-update, the next start recovers the previous instance automatically and reports it.
-- User-modified and user-created files under `config` and `scripts` are carried into the updated pack. Files that still match the old pack are replaced by the new pack's version.
-- The update and clean-reinstall dialog has been redesigned with pack mod change counts, custom mod selection, live analysis progress, searchable Stable/Beta version lists, and an optional instance copy before the operation.
-- Process cards show animated spinners and progress rings while pack operations run.
-- The status bar reports launcher update state and opens the update dialog. Settings → About and the update dialog include a changelog viewer with recent published stable release notes.
-- Existing native installations upgrade in place, including installations created before the public product name change.
+- Running games no longer block an in-app launcher update. Only a game launch that is still starting blocks, because the installer handoff waits for the old launcher to exit.
+- A self-update from `%LOCALAPPDATA%\Programs\Industrialis GPUI` now recognizes the old install marker, moves the files to `Industrialis Launcher`, restarts, and preserves unrelated files.
+- The detached game broker is no longer mistaken for a second launcher window during old-Electron retirement.
+- A rollback executable still mapped by a running game no longer blocks a later update; the installer switches to a unique rollback name.
+- Installer smoke tests no longer read or migrate a real developer installation.
+
+## Upgrading from 0.4.2 or 0.4.3
+
+Close running games once for this update; the older launcher still enforces that check. After 0.4.4 is installed, later launcher updates run with games open.
 
 ## Downloads
 
