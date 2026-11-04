@@ -1,4 +1,4 @@
-//! Headless process fixture for the cross-runtime ownership tests. Explicit
+//! Headless process fixture for the ownership tests. Explicit
 //! --data-dir equivalent is mandatory: this never selects a user's live profile.
 use industrialis_backend::{
     paths::LauncherPaths,

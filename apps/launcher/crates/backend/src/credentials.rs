@@ -1,36 +1,11 @@
-//! Compatibility with Electron's synchronous safeStorage envelopes. Never
-//! replace a missing/corrupt existing key to make a decryption failure disappear.
+//! Chromium-style synchronous safeStorage envelopes. Never replace a
+//! missing/corrupt existing key to make a decryption failure disappear.
 use crate::paths::LauncherPaths;
 #[cfg(windows)]
 use anyhow::{ensure, Context};
 #[cfg(windows)]
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-#[cfg(windows)]
-use std::path::PathBuf;
 
-#[cfg(windows)]
-fn local_state_candidates(paths: &LauncherPaths) -> Vec<PathBuf> {
-    let mut result = vec![paths.base().join("Local State")];
-    // Electron userData and the launcher backend's profile directory are distinct
-    // in older builds. Read the original key where Electron put it, in place.
-    if paths.base() == crate::paths::system_data_dir()
-        && std::env::var_os("INDUSTRIALIS_DATA_DIR").is_none()
-    {
-        if let Some(base) = directories::BaseDirs::new() {
-            for app in [
-                "Industrialis Launcher",
-                "@industrialis/launcher",
-                "industrialis-launcher",
-            ] {
-                let p = base.config_dir().join(app).join("Local State");
-                if !result.contains(&p) {
-                    result.push(p);
-                }
-            }
-        }
-    }
-    result
-}
 #[cfg(windows)]
 fn key_from_state(path: &std::path::Path) -> anyhow::Result<Option<Vec<u8>>> {
     let raw = match std::fs::read(path) {
@@ -39,7 +14,7 @@ fn key_from_state(path: &std::path::Path) -> anyhow::Result<Option<Vec<u8>>> {
         Err(e) => return Err(e.into()),
     };
     let state: serde_json::Value = serde_json::from_slice(&raw)
-        .context("The original Electron Local State is invalid; it has been kept")?;
+        .context("The launcher Local State is invalid; it has been kept")?;
     let Some(key) = state
         .pointer("/os_crypt/encrypted_key")
         .and_then(|v| v.as_str())
@@ -48,16 +23,13 @@ fn key_from_state(path: &std::path::Path) -> anyhow::Result<Option<Vec<u8>>> {
     };
     let raw = STANDARD
         .decode(key)
-        .context("The Electron credential key is invalid")?;
+        .context("The credential key is invalid")?;
     ensure!(
         raw.starts_with(b"DPAPI"),
-        "The Electron credential key uses an unsupported encryption format"
+        "The credential key uses an unsupported encryption format"
     );
     let key = dpapi(&raw[5..], false)?;
-    ensure!(
-        key.len() == 32,
-        "The Electron credential key has an invalid length"
-    );
+    ensure!(key.len() == 32, "The credential key has an invalid length");
     Ok(Some(key))
 }
 #[cfg(windows)]
@@ -148,30 +120,24 @@ pub fn decrypt(paths: &LauncherPaths, value: &str) -> anyhow::Result<String> {
         raw.len() >= 3 + 12 + 16,
         "Encrypted Google Drive credential is incomplete"
     );
-    // Try only our known old app directories. A failed candidate never causes a
-    // rewrite, deletion, plaintext fallback, or a forced reconnect.
-    let mut last_error = None;
-    for candidate in local_state_candidates(paths) {
-        match key_from_state(&candidate) {
-            Ok(Some(key)) => {
-                let key = ring::aead::UnboundKey::new(&ring::aead::AES_256_GCM, &key)
-                    .map_err(|_| anyhow::anyhow!("Credential key is invalid"))?;
-                let key = ring::aead::LessSafeKey::new(key);
-                let mut ciphertext = raw[15..].to_vec();
-                if let Ok(text) = key.open_in_place(
-                    ring::aead::Nonce::try_assume_unique_for_key(&raw[3..15]).unwrap(),
-                    ring::aead::Aad::empty(),
-                    &mut ciphertext,
-                ) {
-                    return String::from_utf8(text.to_vec())
-                        .context("Credential is not valid UTF-8");
-                }
-            }
-            Ok(None) => {}
-            Err(e) => last_error = Some(e),
+    // A failed key never causes a rewrite, deletion, plaintext fallback, or a
+    // forced reconnect.
+    if let Some(key) = key_from_state(&paths.base().join("Local State"))? {
+        let key = ring::aead::UnboundKey::new(&ring::aead::AES_256_GCM, &key)
+            .map_err(|_| anyhow::anyhow!("Credential key is invalid"))?;
+        let key = ring::aead::LessSafeKey::new(key);
+        let mut ciphertext = raw[15..].to_vec();
+        if let Ok(text) = key.open_in_place(
+            ring::aead::Nonce::try_assume_unique_for_key(&raw[3..15]).unwrap(),
+            ring::aead::Aad::empty(),
+            &mut ciphertext,
+        ) {
+            return String::from_utf8(text.to_vec()).context("Credential is not valid UTF-8");
         }
     }
-    Err(last_error.unwrap_or_else(||anyhow::anyhow!("The original Electron credential key could not decrypt Google Drive. Existing credentials have been kept.")))
+    Err(anyhow::anyhow!(
+        "The launcher credential key could not decrypt Google Drive. Existing credentials have been kept."
+    ))
 }
 #[cfg(windows)]
 pub async fn encrypt(paths: &LauncherPaths, value: String) -> anyhow::Result<String> {
@@ -179,47 +145,41 @@ pub async fn encrypt(paths: &LauncherPaths, value: String) -> anyhow::Result<Str
     let paths = paths.clone();
     crate::profile_store::mutate(async move {
         tokio::task::spawn_blocking(move || {
-            let mut existing = None;
-            for candidate in local_state_candidates(&paths) {
-                if let Some(key) = key_from_state(&candidate)? {
-                    existing = Some(key);
-                    break;
+            let state_path = paths.base().join("Local State");
+            let key = match key_from_state(&state_path)? {
+                Some(key) => key,
+                None => {
+                    let mut state = match std::fs::read(&state_path) {
+                        Ok(raw) => serde_json::from_slice::<serde_json::Value>(&raw)?,
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
+                        Err(e) => return Err(e.into()),
+                    };
+                    ensure!(
+                        state.is_object(),
+                        "Launcher Local State is invalid; it has been kept"
+                    );
+                    let mut key = vec![0; 32];
+                    ring::rand::SystemRandom::new()
+                        .fill(&mut key)
+                        .map_err(|_| anyhow::anyhow!("Secure random generation failed"))?;
+                    let mut protected = b"DPAPI".to_vec();
+                    protected.extend(dpapi(&key, true)?);
+                    let object = state
+                        .as_object_mut()
+                        .unwrap()
+                        .entry("os_crypt")
+                        .or_insert_with(|| serde_json::json!({}));
+                    ensure!(
+                        object.is_object(),
+                        "Launcher credential settings are invalid; they have been kept"
+                    );
+                    object["encrypted_key"] = STANDARD.encode(protected).into();
+                    crate::fs_utils::write_atomic(
+                        &state_path,
+                        serde_json::to_string_pretty(&state)?.as_bytes(),
+                    )?;
+                    key
                 }
-            }
-            let key = if let Some(key) = existing {
-                key
-            } else {
-                let state_path = paths.base().join("Local State");
-                let mut state = match std::fs::read(&state_path) {
-                    Ok(raw) => serde_json::from_slice::<serde_json::Value>(&raw)?,
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
-                    Err(e) => return Err(e.into()),
-                };
-                ensure!(
-                    state.is_object(),
-                    "Electron Local State is invalid; it has been kept"
-                );
-                let mut key = vec![0; 32];
-                ring::rand::SystemRandom::new()
-                    .fill(&mut key)
-                    .map_err(|_| anyhow::anyhow!("Secure random generation failed"))?;
-                let mut protected = b"DPAPI".to_vec();
-                protected.extend(dpapi(&key, true)?);
-                let object = state
-                    .as_object_mut()
-                    .unwrap()
-                    .entry("os_crypt")
-                    .or_insert_with(|| serde_json::json!({}));
-                ensure!(
-                    object.is_object(),
-                    "Electron credential settings are invalid; they have been kept"
-                );
-                object["encrypted_key"] = STANDARD.encode(protected).into();
-                crate::fs_utils::write_atomic(
-                    &state_path,
-                    serde_json::to_string_pretty(&state)?.as_bytes(),
-                )?;
-                key
             };
             let key = ring::aead::UnboundKey::new(&ring::aead::AES_256_GCM, &key)
                 .map_err(|_| anyhow::anyhow!("Credential key is invalid"))?;

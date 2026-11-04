@@ -6,8 +6,10 @@ The owner explicitly chose **Replace Electron in stable**, accepting the remaini
 checks listed in [release notes](RELEASE_NOTES.md). They remain follow-up work;
 this decision does not turn unrun scenarios into passed tests. Launcher 0.4.0 owns
 the production launcher tag workflow. Electron source/build dependencies are
-removed; the original profile path and installer retirement safeguards remain.
-The immutable last-Electron release is launcher-v0.3.0.
+removed; the original profile path remains. Electron retirement helpers were
+removed on 2026-11-04 after the last Electron release aged out. Dated records
+below describe the historical migration. The immutable last-Electron release is
+launcher-v0.3.0.
 
 The native [0.4.0 stable release](https://github.com/SergioJuniorCE/industrialis-launcher/releases/tag/launcher-v0.4.0)
 was published and its public downloads/updater feed verified on 2026-10-19.
@@ -27,9 +29,10 @@ Files now have bounded scrolling, discoverable Easy/Advanced modes and a highlig
 native editor with a visible Find bar; isolated dark/light editing and paired saves pass. Actual
 Java 8/17+ GTNH installation, maintenance preservation and virtual-desktop client
 loading/Stop, saved Microsoft client launch and Linux detached recovery now pass.
-Actual Electron 0.3.0 replacement now passes in Windows Sandbox, including installed
-Launcher boot/protocol/uninstall and generated-profile preservation. Google, physical
-desktops, running-user/published updates and cross-platform cutover remain open.
+Historical Electron 0.3.0 replacement passed in Windows Sandbox, including installed
+Launcher boot/protocol/uninstall and generated-profile preservation; the retirement
+harness was removed on 2026-11-04. Google, physical desktops, running-user/published
+updates and cross-platform cutover remain open.
 See the latest records below and
 [LIVE_ACCEPTANCE.md](LIVE_ACCEPTANCE.md) for reproducible scenarios.
 
@@ -111,7 +114,7 @@ Launcher now exposes Info, Settings, Logs, Files and Mods for an instance.
       Repaired 2026-10-12: persistent Easy/Advanced tabs, syntax highlighting, readable editor surfaces and a visible focused Find bar. Earlier checks did not cover large lists or the missing search presentation; new regressions and isolated native dark/light checks cover both. Physical/platform acceptance remains F20/F38.
 
       **Accept:** edit a scalar and list in Easy mode, edit raw text, save both game
-                                                              file and overlay, restart, then update the pack and verify the override survives.
+                                                                      file and overlay, restart, then update the pack and verify the override survives.
 
 - [x] **F03 — P1 · Done · Open a file in the OS editor.**
       Verified 2026-10-11: the installed Windows app dispatches the default editor, observes its actual atomic save and mirrors the bytes into the original overlay. Native override removal stops mirroring and does not recreate the removed override after another external edit. Shutdown/maintenance guards pass in backend tests; recorded actual GTNH pack maintenance preserves paired config overrides. Physical and other-platform editor behavior remains F38.
@@ -122,7 +125,7 @@ Launcher now exposes Info, Settings, Logs, Files and Mods for an instance.
       Verified 2026-10-11: the installed app opens a native editor window, repeated file opening foregrounds that same window without a duplicate, and normal editor close leaves the launcher and saved override intact. Launcher multi-window paired saves, independent close/reuse, shared drafts and launch-time detached-draft saves pass. Physical and other-platform lifecycle checks remain F31/F38.
 
       **Accept:** pop out a file, focus the existing matching window on repeat,
-                                                              synchronize edits, and close either window without losing saved data.
+                                                                      synchronize edits, and close either window without losing saved data.
 
 - [x] **F05 — P1 · Done · Custom-mod management.**
       Verified 2026-10-11: actual installed native picker Cancel and two-file .jar/.zip import pass byte checks in game/overlay copies; confirmed removal retains the other custom mod and pack-owned file. The OS folder action opens the original persistent mods directory. Launcher/backend disk reload, failed removal and running/busy guards pass; real GTNH copy/update/reinstall preservation is recorded below.
@@ -167,10 +170,10 @@ Reference: [App.tsx](https://github.com/SergioJuniorCE/industrialis-launcher/blo
       Verified: complete searchable catalogs and All/Stable/Beta filters serve install and maintenance. Launcher tests exercise filtering, unavailable variants and selections beyond the former eight-row limit. Error/reload controls remain reachable. Actual supported Java 8/17+ archives install in expendable instances.
 
       **Accept:** select any supported catalog version, search/filter releases, see
-                                                              available Java variants, reject unavailable variants before installation, and
-                                                              retry a failed catalog fetch. The maintenance picker already has a full list
-                                                              and archive-availability checks; do not replace that with the limited picker.
-                                                              Actual 2.9.0-RC-2 Java 8/17+ and 2.8.4 Java 17+ archive installation passes in expendable instances.
+                                                                      available Java variants, reject unavailable variants before installation, and
+                                                                      retry a failed catalog fetch. The maintenance picker already has a full list
+                                                                      and archive-availability checks; do not replace that with the limited picker.
+                                                                      Actual 2.9.0-RC-2 Java 8/17+ and 2.8.4 Java 17+ archive installation passes in expendable instances.
 
 - [x] **F12 — P1 · Done · Pack update status.**
       Updated 2026-10-12: one shared catalog checks at startup and every hour. Manual checks live in the instance context menu; ordinary library/detail check buttons are removed. Unknown/current status is informational; available updates open the matching maintenance workflow. The root owns the polling task and duplicate starts/in-flight requests are guarded. Fake-clock tests verify the hourly boundaries, repeated ticks and cancellation; actual native menu dispatch passes in dark/light. Failed checks retain cached versions and cannot turn unknown status into Up to date. Real catalogs and maintenance were exercised in the earlier GTNH acceptance fixtures.
@@ -211,31 +214,31 @@ Backup services, provider and durable manager now have reachable Launcher workfl
       Implemented: OAuth PKCE loopback authorization, encrypted refresh-token reuse, paginated Drive folder operations and resumable uploads are implemented. Actual Electron 43.3.0/Rust Windows DPAPI, isolated Linux GNOME Secret Service and native KWallet 6 interoperability pass in both directions with the original generated key unchanged. The native Linux regression caught and fixed libsecret unloading between calls. macOS Keychain support compiles; CBC vectors match independent Node crypto. Live Google and Keychain acceptance remain open; older KWallet versions are not certified by the KWallet 6 fixture.
 
       **Accept:** connect,
-                                                              restart, refresh, disconnect and handle denied/expired authorization without
-                                                              exposing credentials or falsely displaying Connected.
+                                                                      restart, refresh, disconnect and handle denied/expired authorization without
+                                                                      exposing credentials or falsely displaying Connected.
 
 - [ ] **F17 — P1 · Verify · Manual backup management.**
       Implemented: Local/cloud lists, manifest-last verified uploads, verified collision-safe restores into the existing backups folder, confirmed cloud deletion, folder actions and transfer errors/progress are reachable in Launcher. Synthetic integrity/collision/failure tests pass. Live Drive transfer acceptance remains open.
 
       **Accept:** upload/download a real archive byte-for-byte, reject a corrupt
-                                                              remote artifact, handle an interrupted upload and delete only the selected
-                                                              snapshot. Electron's Restore action downloads an archive into the backups
-                                                              directory; it does not unpack or replace a running world's saves.
+                                                                      remote artifact, handle an interrupted upload and delete only the selected
+                                                                      snapshot. Electron's Restore action downloads an archive into the backups
+                                                                      directory; it does not unpack or replace a running world's saves.
 
 - [x] **F18 — P1 · Done · Automatic backup manager.**
       Implemented: Automatic settling/deduplication, original backup-state.json queue, retry/backoff/restart recovery, manual retry/scan, deletion tombstones and cloud-only retention are implemented. At most two instances upload concurrently; same-instance retention is serialized. Settling, bounded concurrency, durable delivery and empty-progress completion regressions pass.
 
       **Accept:** new completed archives upload automatically, partial files do not,
-                                                              failures survive restart and can retry, deleted snapshots do not reappear, and
-                                                              retention never deletes local archives.
+                                                                      failures survive restart and can retry, deleted snapshots do not reappear, and
+                                                                      retention never deletes local archives.
 
 - [x] **F19 — P1 · Done · Backup controls and health.**
       Verified: global/per-instance policy, inheritance and retention edits round-trip through native launcher fields into the original settings files without losing extensions. The panel reads existing archives; manager tests cover queued/failed/retried/healthy progress. Retry/scan, transfer progress and the local OAuth setup guide are reachable. Actual Google authorization/transfers remain independently gated by F16/F17.
 
       **Accept:** enable/disable one instance, inherit/override retention, observe
-                                                              queued/failed/healthy states and transfer progress, retry, and open the guide.
-                                                              Planned provider cards in Electron are not implementations: SFTP or other
-                                                              providers need not be invented to complete this port.
+                                                                      queued/failed/healthy states and transfer progress, retry, and open the guide.
+                                                                      Planned provider cards in Electron are not implementations: SFTP or other
+                                                                      providers need not be invented to complete this port.
 
 ### Input and settings features
 
@@ -270,8 +273,8 @@ Reference: [Launcher input](crates/app/src/input.rs),
       Verified: an Electron-shaped custom preset loads, edits/saves all supported tokens and overrides, reloads from disk and can be selected again. Launcher pointer reset/delete/fallback preserves unknown root/token/override fields. Platform rendering remains in F38 and visual matching in UI_PARITY.
 
       **Accept:** load an Electron custom preset, edit/save it and its overrides,
-                                                              restart and select it again, then reset/delete safely. Visual matching can wait;
-                                                              preserve user-authored settings now (F25).
+                                                                      restart and select it again, then reset/delete safely. Visual matching can wait;
+                                                                      preserve user-authored settings now (F25).
 
 ### Persistence, process lifetime, and desktop behavior
 
@@ -401,21 +404,16 @@ Reference: [release updater](https://github.com/SergioJuniorCE/industrialis-laun
       verification and virtual-desktop boot/render/close. Remote CI, macOS and
       physical Linux launches, signing/notarization, production install/uninstall
       and running-user replacement remain unverified.
-      The stable build mode now emits the old updater's required Windows filename
-      and embeds guarded Squirrel retirement; synthetic running/data/overlap,
-      protocol-cleanup and native installer rollback tests pass. Actual public
-      Electron 0.3.0 retirement, installed Launcher rendering, same-owner protocol
-      activation and uninstall pass in Windows Sandbox without an external MSVC
-      runtime. With the real old window open, replacement waits for its normal
-      fixture close; all eleven post-close metadata/player fixture files survive
-      before Launcher boot. The old app legitimately updates two metadata documents
-      during its own boot/close, so preservation uses the post-close baseline.
-      Production
-      activation and other supported-platform acceptance remain gated.
+      The stable build mode emits the expected Windows filename and the native
+      installer rollback test passes. Electron retirement helpers were removed on
+      2026-11-04 after the last Electron release aged out. Installed Launcher
+      rendering, same-owner protocol activation and uninstall pass in Windows
+      Sandbox without an external MSVC runtime. Production activation and other
+      supported-platform acceptance remain gated.
       **Accept:** native artifacts install/run/uninstall on supported targets, carry
       icons/version metadata and required resources, document runtime requirements
       and signing/notarization policy, and publish the assets expected by downloads
-      and F32. Verify upgrade from the old Windows installer and preserve user data.
+      and F32. Verify native upgrades preserve user data.
 - [x] **F34 — P0 · Done · Repository/distribution cutover.** Stable replacement
       was authorized on 2026-10-17 with the recorded acceptance gaps retained as
       follow-ups. Electron source/build wrappers and workspace dependencies are
@@ -509,14 +507,11 @@ Reference: [release updater](https://github.com/SergioJuniorCE/industrialis-laun
       pass in the actual replacement Sandbox. Linux desktop/MIME registration and actual
       `xdg-open` activation also restore the same minimized owner in the owned
       virtual desktop. macOS and published replacement remain open.
-      This flag does not uninstall Squirrel/Electron.
-      The prepared stable-channel installer additionally embeds guarded retirement;
-      actual Squirrel retirement also passes in the generated-profile Sandbox,
-      alongside synthetic failure/rollback/handler-cleanup scenarios.
+      Electron retirement helpers were removed on 2026-11-04.
       Keep skip_java_compat data/control without inventing a launch check that
       neither original backend had.
-      **Accept:** retained services/resources and installed protocol survive
-      Electron deletion, with intentionally unused UI contracts documented.
+      **Accept:** retained services/resources and installed protocol remain
+      functional, with intentionally unused UI contracts documented.
 
 ## Post-migration improvements
 

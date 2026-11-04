@@ -20,7 +20,6 @@ pub mod java;
 pub mod launch;
 pub mod launch_config;
 pub mod lifecycle;
-mod legacy_launcher;
 pub mod migration;
 pub mod minecraft_files;
 pub mod minecraft_file_search;

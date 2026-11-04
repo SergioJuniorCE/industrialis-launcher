@@ -3,7 +3,8 @@
 Use [MIGRATION_TRACKER.md](MIGRATION_TRACKER.md) for status and stable feature IDs.
 These scenarios supplement the synthetic regression suite. A successful backend
 scenario does not establish physical Launcher, provider or installed-app acceptance.
-Keep Electron until [CUTOVER.md](CUTOVER.md) is satisfied.
+The native launcher is the production launcher; remaining checks are recorded in
+[CUTOVER.md](CUTOVER.md).
 
 F15's [native copy sound check](MIGRATION_TRACKER.md#2026-10-11-f15-copy-completion-cue-verification)
 passes on the owned Linux Xvfb: one real bell request for a successful native
@@ -338,41 +339,6 @@ credentials or compatibility with other Linux distributions. Use the production
 CI distribution baseline for release artifacts; a newer Debian acceptance build
 can require a newer glibc than an older user's Linux distribution.
 
-### Native Linux credential interoperability
-
-This test uses an actual Electron 43.3.0 safeStorage envelope under the original
-app name and normal Linux app-data path, a generated value and a new native GNOME
-keyring. It checks Electron-to-Rust decryption, Rust-to-Electron decryption and
-unchanged native key bytes without printing them. It does not authorize Google,
-touch a user's keyring or certify macOS Keychain/KWallet.
-
-```sh
-cargo build --manifest-path apps/launcher/Cargo.toml --workspace \
-  --example credential_compat --locked --jobs 1 --features industrialis-app/packaged-updates
-docker build -f apps/launcher/packaging/acceptance/linux-credentials.Dockerfile \
-  -t industrialis-credential-acceptance:local apps/launcher/packaging/acceptance
-mkdir -p apps/launcher/target/credential-acceptance
-docker run --rm --network none \
-  --mount "type=bind,source=$PWD,target=/repo,readonly" \
-  --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
-  --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
-  -e LAUNCHER_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
-  industrialis-credential-acceptance:local \
-  sh scripts/test-linux-credentials.sh /opt/electron-fixture/electron \
-  /target/debug/examples/credential_compat /receipt/verification.json
-```
-
-The shell runner refuses a non-Docker environment. Its HOME, runtime directory,
-D-Bus, Xvfb and unlocked generated keyring exist only in the disposable container.
-The checked-in image verifies Electron's ZIP against its release checksums.
-The release workflow builds/runs this regression and retains its non-secret
-receipt. Remote CI still needs execution. On 2026-10-09, the original native loop
-reproduced a second-lookup SIGSEGV in libsecret/GLib; retaining those libraries for
-the process lifetime fixed it. The end-to-end checked-in recipe passes locally
-on Debian 13, using the existing Debian fixture as `BASE_IMAGE` after Docker Hub
-returned HTTP 504 twice. This validates the recipe and native interoperability,
-without claiming a clean pull of its default minimal base image.
-
 ## Native/provider acceptance still required
 
 ### Opt-in Windows provider harness
@@ -439,16 +405,16 @@ server accepted that session or establish world gameplay/native input.
 
 Record each supported Windows x64, Linux x64 and macOS arm64 artifact separately:
 
-| Scenario                  | Acceptance evidence                                                                                                                                                                                                                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Existing profile/accounts | Open the normal original profile with the old launcher closed. Confirm paths, instances, groups/icons/settings and existing Microsoft/Google credentials work without reconnecting. Verify refresh before a separate fresh sign-in scenario. Never import or relocate user data.                                                            |
-| Microsoft                 | With an authorized test account, complete device login, license/profile/skin resolution, refresh and visible cancellation/error handling. Launch a real instance using that account.                                                                                                                                                        |
-| Google backups            | Use expendable backup contents. Link the authorized account, upload, interrupt/retry, download/restore and compare exact bytes. Test retention/delete scope against expendable backups only.                                                                                                                                                |
-| Actual gameplay           | Create/open an expendable world in both supported Java variants. Check window/RAM/JVM arguments, configured environment and pre/post commands. Use a disposable server for auto-join. Check exit/crash logs and play time.                                                                                                                  |
-| Detached game             | Leave a real game running across launcher close and reopening. Confirm one game process, recovered logs/PID/Stop and exactly-once exit/play-time accounting.                                                                                                                                                                                |
-| Native input/desktop      | Verify focus, keyboard navigation, clipboard/IME, native pickers, external editor/folders/links, second-launch foreground activation and physical dragging. Check macOS main close versus Dock/menu Quit. Record the accepted Linux minimize behavior.                                                                                      |
-| Windows replacement       | On an authorized expendable old Squirrel installation, test successful stable installation and failure/retry. Confirm old app/shortcuts/startup entries are retired, the original profile remains usable in place and protocol launch/uninstall owns/restores the correct handler. Do not use a running personal installation as a fixture. |
-| Published updates         | After signing policy and publication are authorized, install actual version N and update to published N+1. Exercise digest/size/header validation, busy/save/close guards, failed handoff and profile preservation. Confirm manual update behavior on macOS/Linux/portable packages.                                                        |
+| Scenario                  | Acceptance evidence                                                                                                                                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Existing profile/accounts | Open the normal profile with no other launcher running. Confirm paths, instances, groups/icons/settings and existing Microsoft/Google credentials work without reconnecting. Verify refresh before a separate fresh sign-in scenario. Never import or relocate user data.            |
+| Microsoft                 | With an authorized test account, complete device login, license/profile/skin resolution, refresh and visible cancellation/error handling. Launch a real instance using that account.                                                                                                 |
+| Google backups            | Use expendable backup contents. Link the authorized account, upload, interrupt/retry, download/restore and compare exact bytes. Test retention/delete scope against expendable backups only.                                                                                         |
+| Actual gameplay           | Create/open an expendable world in both supported Java variants. Check window/RAM/JVM arguments, configured environment and pre/post commands. Use a disposable server for auto-join. Check exit/crash logs and play time.                                                           |
+| Detached game             | Leave a real game running across launcher close and reopening. Confirm one game process, recovered logs/PID/Stop and exactly-once exit/play-time accounting.                                                                                                                         |
+| Native input/desktop      | Verify focus, keyboard navigation, clipboard/IME, native pickers, external editor/folders/links, second-launch foreground activation and physical dragging. Check macOS main close versus Dock/menu Quit. Record the accepted Linux minimize behavior.                               |
+| Windows install/uninstall | On a clean expendable guest, install the stable artifact, confirm the profile is unchanged before first boot, and verify protocol launch, normal close and uninstall. Confirm the profile and an unrelated data file survive. Do not use a personal installation as a fixture.       |
+| Published updates         | After signing policy and publication are authorized, install actual version N and update to published N+1. Exercise digest/size/header validation, busy/save/close guards, failed handoff and profile preservation. Confirm manual update behavior on macOS/Linux/portable packages. |
 
 For every record include date, OS/build/architecture, artifact version and SHA-256,
 scenario, result, recovery checks and remaining limits. Do not include tokens,
@@ -457,51 +423,49 @@ the stable Fxx IDs in the tracker; partial evidence keeps the item unchecked.
 
 ## Local installer preparation
 
-### Actual Squirrel replacement in Windows Sandbox
+### Installed launcher in Windows Sandbox
 
-`scripts/test-windows-squirrel-sandbox.ps1` prepares a disposable VM fixture.
-Use the unchanged public `launcher-v0.3.0` Windows installer and a stable Launcher
-artifact directory containing its `verification.json`. From the repository root:
+`scripts/test-windows-installed-sandbox.ps1` prepares a disposable VM fixture.
+Use a stable Launcher artifact directory containing its `verification.json`.
+From the repository root:
 
 ```powershell
 # Verify the actual guest wait function with disposable native children only.
 powershell -NoProfile -File scripts/test-windows-process-exit.ps1
 # Preparation only; no installer executes on the host.
-powershell -NoProfile -File scripts/test-windows-squirrel-sandbox.ps1 `
-  -LegacyInstaller <downloaded-0.3.0-setup.exe> -StableArtifactDirectory <verified-stable-directory>
+powershell -NoProfile -File scripts/test-windows-installed-sandbox.ps1 `
+  -StableArtifactDirectory <verified-stable-directory>
 # Add -Run to execute in an already-enabled Windows Sandbox.
-# Add -RunningLegacy to keep the actual released Electron fixture window open
-# while the launcher installer waits; the guest closes only that fixture normally.
 # Add -NativeUi for guest-only accessibility, keyboard, native pickers,
 # folder/default-editor dispatch and independent editor-window scenarios.
 ```
 
 The runner never enables host features or reboots the host. It refuses an existing
-Sandbox session. Only two checksum-verified installers, the guarded guest scripts,
-a fixture image and a
-unique identity marker are mapped read-only; one fresh evidence directory is
-mapped writable. Networking, clipboard, audio/video input and printer redirection
-are disabled, with software graphics. No repository or user profile is mapped.
-These controls use Microsoft's [Windows Sandbox configuration format](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file).
+Sandbox session. Only the checksum-verified installer, the guarded guest scripts,
+a fixture image and a unique identity marker are mapped read-only; one fresh
+evidence directory is mapped writable. Networking, clipboard, audio/video input
+and printer redirection are disabled, with software graphics. No repository or
+user profile is mapped. These controls use Microsoft's
+[Windows Sandbox configuration format](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file).
 
 The guest verifies its disposable identity before installation or shutdown. It
-installs the actual old release, closes only its expendable fixture processes,
 seeds generated accounts/settings/instance/player data in the normal app-data
-location, then runs the actual stable Launcher installer. Assertions cover old
-executables/shortcuts/uninstall registration, new executable checksum, exact
-pre-boot profile preservation, protocol ownership, native Launcher boot/normal close,
-unknown-field persistence, actual protocol launch restoring/foregrounding the same
-minimized guest owner, Launcher uninstall and post-uninstall profile preservation.
-Evidence stays under `target/live-acceptance/squirrel-sandbox-*/output`. The host
-checks the receipt nonce and closes only that fixture's identified Sandbox client
-after guest shutdown. Neither installer runs on the physical host.
+location, then runs the actual stable Launcher installer. Assertions cover the
+new executable checksum, exact pre-boot profile preservation, protocol ownership,
+native Launcher boot/normal close, unknown-field persistence, actual protocol
+launch restoring/foregrounding the same minimized guest owner, Launcher uninstall
+and post-uninstall profile preservation. Evidence stays under
+`target/live-acceptance/installed-sandbox-*/output`. The host checks the receipt
+nonce and closes only that fixture's identified Sandbox client after guest
+shutdown. The installer never runs on the physical host.
 
-The 2026-10-09 static-CRT stable artifact passes this complete runner with exit 0
-on Windows build 10.0.26100.0 without the MSVC redistributable. Nine generated
-profile files survive, the installed library discovers the fixture instance,
-native rendering and same-owner protocol foreground activation pass, and normal
-close/uninstall retain the profile. Inspect the saved native-window PNG as well
-as the receipt. Exact provenance and remaining limits are in the latest
+The 2026-10-09 static-CRT stable artifact passed the then-current replacement
+runner with exit 0 on Windows build 10.0.26100.0 without the MSVC redistributable.
+Nine generated profile files survived, the installed library discovered the
+fixture instance, native rendering and same-owner protocol foreground activation
+passed, and normal close/uninstall retained the profile. Inspect the saved
+native-window PNG as well as the receipt. Exact provenance and remaining limits
+are in the latest
 [tracker record](MIGRATION_TRACKER.md#2026-10-09-rebuilt-clean-windows-replacement-acceptance).
 
 The process-wait regression imports only the guest's two wait/log functions via
@@ -511,17 +475,12 @@ the native process handle because Windows PowerShell can otherwise return a blan
 exit code for redirected output; see the [PowerShell issue and resolution](https://github.com/PowerShell/PowerShell/issues/5421).
 This VM test does not establish existing real credentials, physical input,
 published update handoff, an actual user's running installation or older Windows compatibility.
-`-RunningLegacy` verifies the controlled released-app window handoff, with no
-original account: preservation begins after its normal close because the old app
-legitimately rewrites some metadata on its own boot/close. `-NativeUi` interacts
-only with verified guest-owned window/dialog PIDs. Native filename controls are
-addressed by both control ID and Edit class because the common dialog also gives
-the parent combo controls the same ID. The external editor is a generated native
-guest form registered only for the fixture's `.cfg` files; its atomic save must
-reach both the game file and original overlay. No host desktop APIs are invoked.
-When Electron does not create `Local State`, the fixture seeds a marker and
-records `legacyCreatedLocalState: false`; that result cannot certify encryption-key
-interoperability or live refresh of an original account.
+`-NativeUi` interacts only with verified guest-owned window/dialog PIDs. Native
+filename controls are addressed by both control ID and Edit class because the
+common dialog also gives the parent combo controls the same ID. The external
+editor is a generated native guest form registered only for the fixture's `.cfg`
+files; its atomic save must reach both the game file and original overlay. No
+host desktop APIs are invoked.
 
 Windows distribution builds enable static CRT linkage; both packaging and the
 artifact verifier inspect actual x64 PE imports, including delay imports, and
@@ -530,34 +489,32 @@ in the artifact receipt. This avoids silently relying on developer-machine
 `VCRUNTIME140.dll` installation. See [Rust's CRT linkage documentation](https://doc.rust-lang.org/reference/linkage.html#static-and-dynamic-c-runtimes)
 and [Microsoft's PE import format](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format).
 
-Ordinary previews never retire Electron. `--replacement` registers the protocol
-only. `--channel stable` additionally compiles stable update selection and embeds
-the guarded retirement helper; building it does not run the helper. The helper's
-standalone default is inspection only. Avoid `-Apply` on a personal installation
-until the installed acceptance scenario is authorized and launchers are closed.
+Preview builds register the protocol only with `--replacement`. Stable builds
+additionally compile stable update selection and register the protocol. The
+production release workflow and public downloads remain gated on native
+acceptance.
 
 ```powershell
 node --test scripts/packaging.test.mjs scripts/notices.test.mjs
-powershell -NoProfile -File scripts/test-windows-retirement.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
+powershell -NoProfile -File scripts/test-windows-updater.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
 ```
 
-The retirement test uses synthetic install files, a uniquely owned registry test
-key and native NSIS failure/rollback fixtures. It never invokes the actual old
-installation's uninstaller. The production release workflow, public downloads
-and source deletion remain gated even after these tests pass.
+The updater test compiles an isolated installer with registry/shortcut writes
+disabled and exercises fresh install, readiness failure, PID waiting, replacement,
+restart and uninstall without touching the personal installation.
 
 ## Latest native interaction boundary
 
-The complete 2026-10-11 `-RunningLegacy -NativeUi` run passes both guest assertions
-and host cleanup. Use `rebuilt-stable-20261011-native-focus-fixed`; its artifact
-receipt and exact hashes are in the [latest tracker record](MIGRATION_TRACKER.md#2026-10-11-native-functional-acceptance-and-remaining-external-gates).
-The guest receipt, native trees, editor receipt, screenshot and progress log are
+The complete 2026-10-11 `-NativeUi` run passed both guest assertions and host
+cleanup. Use `rebuilt-stable-20261011-native-focus-fixed`; its artifact receipt
+and exact hashes are in the [latest tracker record](MIGRATION_TRACKER.md#2026-10-11-native-functional-acceptance-and-remaining-external-gates).
+The historical guest receipt, native trees, editor receipt, screenshot and
+progress log are
 `target/live-acceptance/squirrel-sandbox-0faf50f8f6ee4c1ea6f49f01061b631f/output/`.
 
-Eleven generated files survive the old window's normal close/replacement before
-Launcher boot. Same-owner registered protocol foreground restoration, installed
-rendering, normal close and uninstall pass; fifteen post-test files survive
-uninstall and the dead legacy handler is not restored. The screenshot was inspected.
+Same-owner registered protocol foreground restoration, installed rendering, normal
+close and uninstall pass; post-test files survive uninstall and the protocol is
+removed. The screenshot was inspected.
 
 Native picker Cancel, two-file mod import/removal/folder dispatch, twelve distinct
 menu actions, icon import/select/reset/library-folder dispatch, OS editor atomic
@@ -578,23 +535,6 @@ checks remain in F20/F38. UIA reports disabled Create as enabled; the native bla
 activation guard nevertheless preserves the accounts file. This announcement
 limitation remains explicit. Original credentials, older Windows and a published
 update are outside the generated-profile VM evidence.
-
-## Native Linux credential stores
-
-The checked-in `packaging/acceptance/linux-credentials.Dockerfile` now builds from
-its default Debian trixie-slim base and verifies the official Electron 43.3.0 ZIP.
-Both `scripts/test-linux-credentials.sh` and `scripts/test-linux-kwallet.sh`
-pass with actual GNOME Secret Service and KWallet 6 on this fresh image. Each
-requires an owned Docker session, creates private HOME/runtime/config/data/temp
-paths, D-Bus and Xvfb, and runs with networking disabled and source/binaries read-only.
-No host HOME or session bus is mounted. The KWallet runner checks its native
-dialog's PID before creating the generated encrypted wallet.
-
-Both Electron/Rust directions and unchanged native keys pass. Receipts are
-`target/live-acceptance/linux-kwallet-20261011/clean-recipe-verification.json` and
-`gnome-clean-recipe-verification.json`. CI includes both checks and retains their
-receipts; remote CI is still unrun. macOS Keychain, older KWallet/platform fixtures,
-original user wallets and live Google authorization remain separate gates.
 
 ### 2026-10-14 Open VSX themes (virtual UI and public registry)
 

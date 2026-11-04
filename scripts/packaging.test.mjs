@@ -56,6 +56,7 @@ test("stable native release and optional previews use the correct update channel
   const workflow = await readFile(path.join(app, "../../.github/workflows/launcher-release.yml"), "utf8");
   const updater = await readFile(path.join(app, "crates/backend/src/release_updater.rs"), "utf8");
   const packager = await readFile(path.join(app, "../../scripts/build-launcher.mjs"), "utf8");
+  const installer = await readFile(path.join(app, "packaging/windows.nsi"), "utf8");
   assert.match(workflow, /launcher-preview-v\*/);
   assert.match(workflow, /launcher-v\*/);
   assert.ok(workflow.includes("prerelease: ${{ startsWith(github.ref_name, 'launcher-preview-v') }}"));
@@ -63,6 +64,8 @@ test("stable native release and optional previews use the correct update channel
   assert.match(workflow, /pull_request:/);
   assert.ok(!workflow.includes("electron-forge"));
   assert.ok(!workflow.toLowerCase().includes("gpui"));
+  assert.ok(!installer.includes("RETIRE_SCRIPT_FILE"));
+  assert.ok(!packager.includes("retire-electron"));
   const notes = await readFile(path.join(app, "RELEASE_NOTES.md"), "utf8");
   assert.ok(notes.includes("<!-- industrialis-launcher-release-v1 -->"));
   const manifest = JSON.parse(await readFile(path.join(app, "../../package.json"), "utf8"));
