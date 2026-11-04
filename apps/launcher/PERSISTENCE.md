@@ -20,6 +20,20 @@ saves through the editor backend, then replaces fresh pack configs through the
 actual staged update and reinstall flow. It uses a path outside the legacy
 preservation allowlist so passing requires the editor's persistent overlay.
 
+## Disabled pack mods
+
+The Add-ons tab lists every pack mod with an enable checkbox. Unchecking a mod
+renames its file to `<name>.disabled` in `.minecraft/mods` and the custom
+overlay, and records the stable filename identity in `instance.json` under
+`disabled_mods`. Pack installs, updates, clean reinstalls, and every launch
+re-apply the state, so a new pack version stays disabled. Checking the box
+renames the file back and drops the record. A `.disabled` file without a
+settings record is adopted on the next startup or instance operation.
+
+`install::tests::updates_and_reinstalls_keep_disabled_mods_disabled` and
+`mod_toggles::tests::*` cover the update, reinstall, launch-prep and recovery
+paths.
+
 Launcher opens its existing `industrialis-launcher` directory and files in place.
 Users must not copy their data, import a profile, or sign in again.
 Windows uses `%APPDATA%/industrialis-launcher`, macOS uses

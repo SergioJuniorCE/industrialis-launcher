@@ -109,6 +109,12 @@ enum Command {
         #[arg(long)]
         java_type: Option<String>,
     },
+    /// Disable a pack mod and keep it disabled across updates.
+    DisableMod { id: String, identity: String },
+    /// Re-enable a disabled mod.
+    EnableMod { id: String, identity: String },
+    /// List pack mods with their enabled state.
+    ListMods { id: String },
     /// List pack versions from the GTNH catalog.
     PackVersions,
     /// Check only launcher releases (does not install or write data).
@@ -147,6 +153,7 @@ impl Command {
                 | Self::PackVersions
                 | Self::CheckLauncherUpdate { .. }
                 | Self::PresetStatus { .. }
+                | Self::ListMods { .. }
         )
     }
 }
@@ -375,6 +382,21 @@ async fn run_command(command: Command, paths: LauncherPaths) -> Result<(), anyho
             )
             .await?;
             println!("reinstalled {id} @ {pack_version}");
+        }
+        Command::DisableMod { id, identity } => {
+            industrialis_backend::custom_mods::set_enabled(
+                &paths, &id, &identity, false,
+            )
+            .await?;
+            println!("disabled {identity}");
+        }
+        Command::EnableMod { id, identity } => {
+            industrialis_backend::custom_mods::set_enabled(&paths, &id, &identity, true).await?;
+            println!("enabled {identity}");
+        }
+        Command::ListMods { id } => {
+            let mods = industrialis_backend::custom_mods::list_pack(&paths, &id).await?;
+            print_json(&serde_json::to_value(&mods)?);
         }
         Command::PackVersions => {
             let versions = pack_files::fetch_gtnh_versions().await?;

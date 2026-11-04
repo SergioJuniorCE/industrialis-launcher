@@ -181,6 +181,7 @@ pub async fn patch_instance_settings(
                         | "custom_icon"
                         | "cached_size_bytes"
                         | "total_play_seconds"
+                        | "disabled_mods"
                 )
             {
                 anyhow::bail!("This setting cannot be edited: {key}");

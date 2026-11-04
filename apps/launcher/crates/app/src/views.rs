@@ -660,6 +660,7 @@ impl LauncherRoot {
             (_, "settings-retention") => &self.settings_retention,
             (_, "settings-width") => &self.settings_width,
             (_, "settings-height") => &self.settings_height,
+            (_, "mods-search") => &self.mods_ui.search,
             _ => &self.fallback_field,
         }
     }
@@ -680,6 +681,7 @@ impl LauncherRoot {
             (_, "settings-retention") => &mut self.settings_retention,
             (_, "settings-width") => &mut self.settings_width,
             (_, "settings-height") => &mut self.settings_height,
+            (_, "mods-search") => &mut self.mods_ui.search,
             _ => &mut self.fallback_field,
         }
     }
@@ -734,6 +736,7 @@ impl LauncherRoot {
                 "settings-retention" => "Backup retention",
                 "settings-width" => "Launcher width",
                 "settings-height" => "Launcher height",
+                "mods-search" => "Search mods",
                 "new-name" => "Instance name",
                 "new-group" => "Instance group",
                 "new-version-search" => "Search pack versions",

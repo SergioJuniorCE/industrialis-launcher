@@ -1,9 +1,11 @@
-//! Guarded custom-mod management on the original persistent overlay.
+//! Guarded mod management: the custom overlay and pack-mod enable/disable.
 use crate::{
     pack_files::{self, ModEntry},
     paths::LauncherPaths,
 };
+use std::collections::HashSet;
 use std::path::Path;
+
 pub async fn list(paths: &LauncherPaths, id: &str) -> anyhow::Result<Vec<ModEntry>> {
     let _lease = crate::lifecycle::admit(paths)?;
     let instance = paths.instance_dir(id)?;
@@ -159,6 +161,41 @@ pub async fn remove(paths: &LauncherPaths, id: &str, identity: &str) -> anyhow::
         .await?
     })
     .await
+}
+
+/// Pack-owned mods in the active tree, including disabled ones. Custom overlay
+/// identities are excluded because the Add-ons tab manages those separately.
+pub async fn list_pack(
+    paths: &LauncherPaths,
+    id: &str,
+) -> anyhow::Result<Vec<crate::mod_toggles::InstalledMod>> {
+    let _lease = crate::lifecycle::admit(paths)?;
+    let instance = paths.instance_dir(id)?;
+    let overlay: HashSet<String> = crate::mod_toggles::list_installed(
+        &crate::pack_prep::persistent_custom_mods_dir(&instance),
+    )
+    .await?
+    .into_iter()
+    .map(|entry| entry.identity)
+    .collect();
+    let mut mods = crate::mod_toggles::list_installed(
+        &pack_files::resolve_mods_dir(&instance).await,
+    )
+    .await?;
+    mods.retain(|entry| !overlay.contains(&entry.identity));
+    // One row per mod identity; the enabled copy wins when both exist.
+    let mut seen = HashSet::new();
+    mods.retain(|entry| seen.insert(entry.identity.clone()));
+    Ok(mods)
+}
+
+pub async fn set_enabled(
+    paths: &LauncherPaths,
+    id: &str,
+    identity: &str,
+    enabled: bool,
+) -> anyhow::Result<()> {
+    crate::mod_toggles::set_enabled(paths, id, identity, enabled).await
 }
 
 pub async fn open_folder(paths: &LauncherPaths, id: &str) -> anyhow::Result<()> {

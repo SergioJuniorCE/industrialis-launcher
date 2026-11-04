@@ -1,5 +1,3 @@
 # Taste
 
-- Expects multi-step operations that mutate user data (installs, updates, migration/reinstall paths) to be atomic and recoverable rather than in-place destruction: a verified rollback copy, automatic restore on any failure, recovery of interrupted runs on next startup, and preservation of user-modified files (configs/scripts) instead of wiping back to pack defaults. Approved a plan built around rollback + preservation over the existing backup-wipe-restore flow. Confidence: 0.5
-- When told to remove a deprecated name/codename, expects an exhaustive repo-wide sweep of product surfaces (installer identity, scripts, env vars, fixtures, docs, CI) rather than a minimal one-line patch; treating leftover legacy strings as incomplete work. Confidence: 0.5
-- Once a migration is declared finished ("there are no <old> users left"), wants the compatibility/legacy machinery deleted outright — old-path lookups, legacy key/name fallbacks, retirement/rollback helpers, migration acceptance harnesses and their CI steps — instead of kept as permanently harmless shims; accepts the behavioral consequence (users on the old format must re-authenticate). Confidence: 0.5
+See [taste/taste.md](taste/taste.md)

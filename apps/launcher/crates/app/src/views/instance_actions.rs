@@ -569,7 +569,14 @@ impl LauncherRoot {
                                         .h(px(30.0))
                                         .bg(tint(t.border(), 0.3)),
                                 )
-                                .child(stat(preview.removed_from_pack_count, "Removed")),
+                                .child(stat(preview.removed_from_pack_count, "Removed"))
+                                .child(
+                                    div()
+                                        .w(px(1.0))
+                                        .h(px(30.0))
+                                        .bg(tint(t.border(), 0.3)),
+                                )
+                                .child(stat(preview.disabled_count, "Disabled")),
                         ),
                 )
                 .child(
