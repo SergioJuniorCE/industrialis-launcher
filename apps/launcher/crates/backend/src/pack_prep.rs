@@ -179,11 +179,11 @@ pub async fn apply_persistent_custom_mods(instance: &Path) -> Result<usize, anyh
     apply_persistent_custom_mods_excluding(instance, &HashSet::new()).await
 }
 
-/// Same as [`apply_persistent_custom_mods`], but excluded mod identities are
+/// Same as [`apply_persistent_custom_mods`], but disabled mod identities are
 /// never copied into the active tree.
 pub async fn apply_persistent_custom_mods_excluding(
     instance: &Path,
-    excluded: &HashSet<String>,
+    disabled: &HashSet<String>,
 ) -> Result<usize, anyhow::Error> {
     let persistent = persistent_custom_mods_dir(instance);
     if !exists(&persistent).await {
@@ -202,7 +202,7 @@ pub async fn apply_persistent_custom_mods_excluding(
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        if crate::mod_exclusions::is_excluded(&name, excluded) {
+        if crate::mod_toggles::is_disabled(&name, disabled) {
             continue;
         }
         tokio::fs::copy(entry.path(), active.join(entry.file_name())).await?;

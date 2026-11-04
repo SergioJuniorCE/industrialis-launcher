@@ -96,8 +96,8 @@ pub struct UpdateModPreview {
     pub new_pack_mods_count: usize,
     pub updated_pack_mods_count: usize,
     pub removed_from_pack_count: usize,
-    /// Mods in the target pack that the instance excludes.
-    pub kept_out_count: usize,
+    /// Mods in the target pack that the instance keeps disabled.
+    pub disabled_count: usize,
 }
 
 fn mod_patterns() -> &'static (Regex, Regex, Regex, Regex) {
@@ -176,21 +176,21 @@ pub async fn list_mods(dir: &Path) -> Result<Vec<ModEntry>, anyhow::Error> {
     Ok(mods)
 }
 
-/// Split a mod list into deployable mods and excluded-identity matches.
-pub fn split_excluded_mods(
+/// Split a mod list into loadable mods and disabled-identity matches.
+pub fn split_disabled_mods(
     mods: Vec<ModEntry>,
-    excluded: &HashSet<String>,
+    disabled: &HashSet<String>,
 ) -> (Vec<ModEntry>, usize) {
-    let mut kept = Vec::with_capacity(mods.len());
-    let mut kept_out = 0;
+    let mut enabled = Vec::with_capacity(mods.len());
+    let mut disabled_count = 0;
     for entry in mods {
-        if excluded.contains(&entry.identity) {
-            kept_out += 1;
+        if disabled.contains(&entry.identity) {
+            disabled_count += 1;
         } else {
-            kept.push(entry);
+            enabled.push(entry);
         }
     }
-    (kept, kept_out)
+    (enabled, disabled_count)
 }
 
 /// Mirrors `classifyModUpdates` → (updated, added, removed).
@@ -765,7 +765,7 @@ pub async fn build_update_preview(
     let settings =
         industrialis_core::instance_settings::parse_instance_settings_json(&settings_raw);
     let current_version = settings.pack_version.clone();
-    let excluded = crate::mod_exclusions::excluded_identities(&settings.removed_mods);
+    let disabled = crate::mod_toggles::disabled_identities(&settings.disabled_mods);
     let old_mods = list_mods(&resolve_mods_dir(instance).await).await?;
     let staging_parent = instance.join(".update-preview");
     let staging = download_and_extract_to_staging(
@@ -778,12 +778,12 @@ pub async fn build_update_preview(
     )
     .await?;
     let new_mods = list_mods(&resolve_mods_dir(&staging).await).await?;
-    let (new_mods, kept_out_count) = split_excluded_mods(new_mods, &excluded);
+    let (new_mods, disabled_count) = split_disabled_mods(new_mods, &disabled);
     let (updated, added, removed) = classify_mod_updates(&old_mods, &new_mods);
     let custom_mods = list_custom_mods(instance)
         .await?
         .into_iter()
-        .filter(|entry| !excluded.contains(&entry.identity))
+        .filter(|entry| !disabled.contains(&entry.identity))
         .map(|entry| ModPreviewEntry {
             entry,
             in_persistent_overlay: true,
@@ -796,7 +796,7 @@ pub async fn build_update_preview(
         new_pack_mods_count: added,
         updated_pack_mods_count: updated,
         removed_from_pack_count: removed,
-        kept_out_count,
+        disabled_count,
     })
 }
 
@@ -838,18 +838,18 @@ mod tests {
     }
 
     #[test]
-    fn splits_excluded_mods_by_identity() {
+    fn splits_disabled_mods_by_identity() {
         let entry = |identity: &str| ModEntry {
             filename: format!("{identity}.jar"),
             identity: identity.to_string(),
             size_bytes: 1,
         };
-        let excluded = HashSet::from(["defaultserverlist".to_string()]);
-        let (kept, count) =
-            split_excluded_mods(vec![entry("defaultserverlist"), entry("keep")], &excluded);
+        let disabled = HashSet::from(["defaultserverlist".to_string()]);
+        let (enabled, count) =
+            split_disabled_mods(vec![entry("defaultserverlist"), entry("keep")], &disabled);
         assert_eq!(count, 1);
-        assert_eq!(kept.len(), 1);
-        assert_eq!(kept[0].identity, "keep");
+        assert_eq!(enabled.len(), 1);
+        assert_eq!(enabled[0].identity, "keep");
     }
 
     #[test]

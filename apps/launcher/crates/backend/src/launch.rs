@@ -22,7 +22,7 @@ use crate::launch_config::{
     run_shell_command, split_command_args, substitute_command_vars, sync_assets,
     write_launch_argfile, EmitLaunchLog,
 };
-use crate::mod_exclusions::{apply_removed_mods, excluded_identities};
+use crate::mod_toggles::{apply_disabled_mods, disabled_identities};
 use crate::pack_prep::{
     apply_persistent_custom_mods_excluding, apply_persistent_minecraft, flatten_nested_pack,
     prepare_instance_configs,
@@ -273,14 +273,14 @@ pub async fn launch_instance_with_started(
     if !crate::fs_utils::exists(&instance).await {
         anyhow::bail!("instance not installed");
     }
-    crate::mod_exclusions::recover_interrupted_removal(paths, &id).await?;
+    crate::mod_toggles::recover_interrupted_disables(paths, &id).await?;
     let settings = load_instance_settings(paths, &id).await?;
-    let exclusions = excluded_identities(&settings.removed_mods);
+    let disabled = disabled_identities(&settings.disabled_mods);
     flatten_nested_pack(&instance).await?;
     prepare_instance_configs(&instance, false).await?;
-    apply_persistent_custom_mods_excluding(&instance, &exclusions).await?;
+    apply_persistent_custom_mods_excluding(&instance, &disabled).await?;
     apply_persistent_minecraft(&instance).await?;
-    apply_removed_mods(&instance, &settings.removed_mods).await?;
+    apply_disabled_mods(&instance, &settings.disabled_mods).await?;
 
     let sink = LogSink::new(paths, &id, emit)?;
     let result = launch_prepared(paths, id.clone(), instance, &sink, on_started).await;

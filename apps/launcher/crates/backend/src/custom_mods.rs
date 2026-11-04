@@ -1,9 +1,8 @@
-//! Guarded mod management: the custom overlay and pack-mod exclusions.
+//! Guarded mod management: the custom overlay and pack-mod enable/disable.
 use crate::{
     pack_files::{self, ModEntry},
     paths::LauncherPaths,
 };
-use industrialis_core::instance_settings::RemovedMod;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -164,46 +163,39 @@ pub async fn remove(paths: &LauncherPaths, id: &str, identity: &str) -> anyhow::
     .await
 }
 
-/// Active pack-owned mods: everything in the game mods dir that is not a
-/// custom overlay mod and not excluded.
-pub async fn list_pack(paths: &LauncherPaths, id: &str) -> anyhow::Result<Vec<ModEntry>> {
+/// Pack-owned mods in the active tree, including disabled ones. Custom overlay
+/// identities are excluded because the Add-ons tab manages those separately.
+pub async fn list_pack(
+    paths: &LauncherPaths,
+    id: &str,
+) -> anyhow::Result<Vec<crate::mod_toggles::InstalledMod>> {
     let _lease = crate::lifecycle::admit(paths)?;
     let instance = paths.instance_dir(id)?;
-    let custom: HashSet<String> = pack_files::list_custom_mods(&instance)
-        .await?
-        .into_iter()
-        .map(|entry| entry.identity)
-        .collect();
-    let removed: HashSet<String> = crate::settings::load_instance_settings(paths, id)
-        .await?
-        .removed_mods
-        .into_iter()
-        .map(|entry| entry.identity)
-        .collect();
-    let active = pack_files::list_mods(&pack_files::resolve_mods_dir(&instance).await).await?;
-    Ok(active
-        .into_iter()
-        .filter(|entry| !custom.contains(&entry.identity) && !removed.contains(&entry.identity))
-        .collect())
+    let overlay: HashSet<String> = crate::mod_toggles::list_installed(
+        &crate::pack_prep::persistent_custom_mods_dir(&instance),
+    )
+    .await?
+    .into_iter()
+    .map(|entry| entry.identity)
+    .collect();
+    let mut mods = crate::mod_toggles::list_installed(
+        &pack_files::resolve_mods_dir(&instance).await,
+    )
+    .await?;
+    mods.retain(|entry| !overlay.contains(&entry.identity));
+    // One row per mod identity; the enabled copy wins when both exist.
+    let mut seen = HashSet::new();
+    mods.retain(|entry| seen.insert(entry.identity.clone()));
+    Ok(mods)
 }
 
-pub async fn list_removed(paths: &LauncherPaths, id: &str) -> anyhow::Result<Vec<RemovedMod>> {
-    let _lease = crate::lifecycle::admit(paths)?;
-    Ok(crate::settings::load_instance_settings(paths, id)
-        .await?
-        .removed_mods)
-}
-
-pub async fn remove_pack(
+pub async fn set_enabled(
     paths: &LauncherPaths,
     id: &str,
     identity: &str,
-) -> anyhow::Result<RemovedMod> {
-    crate::mod_exclusions::remove_mod(paths, id, identity).await
-}
-
-pub async fn restore_pack(paths: &LauncherPaths, id: &str, identity: &str) -> anyhow::Result<()> {
-    crate::mod_exclusions::restore_mod(paths, id, identity).await
+    enabled: bool,
+) -> anyhow::Result<()> {
+    crate::mod_toggles::set_enabled(paths, id, identity, enabled).await
 }
 
 pub async fn open_folder(paths: &LauncherPaths, id: &str) -> anyhow::Result<()> {

@@ -736,7 +736,7 @@ impl LauncherRoot {
                 "settings-retention" => "Backup retention",
                 "settings-width" => "Launcher width",
                 "settings-height" => "Launcher height",
-                "mods-search" => "Search pack mods",
+                "mods-search" => "Search mods",
                 "new-name" => "Instance name",
                 "new-group" => "Instance group",
                 "new-version-search" => "Search pack versions",

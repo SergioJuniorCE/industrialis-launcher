@@ -576,7 +576,7 @@ impl LauncherRoot {
                                         .h(px(30.0))
                                         .bg(tint(t.border(), 0.3)),
                                 )
-                                .child(stat(preview.kept_out_count, "Kept out")),
+                                .child(stat(preview.disabled_count, "Disabled")),
                         ),
                 )
                 .child(

@@ -19,7 +19,7 @@ use crate::launch::is_already_running;
 use crate::migration::{
     restore_modified_configs, restore_player_data_from_instance, PRESERVE_DIR_NAME,
 };
-use crate::mod_exclusions::{apply_removed_mods, excluded_identities};
+use crate::mod_toggles::{apply_disabled_mods, disabled_identities};
 use crate::pack_cache::find_cached_pack;
 use crate::pack_files::{
     build_update_preview, download_and_extract_to_staging, install_staging_contents,
@@ -162,7 +162,7 @@ pub async fn recover_interrupted_update(
 pub async fn recover_interrupted_maintenance(
     paths: &LauncherPaths,
 ) -> Result<Vec<String>, anyhow::Error> {
-    crate::mod_exclusions::recover_interrupted_removals(paths).await?;
+    crate::mod_toggles::recover_interrupted_disables_all(paths).await?;
     let root = rollback_root(paths);
     if !exists(&root).await {
         return Ok(Vec::new());
@@ -335,7 +335,7 @@ pub async fn preview_update(
     let id = validate_instance_id(raw_id)?;
     let _lease = crate::instance_guard::reserve_instances(paths, &[&id])?;
     recover_interrupted_update(paths, &id).await?;
-    crate::mod_exclusions::recover_interrupted_removal(paths, &id).await?;
+    crate::mod_toggles::recover_interrupted_disables(paths, &id).await?;
     if is_already_running(paths, &id).await? {
         anyhow::bail!("cannot analyze an update while instance is running");
     }
@@ -376,7 +376,7 @@ pub async fn update_instance(
     let id = validate_instance_id(raw_id)?;
     let _lease = crate::instance_guard::reserve_instances(paths, &[&id])?;
     recover_interrupted_update(paths, &id).await?;
-    crate::mod_exclusions::recover_interrupted_removal(paths, &id).await?;
+    crate::mod_toggles::recover_interrupted_disables(paths, &id).await?;
     if is_already_running(paths, &id).await? {
         anyhow::bail!("cannot update while instance is running");
     }
@@ -407,7 +407,7 @@ pub async fn reinstall_instance(
     let id = validate_instance_id(raw_id)?;
     let _lease = crate::instance_guard::reserve_instances(paths, &[&id])?;
     recover_interrupted_update(paths, &id).await?;
-    crate::mod_exclusions::recover_interrupted_removal(paths, &id).await?;
+    crate::mod_toggles::recover_interrupted_disables(paths, &id).await?;
     if is_already_running(paths, &id).await? {
         anyhow::bail!("cannot reinstall while instance is running");
     }
@@ -510,7 +510,7 @@ async fn apply_reinstall_staging(
         } else {
             None
         };
-    let exclusions = excluded_identities(&previous_settings.removed_mods);
+    let disabled = disabled_identities(&previous_settings.disabled_mods);
     let stage = if operation == "update-pack" {
         "updating"
     } else {
@@ -582,15 +582,16 @@ async fn apply_reinstall_staging(
         ctx.progress(stage, 0.90, |p| {
             p.log_line = Some("Applying persistent launcher overlays…".to_string())
         });
-        apply_persistent_custom_mods_excluding(&instance, &exclusions).await?;
+        apply_persistent_custom_mods_excluding(&instance, &disabled).await?;
         apply_persistent_minecraft(&instance).await?;
         ctx.progress(stage, 0.92, |p| {
-            p.log_line = Some("Applying removed-mod exclusions…".to_string())
+            p.log_line = Some("Applying disabled-mod state…".to_string())
         });
-        let kept_out = apply_removed_mods(&instance, &previous_settings.removed_mods).await?;
+        let disabled_count =
+            apply_disabled_mods(&instance, &previous_settings.disabled_mods).await?;
         ctx.progress(stage, 0.94, |p| {
-            p.log_line = Some(if kept_out > 0 {
-                format!("Kept out {kept_out} removed mod(s)")
+            p.log_line = Some(if disabled_count > 0 {
+                format!("Kept {disabled_count} mod(s) disabled")
             } else {
                 "Launcher overlays applied".to_string()
             })
@@ -892,10 +893,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn updates_and_reinstalls_keep_removed_mods_out() {
-        use industrialis_core::instance_settings::{RemovedMod, RemovedModFile};
+    async fn updates_and_reinstalls_keep_disabled_mods_disabled() {
+        use industrialis_core::instance_settings::DisabledMod;
 
-        let paths = temp_paths("exclusions");
+        let paths = temp_paths("disabled-mods");
         let instance = paths.instance_dir("gtnh").unwrap();
         tokio::fs::create_dir_all(instance.join(".minecraft/mods"))
             .await
@@ -918,24 +919,13 @@ mod tests {
         )
         .await
         .unwrap();
-        let removed = RemovedMod {
+        let disabled = DisabledMod {
             identity: "defaultserverlist".into(),
             filename: "DefaultServerList-1.0.jar".into(),
-            removed_at: 1,
-            files: vec![
-                RemovedModFile {
-                    root: ".minecraft".into(),
-                    filename: "DefaultServerList-1.0.jar".into(),
-                },
-                RemovedModFile {
-                    root: "persistent-minecraft".into(),
-                    filename: "DefaultServerList-1.0.jar".into(),
-                },
-            ],
         };
         let mut settings = InstanceSettings::default();
         settings.pack_version = "2.8.0".into();
-        settings.removed_mods = vec![removed.clone()];
+        settings.disabled_mods = vec![disabled.clone()];
         save_instance_settings(&paths, "gtnh", &settings)
             .await
             .unwrap();
@@ -963,19 +953,22 @@ mod tests {
             )
             .await
             .unwrap();
+            assert!(instance
+                .join(".minecraft/mods/DefaultServerList-2.0.jar.disabled")
+                .exists());
             assert!(!instance
                 .join(".minecraft/mods/DefaultServerList-2.0.jar")
                 .exists());
-            assert!(!instance
-                .join(".minecraft/mods/DefaultServerList-1.0.jar")
+            assert!(instance
+                .join("persistent-minecraft/mods/DefaultServerList-1.0.jar.disabled")
                 .exists());
             assert!(instance.join(".minecraft/mods/keep-me.jar").exists());
             assert_eq!(
                 load_instance_settings(&paths, "gtnh")
                     .await
                     .unwrap()
-                    .removed_mods,
-                vec![removed.clone()]
+                    .disabled_mods,
+                vec![disabled.clone()]
             );
         }
         std::fs::remove_dir_all(paths.base()).unwrap();

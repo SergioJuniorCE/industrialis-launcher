@@ -37,7 +37,7 @@ pub mod running_pids;
 pub mod settings;
 
 pub mod custom_mods;
-pub mod mod_exclusions;
+pub mod mod_toggles;
 pub mod content;
 mod content_archive;
 pub mod modernity;

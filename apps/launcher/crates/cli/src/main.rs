@@ -109,12 +109,12 @@ enum Command {
         #[arg(long)]
         java_type: Option<String>,
     },
-    /// Remove a pack mod and keep it out of future updates.
-    RemoveMod { id: String, identity: String },
-    /// Restore a mod previously removed from an instance.
-    RestoreMod { id: String, identity: String },
-    /// List mods removed from an instance.
-    RemovedMods { id: String },
+    /// Disable a pack mod and keep it disabled across updates.
+    DisableMod { id: String, identity: String },
+    /// Re-enable a disabled mod.
+    EnableMod { id: String, identity: String },
+    /// List pack mods with their enabled state.
+    ListMods { id: String },
     /// List pack versions from the GTNH catalog.
     PackVersions,
     /// Check only launcher releases (does not install or write data).
@@ -153,7 +153,7 @@ impl Command {
                 | Self::PackVersions
                 | Self::CheckLauncherUpdate { .. }
                 | Self::PresetStatus { .. }
-                | Self::RemovedMods { .. }
+                | Self::ListMods { .. }
         )
     }
 }
@@ -383,18 +383,20 @@ async fn run_command(command: Command, paths: LauncherPaths) -> Result<(), anyho
             .await?;
             println!("reinstalled {id} @ {pack_version}");
         }
-        Command::RemoveMod { id, identity } => {
-            let removed =
-                industrialis_backend::custom_mods::remove_pack(&paths, &id, &identity).await?;
-            print_json(&serde_json::to_value(&removed)?);
+        Command::DisableMod { id, identity } => {
+            industrialis_backend::custom_mods::set_enabled(
+                &paths, &id, &identity, false,
+            )
+            .await?;
+            println!("disabled {identity}");
         }
-        Command::RestoreMod { id, identity } => {
-            industrialis_backend::custom_mods::restore_pack(&paths, &id, &identity).await?;
-            println!("restored {identity}");
+        Command::EnableMod { id, identity } => {
+            industrialis_backend::custom_mods::set_enabled(&paths, &id, &identity, true).await?;
+            println!("enabled {identity}");
         }
-        Command::RemovedMods { id } => {
-            let removed = industrialis_backend::custom_mods::list_removed(&paths, &id).await?;
-            print_json(&serde_json::to_value(&removed)?);
+        Command::ListMods { id } => {
+            let mods = industrialis_backend::custom_mods::list_pack(&paths, &id).await?;
+            print_json(&serde_json::to_value(&mods)?);
         }
         Command::PackVersions => {
             let versions = pack_files::fetch_gtnh_versions().await?;
