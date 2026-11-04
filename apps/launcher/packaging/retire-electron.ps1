@@ -56,10 +56,18 @@ function Get-LegacyInstall([string]$LocalDirectory, [string]$ProfileDirectory) {
   [pscustomobject]@{ Root = $root; Updater = $updater; Executables = $executables; Profile = $profile }
 }
 
+function Test-GameBrokerProcess($Process) {
+  # The game broker is a hidden child of the installed launcher. It shares the
+  # executable name but never owns a launcher window, so retirement must not
+  # wait for it while a game is running.
+  [bool]($Process.CommandLine -and $Process.CommandLine.Contains('--industrialis-game-broker'))
+}
+
 function Get-RunningLaunchers([string]$Root) {
   @(Get-CimInstance Win32_Process | Where-Object {
-    $_.ExecutablePath -and ($_.ExecutablePath.StartsWith($Root + '\', [StringComparison]::OrdinalIgnoreCase) -or
-      $_.Name -eq 'industrialis.exe')
+    $_.ExecutablePath -and -not (Test-GameBrokerProcess $_) -and
+      ($_.ExecutablePath.StartsWith($Root + '\', [StringComparison]::OrdinalIgnoreCase) -or
+        $_.Name -eq 'industrialis.exe')
   })
 }
 

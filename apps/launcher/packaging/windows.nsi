@@ -21,11 +21,16 @@ Unicode true
 !define LEGACY_REGKEY "Software\Industrialis\GPUI"
 !define LEGACY_UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisGPUI"
 !define LEGACY_INSTALL_MARKER "gpui-install.json"
+!ifndef LEGACY_FOLDER_NAME
 !define LEGACY_FOLDER_NAME "Industrialis GPUI"
+!endif
+!ifndef CURRENT_FOLDER_NAME
+!define CURRENT_FOLDER_NAME "Industrialis Launcher"
+!endif
 
 Name "Industrialis Launcher"
 OutFile "${OUTFILE}"
-InstallDir "$LOCALAPPDATA\Programs\Industrialis Launcher"
+InstallDir "$LOCALAPPDATA\Programs\${CURRENT_FOLDER_NAME}"
 InstallDirRegKey HKCU "${APP_REGKEY}" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
@@ -50,6 +55,7 @@ Var ReadyFile
 Var ProcessHandle
 Var LegacyDir
 Var MigrateLegacy
+Var HasMarker
 
 Function .onInit
   SetShellVarContext current
@@ -63,11 +69,13 @@ Function .onInit
   ${AndIf} $R1 == "$LOCALAPPDATA\Programs"
     StrCpy $MigrateLegacy "1"
     StrCpy $LegacyDir "$INSTDIR"
-    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\Industrialis Launcher"
+    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${CURRENT_FOLDER_NAME}"
   ${EndIf}
 
+!ifndef SMOKE_TEST
   ; Without /D the directory comes from the registry. Adopt a custom location
-  ; from an older build, but never inherit the retired default folder.
+  ; from an older build, but never inherit the retired default folder. Smoke
+  ; fixtures always pass /D and must never read or migrate the real profile.
   ReadRegStr $R2 HKCU "${APP_REGKEY}" "InstallDir"
   ${If} $R2 == ""
     ReadRegStr $R2 HKCU "${LEGACY_REGKEY}" "InstallDir"
@@ -78,11 +86,12 @@ Function .onInit
       ${AndIf} $R1 == "$LOCALAPPDATA\Programs"
         StrCpy $MigrateLegacy "1"
         StrCpy $LegacyDir "$R2"
-      ${ElseIf} $INSTDIR == "$LOCALAPPDATA\Programs\Industrialis Launcher"
+      ${ElseIf} $INSTDIR == "$LOCALAPPDATA\Programs\${CURRENT_FOLDER_NAME}"
         StrCpy $INSTDIR "$R2"
       ${EndIf}
     ${EndIf}
   ${EndIf}
+!endif
 
   ${GetParameters} $R0
   ${GetOptions} $R0 "/UPDATEPID=" $UpdatePID
@@ -94,10 +103,22 @@ Function .onInit
       SetErrorLevel 1
       Abort
     ${EndIf}
+    StrCpy $HasMarker "0"
     ${If} ${FileExists} "$INSTDIR\${INSTALL_MARKER}"
     ${OrIf} ${FileExists} "$INSTDIR\${LEGACY_INSTALL_MARKER}"
-      ; Existing installation marker found.
-    ${Else}
+      StrCpy $HasMarker "1"
+    ${EndIf}
+    ; An update passes the directory it is installed in. When that is the
+    ; retired default folder, $INSTDIR has already moved to the current
+    ; directory, so validate the marker in the old directory as well.
+    ${If} $MigrateLegacy == "1"
+    ${AndIf} $LegacyDir != ""
+      ${If} ${FileExists} "$LegacyDir\${INSTALL_MARKER}"
+      ${OrIf} ${FileExists} "$LegacyDir\${LEGACY_INSTALL_MARKER}"
+        StrCpy $HasMarker "1"
+      ${EndIf}
+    ${EndIf}
+    ${If} $HasMarker != "1"
       MessageBox MB_ICONSTOP "This is not an existing launcher installation. Use the normal installer." /SD IDOK
       SetErrorLevel 1
       Abort

@@ -24,6 +24,24 @@ function Assert-Throws([scriptblock]$Action) {
 }
 $install = Get-LegacyInstall $local $profile
 if ($install.Executables.Count -ne 2 -or $install.Updater -ne (Join-Path $root 'Update.exe')) { throw 'Legacy detection failed to include app and shortcut stub' }
+$broker = [pscustomobject]@{
+  Name = 'industrialis.exe'
+  ExecutablePath = "$root\app-1.0.0\industrialis.exe"
+  CommandLine = '"C:\fixture\industrialis.exe" --industrialis-game-broker request.json'
+}
+if (-not (Test-GameBrokerProcess $broker)) { throw 'Game broker command line was not recognized' }
+$window = [pscustomobject]@{
+  Name = 'industrialis.exe'
+  ExecutablePath = "$root\app-1.0.0\industrialis.exe"
+  CommandLine = '"C:\fixture\industrialis.exe"'
+}
+if (Test-GameBrokerProcess $window) { throw 'Launcher window was classified as a game broker' }
+$unknown = [pscustomobject]@{
+  Name = 'industrialis.exe'
+  ExecutablePath = "$root\app-1.0.0\industrialis.exe"
+  CommandLine = $null
+}
+if (Test-GameBrokerProcess $unknown) { throw 'Unknown command line was classified as a game broker' }
 Assert-Throws { Get-LegacyInstall $local (Join-Path $root 'user-profile') }
 [IO.File]::WriteAllText((Join-Path $root 'accounts.json'), '{}')
 Assert-Throws { Get-LegacyInstall $local $profile }
