@@ -6,6 +6,15 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// A mod the user disabled for this instance. `identity` is the stable
+/// filename-derived mod identity; updates match against it so version bumps
+/// stay disabled.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DisabledMod {
+    pub identity: String,
+    pub filename: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InstanceSettings {
     #[serde(flatten)]
@@ -62,6 +71,10 @@ pub struct InstanceSettings {
     pub override_env: bool,
     #[serde(default)]
     pub env_vars: HashMap<String, String>,
+    /// Mods the user disabled for this instance. Enforced after every pack
+    /// install/update/reinstall and on every launch.
+    #[serde(default)]
+    pub disabled_mods: Vec<DisabledMod>,
     #[serde(default)]
     pub custom_icon: Option<String>,
     /// Maintained by the backend (`refreshSizes`); absent from the TS frontend
@@ -117,6 +130,7 @@ impl Default for InstanceSettings {
             post_exit_command: String::new(),
             override_env: false,
             env_vars: HashMap::new(),
+            disabled_mods: Vec::new(),
             custom_icon: None,
             cached_size_bytes: 0,
         }
@@ -175,6 +189,7 @@ pub fn merge_instance_settings(disk: Option<InstanceSettings>) -> InstanceSettin
     merged.post_exit_command = disk.post_exit_command;
     merged.override_env = disk.override_env;
     merged.env_vars.extend(disk.env_vars);
+    merged.disabled_mods = disk.disabled_mods;
     merged.custom_icon = disk.custom_icon;
     merged.cached_size_bytes = disk.cached_size_bytes;
     merged
@@ -333,6 +348,11 @@ impl PartialInstanceSettings {
                 }
             }
         }
+        if let Some(disabled) = self.inner.get("disabled_mods") {
+            if let Ok(parsed) = serde_json::from_value::<Vec<DisabledMod>>(disabled.clone()) {
+                full.disabled_mods = parsed;
+            }
+        }
         if let Some(v) = get_str("custom_icon") {
             full.custom_icon = Some(v);
         }
@@ -376,6 +396,20 @@ mod tests {
         assert_eq!(parsed.min_ram_mb, 4096);
         assert_eq!(parsed.auth_mode, "offline");
         assert_eq!(parsed.env_vars.get("A").map(String::as_str), Some("1"));
+    }
+
+    #[test]
+    fn disabled_mods_round_trip_outside_extra_fields() {
+        let parsed = parse_instance_settings_json(
+            r#"{"name":"GTNH","disabled_mods":[{"identity":"defaultserverlist","filename":"DefaultServerList-1.0.jar"}]}"#,
+        );
+        assert_eq!(parsed.disabled_mods.len(), 1);
+        assert_eq!(parsed.disabled_mods[0].identity, "defaultserverlist");
+        assert!(!parsed.extra_fields.contains_key("disabled_mods"));
+        let merged = merge_instance_settings(Some(parsed.clone()));
+        assert_eq!(merged.disabled_mods, parsed.disabled_mods);
+        let reparsed = parse_instance_settings_json(&serde_json::to_string(&parsed).unwrap());
+        assert_eq!(reparsed.disabled_mods, parsed.disabled_mods);
     }
 
     #[test]
