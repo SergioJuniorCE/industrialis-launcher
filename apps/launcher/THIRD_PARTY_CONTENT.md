@@ -11,21 +11,26 @@ release assets. Mods can be found on Modrinth and installed as a reviewed set.
 and mod loader are read from its components, not hard-coded to GTNH. Supported
 loaders are Forge, NeoForge, Fabric, Quilt, and LiteLoader. A pack that declares
 several supported loaders is browsed with all of them (for example Forge +
-LiteLoader). The search catalog is public and needs no API key. Choose a project, choose one of its compatible
-versions, and add it to the install list. The list accepts one entry per project;
-choosing a different version replaces the previous entry. A vanilla instance or
-an instance with no recognized loader shows an error instead of browsing.
+LiteLoader). The search catalog is public and needs no API key. Choose a
+project, choose one of its compatible versions, and add it to the install list.
+The list accepts one entry per project; choosing a different version replaces the
+previous entry. A vanilla instance or an instance with no recognized loader
+shows an error instead of browsing.
+
+The browser uses a two-pane layout: search results with icon tiles and selection
+boxes on the left, and the selected project's description, external links,
+versions and install review on the right. A persistent action bar shows the
+selected count and the review/install actions.
 
 **Review install** resolves every selected mod's required dependencies
 recursively. Dependencies already installed, already selected, or already queued
 are skipped. Optional and embedded dependencies are not installed. A required
 dependency with no file for the instance's Minecraft version and loader stops
 the review with an error instead of producing a broken set. An `incompatible`
-dependency that targets a selected,
-planned or already installed project is shown as a conflict and blocks install
-until the conflicting selection is removed. Dependencies that were added
-automatically show which mods require them; the review also lists
-already-installed projects that were skipped.
+dependency that targets a selected, planned or already installed project is
+shown as a conflict and blocks install until the conflicting selection is
+removed. Dependencies that were added automatically show which mods require
+them; the review also lists already-installed projects that were skipped.
 
 The plan is bounded to 64 files and 512 MB, and it rejects duplicate mod
 identities before any download. This keeps a hostile or broken dependency graph

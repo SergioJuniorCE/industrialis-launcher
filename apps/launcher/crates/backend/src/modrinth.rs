@@ -26,6 +26,12 @@ const MAX_FILE: u64 = 128 * 1024 * 1024;
 const MAX_DEPENDENCY_DEPTH: usize = 16;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Donation {
+    pub platform: String,
+    pub url: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Project {
     pub id: String,
     pub slug: String,
@@ -33,6 +39,13 @@ pub struct Project {
     pub description: String,
     pub downloads: u64,
     pub icon_url: Option<String>,
+    pub author: String,
+    pub body: String,
+    pub source_url: Option<String>,
+    pub issues_url: Option<String>,
+    pub wiki_url: Option<String>,
+    pub discord_url: Option<String>,
+    pub donations: Vec<Donation>,
 }
 impl Project {
     pub fn page(&self) -> String {
@@ -144,6 +157,8 @@ struct RawHit {
     downloads: u64,
     #[serde(default)]
     icon_url: Option<String>,
+    #[serde(default)]
+    author: String,
 }
 #[derive(Deserialize)]
 struct RawProject {
@@ -157,6 +172,25 @@ struct RawProject {
     downloads: u64,
     #[serde(default)]
     icon_url: Option<String>,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    source_url: Option<String>,
+    #[serde(default)]
+    issues_url: Option<String>,
+    #[serde(default)]
+    wiki_url: Option<String>,
+    #[serde(default)]
+    discord_url: Option<String>,
+    #[serde(default)]
+    donation_urls: Vec<RawDonation>,
+}
+#[derive(Deserialize)]
+struct RawDonation {
+    #[serde(default)]
+    platform: String,
+    #[serde(default)]
+    url: String,
 }
 #[derive(Deserialize)]
 struct RawVersion {
@@ -892,6 +926,13 @@ fn parse_search(raw: &[u8]) -> anyhow::Result<SearchPage> {
             description: hit.description.trim().chars().take(600).collect(),
             downloads: hit.downloads,
             icon_url: hit.icon_url,
+            author: hit.author.trim().to_owned(),
+            body: String::new(),
+            source_url: None,
+            issues_url: None,
+            wiki_url: None,
+            discord_url: None,
+            donations: Vec::new(),
         };
         // One malformed catalog entry must not hide the rest of the page.
         if project.validate().is_ok() {
@@ -914,9 +955,38 @@ fn parse_project(raw: &[u8]) -> anyhow::Result<Project> {
         description: project.description.trim().chars().take(600).collect(),
         downloads: project.downloads,
         icon_url: project.icon_url,
+        author: String::new(),
+        body: project.body.trim().chars().take(12_000).collect(),
+        source_url: https_url(project.source_url),
+        issues_url: https_url(project.issues_url),
+        wiki_url: https_url(project.wiki_url),
+        discord_url: https_url(project.discord_url),
+        donations: project
+            .donation_urls
+            .into_iter()
+            .filter_map(|donation| {
+                Some(Donation {
+                    platform: donation.platform.trim().to_owned(),
+                    url: https_url(Some(donation.url))?,
+                })
+            })
+            .filter(|donation| !donation.platform.is_empty())
+            .take(4)
+            .collect(),
     };
     project.validate()?;
     Ok(project)
+}
+
+fn https_url(value: Option<String>) -> Option<String> {
+    value.filter(|raw| {
+        reqwest::Url::parse(raw).ok().is_some_and(|url| {
+            url.scheme() == "https"
+                && url.host_str().is_some()
+                && url.username().is_empty()
+                && url.password().is_none()
+        })
+    })
 }
 
 fn parse_version(target: &GameTarget, raw: &[u8]) -> anyhow::Result<Version> {
@@ -1026,6 +1096,24 @@ mod tests {
             game_version: TEST_GAME_VERSION.into(),
             loaders: vec![crate::game_target::ModLoader::Forge],
         }
+    }
+
+    #[test]
+    fn project_details_keep_only_https_links() {
+        let raw = br#"{"id":"GTNHMod","slug":"mod","title":"Mod","description":"d","downloads":1,"body":"<p>Hello</p>","source_url":"https://github.com/example/mod","issues_url":"javascript:alert(1)","wiki_url":null,"discord_url":"https://discord.gg/example","donation_urls":[{"platform":"Ko-fi","url":"https://ko-fi.com/example"},{"platform":"Bad","url":"http://insecure.example"}]}"#;
+        let project = parse_project(raw).unwrap();
+        assert_eq!(project.body, "<p>Hello</p>");
+        assert_eq!(
+            project.source_url.as_deref(),
+            Some("https://github.com/example/mod")
+        );
+        assert_eq!(project.issues_url, None);
+        assert_eq!(
+            project.discord_url.as_deref(),
+            Some("https://discord.gg/example")
+        );
+        assert_eq!(project.donations.len(), 1);
+        assert_eq!(project.donations[0].platform, "Ko-fi");
     }
 
     #[test]
@@ -1140,6 +1228,13 @@ mod tests {
             description: String::new(),
             downloads: 0,
             icon_url: None,
+            author: "Author".into(),
+            body: String::new(),
+            source_url: None,
+            issues_url: None,
+            wiki_url: None,
+            discord_url: None,
+            donations: Vec::new(),
         }
     }
 

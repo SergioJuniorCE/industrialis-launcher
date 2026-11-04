@@ -4,7 +4,8 @@ use super::LauncherRoot;
 use crate::{
     input::{NativeField, NativeFieldEvent},
     state::format_bytes,
-    ui::{btn, card, ButtonVariant},
+    theme::ActiveTheme,
+    ui::{badge, btn, card, icon, tint, BadgeKind, ButtonVariant},
 };
 use gpui::{div, prelude::*, px, Context, Div, Entity};
 use industrialis_backend::{
@@ -78,12 +79,116 @@ fn downloads(count: u64) -> String {
 
 fn version_label(version: &Version) -> String {
     format!(
-        "{} / {} / {} / {}",
-        version.name,
+        "{}  [{}]  ·  {}",
         version.version_number,
         version.version_type,
         format_bytes(version.size)
     )
+}
+
+fn project_color(id: &str) -> gpui::Rgba {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    id.hash(&mut hasher);
+    const COLORS: [u32; 6] = [0x2563eb, 0x7c3aed, 0x059669, 0xd97706, 0xdc2626, 0x0891b2];
+    gpui::rgba((COLORS[(hasher.finish() as usize) % COLORS.len()] << 8) | 0xff)
+}
+
+fn project_tile(project: &Project, size: f32) -> Div {
+    let letter = project
+        .name
+        .chars()
+        .next()
+        .unwrap_or('?')
+        .to_uppercase()
+        .to_string();
+    div()
+        .w(px(size))
+        .h(px(size))
+        .flex_shrink_0()
+        .rounded(px(8.0))
+        .bg(project_color(&project.id))
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_color(gpui::rgb(0xffffff))
+        .font_weight(gpui::FontWeight::SEMIBOLD)
+        .text_size(px(size * 0.42))
+        .child(letter)
+}
+
+fn plain_body(body: &str) -> Vec<String> {
+    if body.trim().is_empty() {
+        return Vec::new();
+    }
+    let normalized = body
+        .replace("<br>", "\n")
+        .replace("<br/>", "\n")
+        .replace("<br />", "\n")
+        .replace("</p>", "\n\n")
+        .replace("</li>", "\n")
+        .replace("</h1>", "\n\n")
+        .replace("</h2>", "\n\n")
+        .replace("</h3>", "\n\n");
+    let mut text = String::new();
+    let mut in_tag = false;
+    for ch in normalized.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                text.push(' ');
+            }
+            _ if !in_tag => text.push(ch),
+            _ => {}
+        }
+    }
+    text.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|line| !line.is_empty())
+        .take(12)
+        .map(|line| line.chars().take(1200).collect())
+        .collect()
+}
+
+fn external_link(
+    theme: &ActiveTheme,
+    label: &str,
+    url: Option<String>,
+) -> Option<gpui::Stateful<Div>> {
+    let url = url.filter(|url| url.starts_with("https://"))?;
+    Some(
+        btn(theme, label, ButtonVariant::Ghost)
+            .text_xs()
+            .child(icon("external-link", 12.0))
+            .on_click(move |_: &gpui::ClickEvent, _, cx| cx.open_url(&url)),
+    )
+}
+
+fn selection_box(theme: &ActiveTheme, checked: bool) -> Div {
+    div()
+        .size(px(18.0))
+        .flex_shrink_0()
+        .rounded(px(4.0))
+        .border_1()
+        .border_color(theme.primary())
+        .bg(if checked {
+            theme.primary()
+        } else {
+            gpui::rgba(0x00000000)
+        })
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_color(theme.primary_foreground())
+        .when(checked, |boxed| boxed.child(icon("check", 12.0)))
 }
 
 impl LauncherRoot {
@@ -227,9 +332,16 @@ impl LauncherRoot {
         state.notice = None;
         let rt = self.data.rt.clone();
         let project_id = project.id.clone();
+        let detail_id = project.id.clone();
         cx.spawn(async move |view, cx| {
             let result = rt
-                .spawn(async move { modrinth::versions(&game_target, &project_id).await })
+                .spawn(async move {
+                    let (detail, versions) = tokio::join!(
+                        modrinth::project(&detail_id),
+                        modrinth::versions(&game_target, &project_id)
+                    );
+                    Ok::<_, anyhow::Error>((detail.ok(), versions?))
+                })
                 .await;
             let _ = view.update(cx, |v, cx| {
                 let state = v.mod_browser_ui.states.entry(id).or_default();
@@ -238,7 +350,21 @@ impl LauncherRoot {
                 }
                 state.versions_loading = false;
                 match result {
-                    Ok(Ok(versions)) => {
+                    Ok(Ok((detail, versions))) => {
+                        if let Some(mut detail) = detail {
+                            if detail.author.is_empty() {
+                                detail.author = state
+                                    .selected
+                                    .as_ref()
+                                    .map(|project| project.author.clone())
+                                    .unwrap_or_default();
+                            }
+                            if let Some(current) = state.selected.as_mut() {
+                                if current.id == detail.id {
+                                    *current = detail;
+                                }
+                            }
+                        }
                         // The API returns newest first; preselect the newest file.
                         state.selected_version = versions.first().map(|version| version.id.clone());
                         state.versions = versions;
@@ -256,6 +382,8 @@ impl LauncherRoot {
     fn choose_modrinth_version(&mut self, id: &str, version_id: &str, cx: &mut Context<Self>) {
         let state = self.mod_browser_ui.states.entry(id.into()).or_default();
         state.selected_version = Some(version_id.to_owned());
+        state.plan = None;
+        state.plan_generation += 1;
         state.notice = None;
         cx.notify();
     }
@@ -300,6 +428,46 @@ impl LauncherRoot {
             return;
         }
         state.selections.retain(|old| old.project.id != project_id);
+        state.plan = None;
+        state.plan_generation += 1;
+        state.notice = None;
+        cx.notify();
+    }
+
+    fn toggle_modrinth_selection(&mut self, id: &str, project: &Project, cx: &mut Context<Self>) {
+        let in_list = self.mod_browser_ui.states.get(id).is_some_and(|state| {
+            state
+                .selections
+                .iter()
+                .any(|selection| selection.project.id == project.id)
+        });
+        if in_list {
+            self.remove_modrinth_selection(id, &project.id, cx);
+            return;
+        }
+        let is_open = self.mod_browser_ui.states.get(id).is_some_and(|state| {
+            state
+                .selected
+                .as_ref()
+                .is_some_and(|selected| selected.id == project.id)
+        });
+        if is_open {
+            self.add_modrinth_selection(id, cx);
+        } else {
+            self.load_modrinth_versions(id.to_owned(), project.clone(), cx);
+            if let Some(state) = self.mod_browser_ui.states.get_mut(id) {
+                state.notice =
+                    Some("Choose a version on the right, then add it to the install list.".into());
+            }
+        }
+    }
+
+    fn clear_modrinth_selections(&mut self, id: &str, cx: &mut Context<Self>) {
+        let state = self.mod_browser_ui.states.entry(id.into()).or_default();
+        if state.resolving || state.installing {
+            return;
+        }
+        state.selections.clear();
         state.plan = None;
         state.plan_generation += 1;
         state.notice = None;
@@ -492,60 +660,80 @@ impl LauncherRoot {
         let loading = state.loading;
         let ready = game_target.is_some();
         let busy = self.instance_is_busy(id) || state.installing || state.resolving;
-        let mut body = div()
-            .id("modrinth-browser")
-            .size_full()
-            .overflow_y_scroll()
+        let selected_version = state.selected_version.clone();
+        let selections = state.selections.clone();
+        let selected_count = selections.len();
+        let plan = state.plan.clone();
+        let plan_count = plan.as_ref().map_or(0, |plan| plan.items.len());
+
+        let mut header = div()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_3()
+            .gap_2()
+            .px_3()
+            .pt_3()
+            .pb_2()
+            .border_b_1()
+            .border_color(theme.border())
             .child(
                 div()
                     .flex()
-                    .flex_col()
-                    .child("Browse Modrinth")
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_base()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("Browse mods"),
+                    )
+                    .child(badge(&theme, "Modrinth", BadgeKind::Normal))
                     .child(
                         div()
                             .text_xs()
                             .text_color(theme.muted_foreground())
-                            .child(format!(
-                                "{target_text}. Required dependencies are added automatically; optional dependencies are not installed."
-                            ))
-                            .child("Downloads are verified before anything is written."),
-                    ),
-            );
-
-        let search = target.clone();
-        let can_search = !loading && ready;
-        body = body.child(
-            div()
-                .flex()
-                .gap_2()
-                .child(div().flex_1().min_w_0().child(field))
-                .child(
-                    btn(
-                        &theme,
-                        if loading { "Searching..." } else { "Search" },
-                        ButtonVariant::Primary,
+                            .child(target_text.clone()),
                     )
-                    .debug_selector(|| "modrinth-search".into())
-                    .tab_stop(can_search)
-                    .when(!can_search, |button| button.opacity(0.5))
-                    .on_click(cx.listener(
-                        move |v, _: &gpui::ClickEvent, _, cx| {
-                            if can_search {
-                                v.search_modrinth(search.clone(), false, cx);
-                            }
-                        },
-                    )),
-                ),
-        );
+                    .child(div().flex_1())
+                    .when(selected_count > 0, |row| {
+                        row.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.muted_foreground())
+                                .child(format!("{selected_count} selected")),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().child(field))
+                    .child({
+                        let search = target.clone();
+                        let can_search = !loading && ready;
+                        btn(
+                            &theme,
+                            if loading { "Searching..." } else { "Search" },
+                            ButtonVariant::Primary,
+                        )
+                        .debug_selector(|| "modrinth-search".into())
+                        .tab_stop(can_search)
+                        .when(!can_search, |button| button.opacity(0.5))
+                        .on_click(cx.listener(
+                            move |v, _: &gpui::ClickEvent, _, cx| {
+                                if can_search {
+                                    v.search_modrinth(search.clone(), false, cx);
+                                }
+                            },
+                        ))
+                    }),
+            );
         if let Some(error) = state.error.clone() {
-            body = body.child(div().text_color(theme.destructive()).child(error));
+            header = header.child(div().text_color(theme.destructive()).child(error));
         }
         if let Some(notice) = state.notice.clone() {
-            body = body.child(
+            header = header.child(
                 div()
                     .text_xs()
                     .text_color(theme.muted_foreground())
@@ -554,7 +742,7 @@ impl LauncherRoot {
         }
         if !ready && !state.target_loading {
             let retry = target.clone();
-            body = body.child(
+            header = header.child(
                 btn(&theme, "Retry version check", ButtonVariant::Outline)
                     .debug_selector(|| "modrinth-target-retry".into())
                     .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
@@ -566,76 +754,116 @@ impl LauncherRoot {
                     })),
             );
         }
+        header = header.child(
+            div()
+                .text_xs()
+                .text_color(theme.muted_foreground())
+                .child("Required dependencies are added automatically. Downloads are verified before anything is written."),
+        );
 
         let mut results = div()
             .id("modrinth-results")
-            .h(px(320.))
+            .flex_1()
             .min_h_0()
             .overflow_y_scroll()
             .flex()
             .flex_col()
+            .p_2()
             .gap_1();
         for project in state.projects.clone() {
-            let project_id = project.id.clone();
-            let page = project.page();
             let selected = state
                 .selected
                 .as_ref()
                 .is_some_and(|old| old.id == project.id);
-            let browse = target.clone();
-            let chosen = project.clone();
+            let checked = selections
+                .iter()
+                .any(|selection| selection.project.id == project.id);
+            let details_target = target.clone();
+            let details_project = project.clone();
+            let toggle_target = target.clone();
+            let toggle_project = project.clone();
+            let selector = project.id.clone();
+            let details_selector = project.id.clone();
+            let meta = if project.author.is_empty() {
+                downloads(project.downloads)
+            } else {
+                format!("{} · by {}", downloads(project.downloads), project.author)
+            };
             results = results.child(
-                card(&theme)
+                div()
                     .id(format!("modrinth-project-row:{}", project.id))
-                    .flex_shrink_0()
                     .flex()
-                    .items_center()
+                    .items_start()
                     .gap_2()
                     .p_2()
+                    .rounded(theme.radius())
+                    .when(selected, |row| row.bg(tint(theme.primary(), 0.10)))
+                    .child(
+                        btn(&theme, "", ButtonVariant::Ghost)
+                            .w(px(24.0))
+                            .px_0()
+                            .aria_label(format!("Add {} to the install list", project.name))
+                            .debug_selector(move || format!("modrinth-project:{selector}").into())
+                            .child(selection_box(&theme, checked))
+                            .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                                v.toggle_modrinth_selection(&toggle_target, &toggle_project, cx);
+                            })),
+                    )
+                    .child(project_tile(&project, 40.0))
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .child(project.name.clone())
+                            .flex()
+                            .flex_col()
+                            .gap_1()
                             .child(
                                 div()
-                                    .text_xs()
-                                    .text_color(theme.muted_foreground())
-                                    .child(downloads(project.downloads)),
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .child(project.name.clone()),
+                                    )
+                                    .when(checked, |name| {
+                                        name.child(badge(&theme, "In list", BadgeKind::Normal))
+                                    }),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_ellipsis()
-                                    .whitespace_nowrap()
                                     .text_color(theme.muted_foreground())
                                     .child(project.description.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground())
+                                    .child(meta),
                             ),
                     )
                     .child(
                         btn(&theme, "Details", ButtonVariant::Ghost)
                             .text_xs()
-                            .on_click(move |_: &gpui::ClickEvent, _, cx| cx.open_url(&page)),
-                    )
-                    .child(
-                        btn(
-                            &theme,
-                            if selected { "Selected" } else { "Versions" },
-                            ButtonVariant::Secondary,
-                        )
-                        .debug_selector(move || format!("modrinth-project:{project_id}").into())
-                        .on_click(cx.listener(
-                            move |v, _: &gpui::ClickEvent, _, cx| {
-                                v.load_modrinth_versions(browse.clone(), chosen.clone(), cx)
-                            },
-                        )),
+                            .debug_selector(move || {
+                                format!("modrinth-details:{details_selector}").into()
+                            })
+                            .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                                v.load_modrinth_versions(
+                                    details_target.clone(),
+                                    details_project.clone(),
+                                    cx,
+                                );
+                            })),
                     ),
             );
         }
-        body = body.child(results);
         if state.searched && !loading && state.projects.is_empty() {
-            body = body.child(
-                div().text_color(theme.muted_foreground()).child(
+            results = results.child(
+                div().p_6().text_color(theme.muted_foreground()).child(
                     game_target
                         .as_ref()
                         .map(|target| format!("No compatible {} mods found.", target.summary()))
@@ -645,7 +873,7 @@ impl LauncherRoot {
         }
         if !loading && state.next_offset < state.total && state.next_offset <= MAX_OFFSET {
             let more = target.clone();
-            body = body.child(
+            results = results.child(
                 btn(&theme, "Load more", ButtonVariant::Ghost)
                     .debug_selector(|| "modrinth-more".into())
                     .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
@@ -653,7 +881,46 @@ impl LauncherRoot {
                     })),
             );
         }
+        let left = div()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px_3()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(theme.border())
+                    .child(div().text_xs().text_color(theme.muted_foreground()).child(
+                        if state.searched {
+                            format!("{} results", state.total)
+                        } else {
+                            "Search results".into()
+                        },
+                    ))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground())
+                            .child(if loading { "Searching..." } else { "" }),
+                    ),
+            )
+            .child(results);
 
+        let mut detail = div()
+            .id("modrinth-detail")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_3();
         if let Some(project) = state.selected.clone() {
             let versions: Vec<Version> = state
                 .versions
@@ -666,21 +933,108 @@ impl LauncherRoot {
                 .take(VISIBLE_VERSIONS)
                 .cloned()
                 .collect();
-            let mut section = div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .p_2()
-                .child(div().child(format!("Versions for {}", project.name)));
+            let meta = if project.author.is_empty() {
+                downloads(project.downloads)
+            } else {
+                format!("by {} · {}", project.author, downloads(project.downloads))
+            };
+            detail = detail.child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_3()
+                    .child(project_tile(&project, 56.0))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_lg()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .child(project.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground())
+                                    .child(meta),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground())
+                                    .child(project.description.clone()),
+                            ),
+                    ),
+            );
+            let mut links = div().flex().flex_wrap().gap_1();
+            for (label, url) in [
+                ("Project page", Some(project.page())),
+                ("Source", project.source_url.clone()),
+                ("Issues", project.issues_url.clone()),
+                ("Wiki", project.wiki_url.clone()),
+                ("Discord", project.discord_url.clone()),
+            ] {
+                if let Some(link) = external_link(&theme, label, url) {
+                    links = links.child(link);
+                }
+            }
+            for donation in &project.donations {
+                if let Some(link) = external_link(
+                    &theme,
+                    &format!("Donate via {}", donation.platform),
+                    Some(donation.url.clone()),
+                ) {
+                    links = links.child(link);
+                }
+            }
+            detail = detail.child(links);
+            let paragraphs = plain_body(&project.body);
+            if !paragraphs.is_empty() {
+                let mut body = card(&theme).p_3().flex().flex_col().gap_2();
+                for paragraph in paragraphs {
+                    body = body.child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground())
+                            .child(paragraph),
+                    );
+                }
+                detail = detail.child(body);
+            }
+
+            let mut versions_card = card(&theme).p_3().flex().flex_col().gap_2().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("Versions"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground())
+                            .child(format!("{} compatible", versions.len())),
+                    ),
+            );
             if state.versions_loading {
-                section = section.child(
+                versions_card = versions_card.child(
                     div()
+                        .text_xs()
                         .text_color(theme.muted_foreground())
                         .child("Loading versions..."),
                 );
             } else if versions.is_empty() {
-                section = section.child(
-                    div().text_color(theme.muted_foreground()).child(
+                versions_card = versions_card.child(
+                    div().text_xs().text_color(theme.muted_foreground()).child(
                         game_target
                             .as_ref()
                             .map(|target| {
@@ -690,22 +1044,25 @@ impl LauncherRoot {
                     ),
                 );
             }
-            for version in versions {
+            let mut version_list = div().flex().flex_col().gap_1();
+            for version in &versions {
                 let selector_id = version.id.clone();
                 let picked = version.id.clone();
                 let choose = target.clone();
-                let chosen = state.selected_version.as_deref() == Some(version.id.as_str());
-                section = section.child(
+                let chosen = selected_version.as_deref() == Some(version.id.as_str());
+                version_list = version_list.child(
                     btn(
                         &theme,
-                        &version_label(&version),
+                        &version_label(version),
                         if chosen {
                             ButtonVariant::Primary
                         } else {
                             ButtonVariant::Outline
                         },
                     )
-                    .flex_shrink_0()
+                    .w_full()
+                    .justify_start()
+                    .text_xs()
                     .debug_selector(move || format!("modrinth-version:{selector_id}").into())
                     .on_click(cx.listener(
                         move |v, _: &gpui::ClickEvent, _, cx| {
@@ -714,53 +1071,77 @@ impl LauncherRoot {
                     )),
                 );
             }
-            let can_add = state.selected_version.is_some() && !busy && ready;
-            let add = target.clone();
-            section = section.child(
-                btn(&theme, "Add to install list", ButtonVariant::Primary)
-                    .debug_selector(|| "modrinth-add".into())
-                    .tab_stop(can_add)
-                    .when(!can_add, |button| button.opacity(0.5))
-                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                        if can_add {
-                            v.add_modrinth_selection(&add, cx);
+            versions_card = versions_card.child(version_list);
+            let listed_version = selections
+                .iter()
+                .find(|selection| selection.project.id == project.id)
+                .map(|selection| selection.version.id.clone());
+            let same_version = listed_version.as_ref() == selected_version.as_ref();
+            let can_add = selected_version.is_some() && !busy && ready;
+            let add_target = target.clone();
+            let add_project = project.clone();
+            versions_card = versions_card.child(
+                btn(
+                    &theme,
+                    if listed_version.is_some() && same_version {
+                        "Remove from install list"
+                    } else if listed_version.is_some() {
+                        "Use this version"
+                    } else {
+                        "Add to install list"
+                    },
+                    if listed_version.is_some() && same_version {
+                        ButtonVariant::Outline
+                    } else {
+                        ButtonVariant::Primary
+                    },
+                )
+                .debug_selector(|| "modrinth-add".into())
+                .tab_stop(can_add)
+                .when(!can_add, |button| button.opacity(0.5))
+                .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                    if can_add {
+                        if listed_version.is_some() && same_version {
+                            v.remove_modrinth_selection(&add_target, &add_project.id, cx);
+                        } else {
+                            v.add_modrinth_selection(&add_target, cx);
                         }
-                    })),
+                    }
+                })),
             );
-            if state.selected_version.is_none() && !state.versions_loading {
-                section = section.child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.muted_foreground())
-                        .child("Choose a version before adding this mod."),
-                );
-            }
-            body = body.child(
-                card(&theme)
-                    .flex_shrink_0()
+            detail = detail.child(versions_card);
+        } else {
+            detail = detail.child(
+                div()
                     .flex()
-                    .flex_col()
-                    .child(section),
+                    .items_center()
+                    .justify_center()
+                    .p_6()
+                    .text_color(theme.muted_foreground())
+                    .child("Select a mod to see its description, links and versions."),
             );
         }
 
-        if !state.selections.is_empty() {
-            let mut list = div().flex().flex_col().gap_1().child(div().child(format!(
-                "Install list ({} selected)",
-                state.selections.len()
-            )));
-            for selection in state.selections.clone() {
+        if !selections.is_empty() {
+            let mut list = card(&theme).p_3().flex().flex_col().gap_2().child(
+                div().flex().items_center().justify_between().child(
+                    div()
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child(format!("Install list ({selected_count})")),
+                ),
+            );
+            for selection in &selections {
                 let project_id = selection.project.id.clone();
                 let remove = target.clone();
                 let removed = project_id.clone();
                 list = list.child(
-                    card(&theme)
+                    div()
                         .id(format!("modrinth-selection:{}", selection.project.id))
-                        .flex_shrink_0()
                         .flex()
                         .items_center()
                         .gap_2()
-                        .p_2()
+                        .child(project_tile(&selection.project, 24.0))
                         .child(
                             div()
                                 .flex_1()
@@ -768,7 +1149,7 @@ impl LauncherRoot {
                                 .child(selection.project.name.clone())
                                 .child(div().text_xs().text_color(theme.muted_foreground()).child(
                                     format!(
-                                        "{} / {}",
+                                        "{} · {}",
                                         selection.version.version_number,
                                         format_bytes(selection.version.size)
                                     ),
@@ -776,6 +1157,7 @@ impl LauncherRoot {
                         )
                         .child(
                             btn(&theme, "Remove", ButtonVariant::Outline)
+                                .text_xs()
                                 .debug_selector(move || {
                                     format!("modrinth-remove:{project_id}").into()
                                 })
@@ -789,49 +1171,21 @@ impl LauncherRoot {
                         ),
                 );
             }
-            let review = target.clone();
-            let resolving = state.resolving;
-            list = list.child(
-                btn(
-                    &theme,
-                    if resolving {
-                        "Resolving dependencies..."
-                    } else {
-                        "Review install"
-                    },
-                    ButtonVariant::Secondary,
-                )
-                .debug_selector(|| "modrinth-review".into())
-                .tab_stop(!resolving && !busy)
-                .when(resolving || busy, |button| button.opacity(0.5))
-                .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                    if !resolving && !busy {
-                        v.review_modrinth_install(review.clone(), cx);
-                    }
-                })),
-            );
-            body = body.child(list);
+            detail = detail.child(list);
         }
 
-        if let Some(InstallPlan {
-            items,
-            skipped,
-            conflicts,
-            ..
-        }) = state.plan.clone()
-        {
-            let count = items.len();
-            let mut section = div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(div().child(format!("Install review ({count} file(s))")));
-            for item in items {
+        if let Some(plan) = plan.clone() {
+            let mut review = card(&theme).p_3().flex().flex_col().gap_2().child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(format!("Install review ({} file(s))", plan.items.len())),
+            );
+            for item in &plan.items {
                 let mut row = div()
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .p_2()
                     .child(
                         div()
                             .flex()
@@ -840,7 +1194,7 @@ impl LauncherRoot {
                             .child(div().flex_1().min_w_0().child(item.project.name.clone()))
                             .child(div().text_xs().text_color(theme.muted_foreground()).child(
                                 format!(
-                                    "{} / {}",
+                                    "{} · {}",
                                     item.version.version_number,
                                     format_bytes(item.version.size)
                                 ),
@@ -860,50 +1214,91 @@ impl LauncherRoot {
                             .child(format!("required by: {}", item.required_by.join(", "))),
                     );
                 }
-                section = section.child(row);
+                review = review.child(row);
             }
-            for note in skipped {
-                section = section.child(
+            for note in plan.skipped {
+                review = review.child(
                     div()
                         .text_xs()
                         .text_color(theme.muted_foreground())
                         .child(note),
                 );
             }
-            for conflict in &conflicts {
-                section = section.child(
+            for conflict in &plan.conflicts {
+                review = review.child(
                     div()
                         .text_xs()
                         .text_color(theme.destructive())
                         .child(conflict.clone()),
                 );
             }
-            if !conflicts.is_empty() {
-                section = section.child(
+            if plan.items.is_empty() {
+                review = review.child(
                     div()
                         .text_xs()
-                        .text_color(theme.destructive())
-                        .child("Remove the conflicting selection before installing."),
-                );
-            } else if count == 0 {
-                section = section.child(
-                    div()
                         .text_color(theme.muted_foreground())
                         .child("Nothing new to install."),
                 );
-            } else if state.installing {
-                section = section.child(
-                    btn(&theme, "Installing...", ButtonVariant::Primary)
-                        .debug_selector(|| "modrinth-install".into())
-                        .tab_stop(false)
-                        .opacity(0.5),
+            }
+            detail = detail.child(review);
+        }
+
+        let right = div()
+            .w(px(420.0))
+            .flex_shrink_0()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .border_l_1()
+            .border_color(theme.border())
+            .child(detail);
+
+        let mut actions = div().flex().items_center().gap_2();
+        if selected_count > 0 && !busy {
+            let clear = target.clone();
+            actions = actions.child(
+                btn(&theme, "Clear", ButtonVariant::Ghost)
+                    .text_xs()
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        v.clear_modrinth_selections(&clear, cx);
+                    })),
+            );
+        }
+        if state.resolving {
+            actions = actions.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground())
+                    .child("Resolving dependencies..."),
+            );
+        } else if state.installing {
+            actions = actions.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground())
+                    .child("Installing..."),
+            );
+        } else if let Some(plan) = plan.as_ref() {
+            if !plan.conflicts.is_empty() {
+                actions = actions.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.destructive())
+                        .child("Resolve conflicts before installing."),
+                );
+            } else if plan_count == 0 {
+                actions = actions.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground())
+                        .child("Nothing new to install."),
                 );
             } else {
                 let install = target.clone();
-                section = section.child(
+                actions = actions.child(
                     btn(
                         &theme,
-                        &format!("Install {count} mods"),
+                        &format!("Install {plan_count} mods"),
                         ButtonVariant::Primary,
                     )
                     .debug_selector(|| "modrinth-install".into())
@@ -918,16 +1313,46 @@ impl LauncherRoot {
                     )),
                 );
             }
-            body = body.child(
-                card(&theme)
-                    .flex_shrink_0()
-                    .flex()
-                    .flex_col()
-                    .child(section),
+        } else if selected_count > 0 {
+            let review = target.clone();
+            actions = actions.child(
+                btn(&theme, "Review install", ButtonVariant::Secondary)
+                    .debug_selector(|| "modrinth-review".into())
+                    .tab_stop(!busy)
+                    .when(busy, |button| button.opacity(0.5))
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        if !busy {
+                            v.review_modrinth_install(review.clone(), cx);
+                        }
+                    })),
             );
         }
+        let bottom = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_3()
+            .py_2()
+            .border_t_1()
+            .border_color(theme.border())
+            .child(div().text_xs().text_color(theme.muted_foreground()).child(
+                if selected_count == 0 {
+                    "No mods selected".into()
+                } else {
+                    format!("{selected_count} mod(s) selected")
+                },
+            ))
+            .child(actions);
 
-        div().flex_1().min_h_0().child(body.size_full())
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(header)
+            .child(div().flex_1().min_h_0().flex().child(left).child(right))
+            .child(bottom)
     }
 }
 
@@ -946,6 +1371,13 @@ mod tests {
             description: "A test mod".into(),
             downloads: 12_345,
             icon_url: None,
+            author: "tester".into(),
+            body: String::new(),
+            source_url: None,
+            issues_url: None,
+            wiki_url: None,
+            discord_url: None,
+            donations: Vec::new(),
         }
     }
 
@@ -1004,6 +1436,42 @@ mod tests {
                     .summary(),
                 "Minecraft 1.20.1 / Fabric"
             );
+        });
+        fixture.cleanup();
+    }
+
+    #[gpui::test]
+    async fn list_checkbox_toggles_the_install_selection(cx: &mut TestAppContext) {
+        let fixture = Fixture::new(&["pack"]);
+        let project = project();
+        let version = version();
+        let (window, root) = fixture.open_sized(cx, size(px(1100.), px(1200.)), |v| {
+            v.selected_id = Some("pack".into());
+            v.instance_ui.detail_tab = DetailTab::Mods;
+            v.content_ui.tab = AddOnTab::Browse;
+            v.mod_browser_ui.states.insert(
+                "pack".into(),
+                BrowserState {
+                    target: Some(GameTarget {
+                        game_version: "1.7.10".into(),
+                        loaders: vec![ModLoader::Forge],
+                    }),
+                    searched: true,
+                    projects: vec![project.clone()],
+                    selected: Some(project.clone()),
+                    versions: vec![version.clone()],
+                    selected_version: Some(version.id.clone()),
+                    ..Default::default()
+                },
+            );
+        });
+        Fixture::click(cx, window, "modrinth-project:GTNHMod");
+        root.read_with(cx, |v, _| {
+            assert_eq!(v.mod_browser_ui.states["pack"].selections.len(), 1);
+        });
+        Fixture::click(cx, window, "modrinth-project:GTNHMod");
+        root.read_with(cx, |v, _| {
+            assert!(v.mod_browser_ui.states["pack"].selections.is_empty());
         });
         fixture.cleanup();
     }
