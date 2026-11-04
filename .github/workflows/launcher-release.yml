@@ -12,7 +12,7 @@ on:
       version:
         description: "major.minor.patch (build artifacts only; does not publish)"
         required: true
-        default: "0.4.3"
+        default: "0.4.4"
       channel:
         description: "Build-only channel; tag pushes publish releases"
         type: choice
@@ -158,6 +158,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: powershell -NoProfile -File scripts/test-windows-updater.ps1 -MakeNSIS "$env:MAKENSIS"
+      - name: Windows legacy-folder migration
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -File scripts/test-windows-migration.ps1 -MakeNSIS "$env:MAKENSIS"
       - uses: actions/upload-artifact@v4
         with:
           name: launcher-${{ matrix.artifact }}

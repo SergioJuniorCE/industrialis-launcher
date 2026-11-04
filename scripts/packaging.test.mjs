@@ -27,7 +27,9 @@ test("Windows packaging exposes the public product name without the migration co
   const installer = await readFile(path.join(app, "packaging/windows.nsi"), "utf8");
   const build = await readFile(path.join(app, "crates/app/build.rs"), "utf8");
   assert.match(installer, /^Name "Industrialis Launcher"$/m);
-  assert.match(installer, /^InstallDir "\$LOCALAPPDATA\\Programs\\Industrialis Launcher"$/m);
+  assert.match(installer, /^!define CURRENT_FOLDER_NAME "Industrialis Launcher"$/m);
+  assert.match(installer, /^!define LEGACY_FOLDER_NAME "Industrialis GPUI"$/m);
+  assert.match(installer, /^InstallDir "\$LOCALAPPDATA\\Programs\\\$\{CURRENT_FOLDER_NAME\}"$/m);
   assert.match(installer, /^InstallDirRegKey HKCU "\$\{APP_REGKEY\}" "InstallDir"$/m);
   assert.match(installer, /!define APP_REGKEY "Software\\Industrialis\\Launcher"/);
   assert.match(installer, /!define UNINSTALL_KEY "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\IndustrialisLauncher"/);
