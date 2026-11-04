@@ -28,10 +28,19 @@ Unicode true
 !define CURRENT_FOLDER_NAME "Industrialis Launcher"
 !endif
 
+!macro MarkerFound Path Result
+  ${If} ${FileExists} "${Path}\${INSTALL_MARKER}"
+  ${OrIf} ${FileExists} "${Path}\${LEGACY_INSTALL_MARKER}"
+    StrCpy ${Result} "1"
+  ${EndIf}
+!macroend
+
 Name "Industrialis Launcher"
 OutFile "${OUTFILE}"
 InstallDir "$LOCALAPPDATA\Programs\${CURRENT_FOLDER_NAME}"
+!ifndef SMOKE_TEST
 InstallDirRegKey HKCU "${APP_REGKEY}" "InstallDir"
+!endif
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 VIProductVersion "${APPVERSION}.0"
@@ -56,6 +65,8 @@ Var ProcessHandle
 Var LegacyDir
 Var MigrateLegacy
 Var HasMarker
+Var HasLegacyMarker
+Var PreviousExe
 
 Function .onInit
   SetShellVarContext current
@@ -104,19 +115,13 @@ Function .onInit
       Abort
     ${EndIf}
     StrCpy $HasMarker "0"
-    ${If} ${FileExists} "$INSTDIR\${INSTALL_MARKER}"
-    ${OrIf} ${FileExists} "$INSTDIR\${LEGACY_INSTALL_MARKER}"
-      StrCpy $HasMarker "1"
-    ${EndIf}
+    !insertmacro MarkerFound "$INSTDIR" "$HasMarker"
     ; An update passes the directory it is installed in. When that is the
     ; retired default folder, $INSTDIR has already moved to the current
     ; directory, so validate the marker in the old directory as well.
     ${If} $MigrateLegacy == "1"
     ${AndIf} $LegacyDir != ""
-      ${If} ${FileExists} "$LegacyDir\${INSTALL_MARKER}"
-      ${OrIf} ${FileExists} "$LegacyDir\${LEGACY_INSTALL_MARKER}"
-        StrCpy $HasMarker "1"
-      ${EndIf}
+      !insertmacro MarkerFound "$LegacyDir" "$HasMarker"
     ${EndIf}
     ${If} $HasMarker != "1"
       MessageBox MB_ICONSTOP "This is not an existing launcher installation. Use the normal installer." /SD IDOK
@@ -152,11 +157,20 @@ FunctionEnd
 
 Section "Launcher"
   SetOutPath "$INSTDIR"
-  ; Keep a rollback executable until the new one is fully extracted.
-  Delete "$INSTDIR\industrialis.exe.previous"
+  ; Keep a rollback executable until the new one is fully extracted. A broker
+  ; from a running game can still map the default rollback name from an earlier
+  ; update, so use a unique name instead of blocking the update.
+  Delete "$INSTDIR\industrialis.exe.previous.*"
+  StrCpy $PreviousExe "$INSTDIR\industrialis.exe.previous"
+  Delete "$PreviousExe"
+  ${If} ${FileExists} "$PreviousExe"
+    System::Call 'kernel32::GetTickCount() i .r0'
+    StrCpy $PreviousExe "$INSTDIR\industrialis.exe.previous.$0"
+    Delete "$PreviousExe"
+  ${EndIf}
   IfFileExists "$INSTDIR\industrialis.exe" 0 extract
   ClearErrors
-  Rename "$INSTDIR\industrialis.exe" "$INSTDIR\industrialis.exe.previous"
+  Rename "$INSTDIR\industrialis.exe" "$PreviousExe"
   ${If} ${Errors}
     MessageBox MB_ICONSTOP "Close other launcher windows and retry. No files were replaced." /SD IDOK
     SetErrorLevel 1
@@ -167,7 +181,7 @@ extract:
   File /oname=industrialis.exe "${BINARY}"
   ${If} ${Errors}
     Delete "$INSTDIR\industrialis.exe"
-    Rename "$INSTDIR\industrialis.exe.previous" "$INSTDIR\industrialis.exe"
+    Rename "$PreviousExe" "$INSTDIR\industrialis.exe"
     MessageBox MB_ICONSTOP "Could not install the launcher. The previous executable was restored." /SD IDOK
     SetErrorLevel 1
     Abort
@@ -180,7 +194,7 @@ extract:
   ExecWait '$\"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe$\" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $\"$PLUGINSDIR\retire-electron.ps1$\" -Apply' $R4
   ${If} $R4 != 0
     Delete "$INSTDIR\industrialis.exe"
-    Rename "$INSTDIR\industrialis.exe.previous" "$INSTDIR\industrialis.exe"
+    Rename "$PreviousExe" "$INSTDIR\industrialis.exe"
     MessageBox MB_ICONSTOP "Could not retire the original launcher. Close launcher windows and retry, or review the old installation. The new launcher was not started and your profile has not been moved or deleted." /SD IDOK
     SetErrorLevel 1
     Abort
@@ -226,21 +240,29 @@ extract:
   Delete "$SMPROGRAMS\Industrialis GPUI.lnk"
   CreateShortcut "$SMPROGRAMS\Industrialis Launcher.lnk" "$INSTDIR\industrialis.exe"
 !endif
-  Delete "$INSTDIR\industrialis.exe.previous"
+  Delete "$PreviousExe"
 
-  ; Move an older installation out of the retired default folder. Only known
-  ; files are removed; the directory itself is kept if anything else remains.
+  ; Move an older installation out of the retired default folder. Only a
+  ; directory that still has a launcher marker is touched, and only known files
+  ; are removed; the directory itself is kept if anything else remains.
   ${If} $MigrateLegacy == "1"
   ${AndIf} $LegacyDir != ""
   ${AndIf} $LegacyDir != $INSTDIR
-    Delete "$LegacyDir\industrialis.exe"
-    Delete "$LegacyDir\industrialis.exe.previous"
-    Delete "$LegacyDir\${INSTALL_MARKER}"
-    Delete "$LegacyDir\${LEGACY_INSTALL_MARKER}"
-    Delete "$LegacyDir\Uninstall.exe"
-    Delete "$LegacyDir\THIRD_PARTY_NOTICES.txt"
-    Delete "$LegacyDir\LICENSE"
-    RMDir "$LegacyDir"
+    StrCpy $HasLegacyMarker "0"
+    !insertmacro MarkerFound "$LegacyDir" "$HasLegacyMarker"
+    ${If} $HasLegacyMarker == "1"
+      ; A game broker can still map the old executable. The delete and RMDir
+      ; then fail harmlessly; the current launcher attaches to the game.
+      Delete "$LegacyDir\industrialis.exe"
+      Delete "$LegacyDir\industrialis.exe.previous"
+      Delete "$LegacyDir\industrialis.exe.previous.*"
+      Delete "$LegacyDir\${INSTALL_MARKER}"
+      Delete "$LegacyDir\${LEGACY_INSTALL_MARKER}"
+      Delete "$LegacyDir\Uninstall.exe"
+      Delete "$LegacyDir\THIRD_PARTY_NOTICES.txt"
+      Delete "$LegacyDir\LICENSE"
+      RMDir "$LegacyDir"
+    ${EndIf}
   ${EndIf}
 SectionEnd
 
@@ -262,6 +284,7 @@ Section "Uninstall"
   ${EndIf}
 app_already_removed:
   Delete "$INSTDIR\industrialis.exe.previous"
+  Delete "$INSTDIR\industrialis.exe.previous.*"
   Delete "$INSTDIR\${INSTALL_MARKER}"
   Delete "$INSTDIR\${LEGACY_INSTALL_MARKER}"
   Delete "$INSTDIR\THIRD_PARTY_NOTICES.txt"

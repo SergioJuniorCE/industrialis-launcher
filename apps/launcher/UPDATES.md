@@ -54,9 +54,10 @@ cutover; normal preview builds do not change the current protocol handler.
 
 An in-app update from the retired `%LOCALAPPDATA%\Programs\Industrialis GPUI`
 directory is recognized by the old marker there even though the installer moves
-the files to the current directory. Running games do not block the update: their
-detached broker keeps the old executable mapped, so the installer ignores it and
-the current launcher reattaches to the running game.
+the files to the current directory. Running games do not block the update: the
+detached broker can keep the old executable mapped, the installer tolerates the
+locked copy, and the current launcher reattaches to the running game. The
+retired folder can remain until that game exits.
 
 The stable Windows installer first extracts the new launcher executable, retaining
 an existing launcher executable for rollback. It then runs the bundled retirement
@@ -220,9 +221,10 @@ launcher is never migrated or cleaned by a fixture. It exercises fresh install,
 the real Rust readiness handoff, rejection of a process that never acknowledges
 readiness, replacement after a running old executable exits, restart into the
 new executable, and uninstall while preserving an unrelated data file. The
-legacy-migration fixture starts from a retired-folder marker and verifies the
-readiness handoff, move to the current directory, restart and cleanup. Both use
-fixture executables, not a real GitHub release, and an isolated unique folder.
+legacy-migration fixture starts from a retired-folder marker and runs both with
+and without the old executable mapped, verifying readiness, migration, target
+preservation, restart, and cleanup. Both use fixture executables, not a real
+GitHub release, and unique folders that are removed afterwards.
 
 Retirement fixtures additionally cover profile overlap/data guards, running
 launchers, unsuccessful/incomplete uninstall, native NSIS extraction rollback,

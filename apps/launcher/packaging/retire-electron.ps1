@@ -59,12 +59,16 @@ function Get-LegacyInstall([string]$LocalDirectory, [string]$ProfileDirectory) {
 function Test-GameBrokerProcess($Process) {
   # The game broker is a hidden child of the installed launcher. It shares the
   # executable name but never owns a launcher window, so retirement must not
-  # wait for it while a game is running.
+  # wait for it while a game is running. Keep this flag in sync with
+  # industrialis_backend::game_broker::FLAG. Same-user processes expose their
+  # command line through Win32_Process; an elevated broker would still be
+  # indistinguishable from a launcher window.
   [bool]($Process.CommandLine -and $Process.CommandLine.Contains('--industrialis-game-broker'))
 }
 
-function Get-RunningLaunchers([string]$Root) {
-  @(Get-CimInstance Win32_Process | Where-Object {
+function Get-RunningLaunchers([string]$Root, $Processes) {
+  if ($null -eq $Processes) { $Processes = Get-CimInstance Win32_Process }
+  @($Processes | Where-Object {
     $_.ExecutablePath -and -not (Test-GameBrokerProcess $_) -and
       ($_.ExecutablePath.StartsWith($Root + '\', [StringComparison]::OrdinalIgnoreCase) -or
         $_.Name -eq 'industrialis.exe')
