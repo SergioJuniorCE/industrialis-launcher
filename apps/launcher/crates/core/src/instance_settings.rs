@@ -6,6 +6,27 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// One quarantined file belonging to a removed mod. `root` is either
+/// `.minecraft` or `persistent-minecraft`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemovedModFile {
+    pub root: String,
+    pub filename: String,
+}
+
+/// A mod the user excluded from this instance. `identity` is the stable
+/// filename-derived mod identity; updates match against it so version bumps
+/// stay removed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemovedMod {
+    pub identity: String,
+    pub filename: String,
+    #[serde(default)]
+    pub removed_at: u64,
+    #[serde(default)]
+    pub files: Vec<RemovedModFile>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InstanceSettings {
     #[serde(flatten)]
@@ -62,6 +83,10 @@ pub struct InstanceSettings {
     pub override_env: bool,
     #[serde(default)]
     pub env_vars: HashMap<String, String>,
+    /// Mods the user removed from this instance. Enforced after every pack
+    /// install/update/reinstall and on every launch.
+    #[serde(default)]
+    pub removed_mods: Vec<RemovedMod>,
     #[serde(default)]
     pub custom_icon: Option<String>,
     /// Maintained by the backend (`refreshSizes`); absent from the TS frontend
@@ -117,6 +142,7 @@ impl Default for InstanceSettings {
             post_exit_command: String::new(),
             override_env: false,
             env_vars: HashMap::new(),
+            removed_mods: Vec::new(),
             custom_icon: None,
             cached_size_bytes: 0,
         }
@@ -175,6 +201,7 @@ pub fn merge_instance_settings(disk: Option<InstanceSettings>) -> InstanceSettin
     merged.post_exit_command = disk.post_exit_command;
     merged.override_env = disk.override_env;
     merged.env_vars.extend(disk.env_vars);
+    merged.removed_mods = disk.removed_mods;
     merged.custom_icon = disk.custom_icon;
     merged.cached_size_bytes = disk.cached_size_bytes;
     merged
@@ -333,6 +360,11 @@ impl PartialInstanceSettings {
                 }
             }
         }
+        if let Some(removed) = self.inner.get("removed_mods") {
+            if let Ok(parsed) = serde_json::from_value::<Vec<RemovedMod>>(removed.clone()) {
+                full.removed_mods = parsed;
+            }
+        }
         if let Some(v) = get_str("custom_icon") {
             full.custom_icon = Some(v);
         }
@@ -376,6 +408,21 @@ mod tests {
         assert_eq!(parsed.min_ram_mb, 4096);
         assert_eq!(parsed.auth_mode, "offline");
         assert_eq!(parsed.env_vars.get("A").map(String::as_str), Some("1"));
+    }
+
+    #[test]
+    fn removed_mods_round_trip_outside_extra_fields() {
+        let parsed = parse_instance_settings_json(
+            r#"{"name":"GTNH","removed_mods":[{"identity":"defaultserverlist","filename":"DefaultServerList-1.0.jar","removed_at":123,"files":[{"root":".minecraft","filename":"DefaultServerList-1.0.jar"}]}]}"#,
+        );
+        assert_eq!(parsed.removed_mods.len(), 1);
+        assert_eq!(parsed.removed_mods[0].identity, "defaultserverlist");
+        assert_eq!(parsed.removed_mods[0].files[0].root, ".minecraft");
+        assert!(!parsed.extra_fields.contains_key("removed_mods"));
+        let merged = merge_instance_settings(Some(parsed.clone()));
+        assert_eq!(merged.removed_mods, parsed.removed_mods);
+        let reparsed = parse_instance_settings_json(&serde_json::to_string(&parsed).unwrap());
+        assert_eq!(reparsed.removed_mods, parsed.removed_mods);
     }
 
     #[test]

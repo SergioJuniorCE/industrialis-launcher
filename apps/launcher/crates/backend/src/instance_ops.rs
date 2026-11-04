@@ -51,6 +51,7 @@ pub async fn delete_instance_with_progress(paths:&LauncherPaths,raw_id:&str,emit
         if cancel.load(std::sync::atomic::Ordering::Acquire){anyhow::bail!(DELETE_CANCELLED);}
         // Commit boundary: finish metadata/group cleanup even if Cancel arrives.
         remove_if_exists(&instance).await?;
+        crate::mod_exclusions::delete_quarantine(&paths, &id).await?;
         let known=known_instance_ids(&paths).await?;
         remove_instance_from_groups(&paths,&id,&known).await?;
         ctx.progress("done",1.0,|_|{});Ok::<_,anyhow::Error>(())
@@ -132,6 +133,7 @@ pub async fn copy_instance_with_progress(
             );
         })
         .await?;
+        crate::mod_exclusions::copy_quarantine(paths, &source_id, &new_id).await?;
         let mut settings = load_instance_settings(paths, &new_id).await?;
         settings.name = new_name.to_string();
         if resolve_icon_path(&destination, settings.custom_icon.as_deref())
@@ -155,6 +157,7 @@ pub async fn copy_instance_with_progress(
     .await;
     if result.is_err() {
         remove_if_exists(&destination).await?;
+        let _ = crate::mod_exclusions::delete_quarantine(paths, &new_id).await;
     }
     result?;
     ctx.progress("done", 1.0, |_| {});
@@ -190,6 +193,33 @@ mod tests {
         crate::settings::save_instance_settings(paths, id, &settings)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn copy_and_delete_carry_the_removed_mod_quarantine() {
+        let paths = temp_paths("quarantine-lifecycle");
+        seed(&paths, "pack").await;
+        let quarantine =
+            crate::mod_exclusions::quarantine_mod_dir(&paths, "pack", "defaultserverlist");
+        std::fs::create_dir_all(quarantine.join(".minecraft/mods")).unwrap();
+        std::fs::write(
+            quarantine.join(".minecraft/mods/DefaultServerList-1.0.jar"),
+            "mod",
+        )
+        .unwrap();
+        copy_instance(&paths, "pack", "copy", "Copy").await.unwrap();
+        assert!(crate::mod_exclusions::quarantine_mod_dir(
+            &paths,
+            "copy",
+            "defaultserverlist"
+        )
+        .join(".minecraft/mods/DefaultServerList-1.0.jar")
+        .exists());
+        delete_instance(&paths, "pack").await.unwrap();
+        assert!(!crate::mod_exclusions::quarantine_dir(&paths, "pack").exists());
+        delete_instance(&paths, "copy").await.unwrap();
+        assert!(!crate::mod_exclusions::quarantine_dir(&paths, "copy").exists());
+        std::fs::remove_dir_all(paths.base()).unwrap();
     }
 
     #[tokio::test]

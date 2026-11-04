@@ -96,6 +96,8 @@ pub struct UpdateModPreview {
     pub new_pack_mods_count: usize,
     pub updated_pack_mods_count: usize,
     pub removed_from_pack_count: usize,
+    /// Mods in the target pack that the instance excludes.
+    pub kept_out_count: usize,
 }
 
 fn mod_patterns() -> &'static (Regex, Regex, Regex, Regex) {
@@ -172,6 +174,23 @@ pub async fn list_mods(dir: &Path) -> Result<Vec<ModEntry>, anyhow::Error> {
     }
     mods.sort_by(|a, b| a.identity.cmp(&b.identity));
     Ok(mods)
+}
+
+/// Split a mod list into deployable mods and excluded-identity matches.
+pub fn split_excluded_mods(
+    mods: Vec<ModEntry>,
+    excluded: &HashSet<String>,
+) -> (Vec<ModEntry>, usize) {
+    let mut kept = Vec::with_capacity(mods.len());
+    let mut kept_out = 0;
+    for entry in mods {
+        if excluded.contains(&entry.identity) {
+            kept_out += 1;
+        } else {
+            kept.push(entry);
+        }
+    }
+    (kept, kept_out)
 }
 
 /// Mirrors `classifyModUpdates` → (updated, added, removed).
@@ -743,14 +762,10 @@ pub async fn build_update_preview(
     let settings_raw = tokio::fs::read_to_string(instance.join("instance.json"))
         .await
         .map_err(|_| anyhow::anyhow!("instance settings are invalid"))?;
-    let current_version: String = serde_json::from_str::<serde_json::Value>(&settings_raw)
-        .ok()
-        .and_then(|v| {
-            v.get("pack_version")
-                .and_then(|p| p.as_str())
-                .map(str::to_string)
-        })
-        .unwrap_or_default();
+    let settings =
+        industrialis_core::instance_settings::parse_instance_settings_json(&settings_raw);
+    let current_version = settings.pack_version.clone();
+    let excluded = crate::mod_exclusions::excluded_identities(&settings.removed_mods);
     let old_mods = list_mods(&resolve_mods_dir(instance).await).await?;
     let staging_parent = instance.join(".update-preview");
     let staging = download_and_extract_to_staging(
@@ -763,10 +778,12 @@ pub async fn build_update_preview(
     )
     .await?;
     let new_mods = list_mods(&resolve_mods_dir(&staging).await).await?;
+    let (new_mods, kept_out_count) = split_excluded_mods(new_mods, &excluded);
     let (updated, added, removed) = classify_mod_updates(&old_mods, &new_mods);
     let custom_mods = list_custom_mods(instance)
         .await?
         .into_iter()
+        .filter(|entry| !excluded.contains(&entry.identity))
         .map(|entry| ModPreviewEntry {
             entry,
             in_persistent_overlay: true,
@@ -779,6 +796,7 @@ pub async fn build_update_preview(
         new_pack_mods_count: added,
         updated_pack_mods_count: updated,
         removed_from_pack_count: removed,
+        kept_out_count,
     })
 }
 
@@ -817,6 +835,21 @@ mod tests {
         let old = vec![entry("a"), entry("b"), entry("gone")];
         let new = vec![entry("a"), entry("b"), entry("fresh")];
         assert_eq!(classify_mod_updates(&old, &new), (2, 1, 1));
+    }
+
+    #[test]
+    fn splits_excluded_mods_by_identity() {
+        let entry = |identity: &str| ModEntry {
+            filename: format!("{identity}.jar"),
+            identity: identity.to_string(),
+            size_bytes: 1,
+        };
+        let excluded = HashSet::from(["defaultserverlist".to_string()]);
+        let (kept, count) =
+            split_excluded_mods(vec![entry("defaultserverlist"), entry("keep")], &excluded);
+        assert_eq!(count, 1);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].identity, "keep");
     }
 
     #[test]

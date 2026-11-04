@@ -1,9 +1,12 @@
-//! Guarded custom-mod management on the original persistent overlay.
+//! Guarded mod management: the custom overlay and pack-mod exclusions.
 use crate::{
     pack_files::{self, ModEntry},
     paths::LauncherPaths,
 };
+use industrialis_core::instance_settings::RemovedMod;
+use std::collections::HashSet;
 use std::path::Path;
+
 pub async fn list(paths: &LauncherPaths, id: &str) -> anyhow::Result<Vec<ModEntry>> {
     let _lease = crate::lifecycle::admit(paths)?;
     let instance = paths.instance_dir(id)?;
@@ -159,6 +162,48 @@ pub async fn remove(paths: &LauncherPaths, id: &str, identity: &str) -> anyhow::
         .await?
     })
     .await
+}
+
+/// Active pack-owned mods: everything in the game mods dir that is not a
+/// custom overlay mod and not excluded.
+pub async fn list_pack(paths: &LauncherPaths, id: &str) -> anyhow::Result<Vec<ModEntry>> {
+    let _lease = crate::lifecycle::admit(paths)?;
+    let instance = paths.instance_dir(id)?;
+    let custom: HashSet<String> = pack_files::list_custom_mods(&instance)
+        .await?
+        .into_iter()
+        .map(|entry| entry.identity)
+        .collect();
+    let removed: HashSet<String> = crate::settings::load_instance_settings(paths, id)
+        .await?
+        .removed_mods
+        .into_iter()
+        .map(|entry| entry.identity)
+        .collect();
+    let active = pack_files::list_mods(&pack_files::resolve_mods_dir(&instance).await).await?;
+    Ok(active
+        .into_iter()
+        .filter(|entry| !custom.contains(&entry.identity) && !removed.contains(&entry.identity))
+        .collect())
+}
+
+pub async fn list_removed(paths: &LauncherPaths, id: &str) -> anyhow::Result<Vec<RemovedMod>> {
+    let _lease = crate::lifecycle::admit(paths)?;
+    Ok(crate::settings::load_instance_settings(paths, id)
+        .await?
+        .removed_mods)
+}
+
+pub async fn remove_pack(
+    paths: &LauncherPaths,
+    id: &str,
+    identity: &str,
+) -> anyhow::Result<RemovedMod> {
+    crate::mod_exclusions::remove_mod(paths, id, identity).await
+}
+
+pub async fn restore_pack(paths: &LauncherPaths, id: &str, identity: &str) -> anyhow::Result<()> {
+    crate::mod_exclusions::restore_mod(paths, id, identity).await
 }
 
 pub async fn open_folder(paths: &LauncherPaths, id: &str) -> anyhow::Result<()> {

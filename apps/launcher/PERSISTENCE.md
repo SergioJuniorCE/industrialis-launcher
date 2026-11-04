@@ -20,6 +20,23 @@ saves through the editor backend, then replaces fresh pack configs through the
 actual staged update and reinstall flow. It uses a path outside the legacy
 preservation allowlist so passing requires the editor's persistent overlay.
 
+## Removed pack mods
+
+The Add-ons tab can remove a pack mod. Its identity (the normalized jar filename
+without version segments) is recorded in `instance.json` under `removed_mods`,
+its files are journaled under
+`<data-dir>/removed-mods/<instance>/<identity>/`, and the active jars are moved
+out of `.minecraft/mods`. Pack installs, updates, clean reinstalls, and every
+launch re-apply the exclusion after the overlays, so a new pack version or a
+manually dropped jar with the same identity cannot bring the mod back. Restore
+moves the quarantined files back and drops the record. The journal completes an
+interrupted move on the next startup or instance operation.
+
+`install::tests::updates_and_reinstalls_keep_removed_mods_out`,
+`instance_ops::tests::copy_and_delete_carry_the_removed_mod_quarantine`, and
+`mod_exclusions::tests::*` cover the update, reinstall, copy/delete, launch-prep
+and recovery paths.
+
 Launcher is a drop-in replacement: it opens the same `industrialis-launcher` directory
 and existing files as Electron, in place. Users must not copy their data, import a
 profile, run a migration wizard or sign in again just because the UI was replaced.
