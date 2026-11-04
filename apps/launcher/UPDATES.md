@@ -19,10 +19,10 @@ See [release notes](RELEASE_NOTES.md) and [cutover status](CUTOVER.md).
 The production workflow is `.github/workflows/launcher-release.yml`.
 Stable `launcher-vX.Y.Z` tags compile `stable-updates`, publish a regular GitHub
 Release and make it latest. Stable release bodies carry
-`<!-- industrialis-launcher-release-v1 -->`; the updater rejects unmarked Electron
-artifacts. Windows uses `IndustrialisLauncherSetup.exe`, preserving the existing
-website and old-updater download contract, with protocol registration and guarded
-Squirrel retirement. Existing profile data stays in its original location.
+`<!-- industrialis-launcher-release-v1 -->`; the updater rejects unmarked
+historical artifacts. Windows uses `IndustrialisLauncherSetup.exe`, preserving the
+existing website download contract, with protocol registration. Existing profile
+data stays in its original location.
 
 Optional `launcher-preview-vX.Y.Z` tags publish prereleases with `make_latest: false`
 and the preview update feature. They remain outside the stable feed.
@@ -41,16 +41,15 @@ installations keep their registered install directory when upgraded; the retired
 codename folder is replaced by the current default and removed. The marker
 identifies an installation that the updater may replace; it is omitted from
 portable ZIPs. The preview uses a separate install directory, shortcut, and
-uninstall entry. It does not remove the Electron installation or migrate
-encrypted accounts.
+uninstall entry.
 
 `node scripts/build-launcher.mjs --replacement` also registers the retained
 `industrialislauncher:` scheme. Default preview artifacts omit that registration.
 Windows saves the previous handler and restores it on uninstall while the launcher still
 owns the command; another application's later registration is kept. macOS embeds
 CFBundleURLTypes, and the Linux desktop entry declares the scheme for installation
-with `xdg-mime`. These registration paths need native installed acceptance before
-cutover; normal preview builds do not change the current protocol handler.
+with `xdg-mime`. These registration paths require native installed acceptance on
+each platform; normal preview builds do not change the protocol handler.
 
 An in-app update from the retired `%LOCALAPPDATA%\Programs\Industrialis GPUI`
 directory is recognized by the old marker there even though the installer moves
@@ -59,27 +58,15 @@ detached broker can keep the old executable mapped, the installer tolerates the
 locked copy, and the current launcher reattaches to the running game. The
 retired folder can remain until that game exits.
 
-The stable Windows installer first extracts the new launcher executable, retaining
-an existing launcher executable for rollback. It then runs the bundled retirement
-helper against the exact old `%LOCALAPPDATA%\IndustrialisLauncher` installation.
-The helper refuses redirected paths, profile overlap or profile files inside
-the install directory, waits for launchers to close normally, and invokes the
-original `Update.exe --uninstall --silent`. It verifies the old executables are
-gone, including Squirrel's root shortcut stub, and clears only a handler
-targeting one of those removed files before the launcher
-registers its own handler. The helper waits for normal closure before delegating
-to Squirrel; legacy uninstall callbacks and cleanup still need installed acceptance.
-A failed helper aborts
-registration/restart and restores the previous launcher executable. A failed or
-partially completed Squirrel uninstall requires review/retry; fixture tests do
-not establish rollback of a real Squirrel installation. The original profile is
-never imported, moved or recursively deleted by the launcher installer.
+The stable Windows installer extracts the new launcher executable, retaining an
+existing launcher executable for rollback, and restarts the installed launcher.
+A failed extraction restores the previous executable. The launcher installer
+never imports, moves or recursively deletes the launcher profile.
 
 For an installed Windows x64 build:
 
 1. Finish file/account operations and settings saves. Running games stay open:
-   they are supervised by a detached broker that the installer and retirement
-   helper ignore.
+   they are supervised by a detached broker that the installer ignores.
 2. Confirm the launcher update. The dialog blocks background input and closing
    the launcher during download/handoff. Busy state is checked again after the
    download, before installation.
@@ -101,11 +88,9 @@ Failed downloads/handoffs clean their temporary directory. Successful handoffs
 retain the temporary installer for the running installer process; it remains
 in the OS temporary directory afterward.
 
-The preview installer/uninstaller only manages its own application files, shortcut
-and registry keys. Stable installation additionally delegates old application
-retirement to Squirrel after the guards above. The launcher does not recursively delete
-the install directory or touch
-the launcher data directory, instances, saves, accounts, or preferences.
+The installer/uninstaller only manages its own application files, shortcut and
+registry keys. The launcher does not recursively delete the install directory or
+touch the launcher data directory, instances, saves, accounts, or preferences.
 
 All artifacts include the project license and generated third-party
 notices from the locked Cargo app graph. Supplied license/notice texts and declared
@@ -167,28 +152,27 @@ to `apps/launcher/dist`. `--skip-build --binary <path>` is only for packaging
 smoke fixtures, not release builds. The packager supports native Windows x64,
 macOS arm64 and Linux x64 hosts.
 
-Build-only stable preparation, after reviewing the retirement behavior:
+Build-only stable preparation:
 
 ```powershell
 node scripts/build-launcher.mjs --channel stable --out apps/launcher/target/stable-review
 ```
 
-Do not install that stable artifact over an existing installation until the actual
-old-installer acceptance scenario is ready. Merely building it does not retire any
-application. `--replacement` alone continues to register only the protocol.
+Stable builds compile the stable update channel and register
+`industrialislauncher:`. `--replacement` enables the same registration for a
+preview build.
 
 The canonical `.github/workflows/launcher-release.yml` tests and builds all
 three native platforms. `launcher-v*` tags publish stable releases and
 `launcher-preview-v*` tags publish optional isolated previews after every build
 succeeds. `workflow_dispatch` builds CI artifacts without publishing a release.
-Root launcher development, packaging and version commands select the native launcher;
-Electron source, aliases and build dependencies have been removed. The last
-Electron source and binary remain available under `launcher-v0.3.0` for rollback.
+Root launcher development, packaging and version commands select the native
+launcher. The immutable `launcher-v0.3.0` tag preserves the historical release.
 
 Windows CI downloads the official NSIS 3.11 portable ZIP, verifies its pinned
 SHA-256 before extraction and checks the compiler version. `MAKENSIS` selects
-that same compiler for packaging and updater/retirement smoke checks. It does
-not depend on the Chocolatey feed or install a global compiler.
+that same compiler for packaging and updater smoke checks. It does not depend on
+the Chocolatey feed or install a global compiler.
 
 ## Verification
 
@@ -202,7 +186,6 @@ node --test scripts/packaging.test.mjs scripts/notices.test.mjs scripts/windows-
 powershell -NoProfile -File scripts/verify-windows-artifacts.ps1
 powershell -NoProfile -File scripts/test-windows-process-exit.ps1
 powershell -NoProfile -File scripts/test-windows-updater.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
-powershell -NoProfile -File scripts/test-windows-retirement.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
 powershell -NoProfile -File scripts/test-windows-migration.ps1 -MakeNSIS C:\Tools\NSIS\makensis.exe
 ```
 
@@ -226,35 +209,24 @@ and without the old executable mapped, verifying readiness, migration, target
 preservation, restart, and cleanup. Both use fixture executables, not a real
 GitHub release, and unique folders that are removed afterwards.
 
-Retirement fixtures additionally cover profile overlap/data guards, running
-launchers, unsuccessful/incomplete uninstall, native NSIS extraction rollback,
-and registry cleanup in a unique test key. They invoke a synthetic uninstall
-callback, never the user's installed Squirrel updater. Stable-channel tests
-reject unmarked Electron releases, GitHub prereleases and the opposite channel.
+Stable-channel tests reject unmarked historical releases, GitHub prereleases and
+the opposite channel.
 
-The separate [Windows Sandbox acceptance](LIVE_ACCEPTANCE.md#actual-squirrel-replacement-in-windows-sandbox)
-uses the unchanged public Electron 0.3.0 installer and the actual stable launcher
-artifact. Only generated profile data and owned guest windows are used. This
-checks real Squirrel retirement and installed lifecycle without replacing the
+The separate [Windows Sandbox acceptance](LIVE_ACCEPTANCE.md#installed-launcher-in-windows-sandbox)
+uses the actual stable launcher artifact. Only generated profile data and owned
+guest windows are used. This checks the installed lifecycle without replacing the
 personal installation. Results and exact artifact hashes are recorded in the
 [migration tracker](MIGRATION_TRACKER.md).
 
-Accepted follow-ups after the 0.4.0 production cutover: an actual published N → N+1 launcher update,
-cross-platform artifact launch/install behavior, signing/notarization, physical
-replacement, running-user handoff and older Windows compatibility. The actual
-Electron 0.3.0 replacement, installed native lifecycle and same-owner protocol
-activation pass in an earlier Windows Sandbox with nine generated profile files
-retained. The subsequent controlled running-Electron window handoff waits for
-normal close and preserves eleven post-close fixture files. The current 2026-10-11
-artifact passes the complete extended native UI runner, normal close and uninstall,
-with all fifteen post-test files retained and owned VM cleanup complete. Exact
-provenance is in the latest tracker record. Original live credentials remain outside
-these fixtures. Profiles remain in the same location and
-require no import, copy or format migration. No release is published merely by
-implementing or testing this code.
+Accepted follow-ups after the 0.4.0 production cutover: an actual published N → N+1
+launcher update, cross-platform artifact launch/install behavior,
+signing/notarization, physical installation and older Windows compatibility. The
+installed native lifecycle and same-owner protocol activation pass in Windows
+Sandbox with generated profile files retained. Original live credentials remain
+outside these fixtures. Profiles remain in the same location and require no import,
+copy or format migration. No release is published merely by implementing or
+testing this code.
 
 Primary API references: [GitHub release assets and digests](https://docs.github.com/en/rest/releases/releases),
 [NSIS installer arguments](https://nsis.sourceforge.io/Docs/Chapter3.html),
 and [NSIS scripting reference](https://nsis.sourceforge.io/Docs/Chapter4.html).
-The retained Squirrel options are defined in its
-[command-line parser](https://github.com/Squirrel/Squirrel.Windows/blob/develop/src/Update/StartupOption.cs).

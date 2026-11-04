@@ -1,17 +1,16 @@
-# Electron UI parity
+# UI parity reference
 
-Functional gaps and the criteria for removing Electron are tracked in
-[MIGRATION_TRACKER.md](MIGRATION_TRACKER.md). Prioritize that checklist;
-aesthetic matching can follow later.
+Functional gaps are tracked in [MIGRATION_TRACKER.md](MIGRATION_TRACKER.md).
+Prioritize that checklist; aesthetic matching can follow later.
 
-The launcher migration should preserve the Electron launcher's interface. This is a
+The native launcher preserves the original launcher's interface. This is a
 work list, not a declaration of pixel parity. Implemented dimensions were checked
 against the actual React components and their computed browser styles using
 isolated fictional instance data. Native screenshot comparison remains pending.
 
 ## Reference
 
-Use the frozen [Electron 0.3.0 source](https://github.com/SergioJuniorCE/industrialis-launcher/tree/launcher-v0.3.0/apps/launcher/src):
+Use the frozen [0.3.0 source](https://github.com/SergioJuniorCE/industrialis-launcher/tree/launcher-v0.3.0/apps/launcher/src):
 `App.tsx`, the final overrides in `App.css`, and the shared `components/` directory.
 The relevant components include
 `InstanceGridCard`, `InstanceAvatar`, `AccountsTab`, `AccountSwitcher`,
@@ -67,13 +66,13 @@ The native highlighted code editor has readable normal/active lines and a visibl
 Find bar. Dark/light screenshots were inspected on an owned disposable Xvfb;
 see [EDITOR_DESIGN.md](EDITOR_DESIGN.md). Exact physical-platform pixel parity
 remains pending. The initial audit table below describes visual comparisons;
-current functional status belongs in the migration tracker.
+current functional status belongs in the tracker.
 
 | Area                    | Difference to resolve                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Detail tabs             | Files, Mods and Backups are ported; exact panel geometry still needs platform comparison                      |
 | Library management      | Management workflows are ported; compare drag indicators, menus and picker geometry                           |
-| Detail actions          | Compare footer actions and group-change access against the Electron reference                                 |
+| Detail actions          | Compare footer actions and group-change access against the 0.3.0 reference                                    |
 | Preferences             | Java, themes and backup workflows are ported; compare control geometry and visual states                      |
 | Settings panels         | Presets, multiline fields and backup UI are ported; exact control arrangement needs comparison                |
 | Dialogs                 | Existing install/copy/update/reinstall/delete workflows work but need reference layout and state comparison   |

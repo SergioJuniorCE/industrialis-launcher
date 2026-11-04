@@ -8,7 +8,7 @@ This patch fixes launcher self-updates: installed builds can update while a game
 
 - Running games no longer block an in-app launcher update. Only a game launch that is still starting blocks, because the installer handoff waits for the old launcher to exit.
 - A self-update from `%LOCALAPPDATA%\Programs\Industrialis GPUI` now recognizes the old install marker, moves the files to `Industrialis Launcher`, restarts, and preserves unrelated files.
-- The detached game broker is no longer mistaken for a second launcher window during old-Electron retirement.
+- The historical Electron retirement helpers, including the bundled Squirrel uninstall step, were removed.
 - A rollback executable still mapped by a running game no longer blocks a later update; the installer switches to a unique rollback name.
 - Installer smoke tests no longer read or migrate a real developer installation.
 

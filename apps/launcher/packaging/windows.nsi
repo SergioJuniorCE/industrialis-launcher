@@ -186,20 +186,6 @@ extract:
     SetErrorLevel 1
     Abort
   ${EndIf}
-!ifdef RETIRE_SCRIPT_FILE
-  ; Verify/extract the replacement before retiring the original. Wait for normal
-  ; close and delegate binary/shortcut removal to its own Squirrel updater.
-  InitPluginsDir
-  File /oname=$PLUGINSDIR\retire-electron.ps1 "${RETIRE_SCRIPT_FILE}"
-  ExecWait '$\"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe$\" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $\"$PLUGINSDIR\retire-electron.ps1$\" -Apply' $R4
-  ${If} $R4 != 0
-    Delete "$INSTDIR\industrialis.exe"
-    Rename "$PreviousExe" "$INSTDIR\industrialis.exe"
-    MessageBox MB_ICONSTOP "Could not retire the original launcher. Close launcher windows and retry, or review the old installation. The new launcher was not started and your profile has not been moved or deleted." /SD IDOK
-    SetErrorLevel 1
-    Abort
-  ${EndIf}
-!endif
   FileOpen $R1 "$INSTDIR\${INSTALL_MARKER}" w
   FileWrite $R1 '{"format":1,"kind":"nsis"}'
   FileClose $R1
