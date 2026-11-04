@@ -6,8 +6,9 @@ The owner explicitly chose **Replace Electron in stable**, accepting the remaini
 checks listed in [release notes](RELEASE_NOTES.md). They remain follow-up work;
 this decision does not turn unrun scenarios into passed tests. Launcher 0.4.0 owns
 the production launcher tag workflow. Electron source/build dependencies are
-removed; the original profile path and installer retirement safeguards remain.
-The immutable last-Electron release is launcher-v0.3.0.
+removed; the original profile path and native installer rollback remain. The
+Electron retirement helpers were removed on 2026-11-04 after the last Electron
+release aged out. The immutable last-Electron release is launcher-v0.3.0.
 
 ## Public stable release verified 2026-10-19
 
@@ -48,9 +49,9 @@ original-account testing, physical/platform checks, release access or cutover ap
 Sound selection (F40) is a separate requested enhancement, not an Electron removal gate.
 
 Windows has 233 passing Rust tests. Linux has 230, including 44 app tests with Launcher
-interactions, in a read-only source container. Native Windows process tests cover cross-runtime
+interactions, in a read-only source container. Native Windows process tests cover cross-process
 ownership, second launch, detached games, durable logs and exactly-once exit
-accounting. A synthetic profile passes actual Electron safeStorage ↔ Rust
+accounting. A synthetic profile passed actual Electron safeStorage ↔ Rust
 encryption/decryption without replacing its key on Windows DPAPI and a private
 Linux GNOME Secret Service and KWallet 6 keyrings. The Linux native test caught a libsecret
 unload crash; its library handles now live for the process lifetime. The isolated NSIS handoff test
@@ -135,41 +136,20 @@ sign-in. Account persistence and play time pass; online-server authentication,
 world gameplay, native account controls and pre-existing original accounts
 remain outside this evidence.
 
-The prepared stable build recognizes marked Launcher `launcher-v*` releases and uses
-the Windows filename accepted by Electron's existing updater. Its installer
-includes guarded Squirrel retirement. Synthetic tests cover running/overlap/data
-guards, failure rollback and cleanup of only the obsolete protocol handler.
-The actual public 0.3.0 Squirrel installation is also retired successfully inside
-a disposable Windows Sandbox, preserving nine generated profile files before
-first boot. Clean-VM boot exposed an external MSVC runtime dependency in the
-previous Windows artifacts; packaging now requires static CRT and inspects the
+The stable build recognizes marked Launcher `launcher-v*` releases and uses the
+`IndustrialisLauncherSetup.exe` filename expected by the download links. The
+installer retains the previous executable for rollback and restores it if
+extraction fails. Clean-VM boot exposed an external MSVC runtime dependency in
+earlier Windows artifacts; packaging now requires static CRT and inspects the
 actual PE imports. The rebuilt stable artifact passes native rendering, normal
 close, protocol restoration/foreground activation of the same owner and uninstall,
-with all post-boot profile files retained. The full host runner exits 0 and
-cleans up its owned VM. `Local State` is a generated marker; original encryption-key
-and live-account acceptance are separate. No host installation or
-production distribution was changed. See
+with all post-boot profile files retained. The full host runner exits 0 and cleans
+up its owned VM. No host installation or production distribution was changed. See
 [the live acceptance runbook](LIVE_ACCEPTANCE.md) and [update channels](UPDATES.md).
 
-`node scripts/rehearse-cutover.mjs` copies only framework sources/resources into an
-isolated source snapshot with no Electron app. It compiles/tests the port, runs
-the frozen old ownership protocol against native processes and renders a hidden
-window. It never copies user profiles or replaces a running development EXE.
-Snapshots, source hashes and results stay under the launcher's ignored `target` directory.
-
-`node scripts/rehearse-workspace.mjs --verify` additionally creates a
-source-only monorepo snapshot without Electron, removes legacy build aliases and
-its zip override there, redirects the copied version command to Launcher, and prunes
-the copied pnpm lockfile. It installs dependencies with scripts disabled, checks
-lint/types/tests, builds server/dashboard/website and verifies packaging/notices.
-The 2026-10-08 Windows run passes: 205 Rust tests, 27 server tests, 8 dashboard
-tests and 4 packaging/notice tests. The snapshot has no Electron runtime/build
-dependencies. Evidence is `target/workspace-removal-3HBHVu/result.json`.
-This complements the native entrypoint/process/render rehearsal above; it does
-not build a new production launcher, switch public distribution or remove the
-original app in this checkout. `--online` allows missing public registry metadata
-and packages; the default uses the local cache only. Corepack is located next to
-Node, or supplied with `LAUNCHER_REHEARSAL_COREPACK` pointing to its `dist/corepack.js`.
+The earlier source-removal rehearsals were retired with the Electron migration and
+their scripts have been removed. The immutable `launcher-v0.3.0` tag preserves the
+historical source for reference.
 
 ## Follow-up acceptance (accepted for 0.4.0)
 
@@ -195,24 +175,15 @@ Node, or supplied with `LAUNCHER_REHEARSAL_COREPACK` pointing to its `dist/corep
    currently minimizes instead of hiding because the pinned adapter's hide API
    does nothing; record acceptance or implement an alternative. Screen-reader
    and physical window-drag behavior also need native acceptance.
-4. **Installer replacement (F26, F33, F39).** The actual public 0.3.0 Squirrel
-   replacement and installed protocol/boot/uninstall subset passes in Windows
-   Sandbox. Finish running-user handoff, original live credentials, physical
-   installation and older supported Windows acceptance. Remove executable
-   entry points/shortcuts/startup behavior
-   without deleting `%APPDATA%/industrialis-launcher`, `Local State`, accounts,
-   cloud credentials or instances. Do not run both launchers against the profile.
-   Cooperative owners are mutually exclusive; the older released binary guard
-   is only best effort and cannot stop an old app starting later. The packager's
-   `--replacement` flag registers `industrialislauncher:`; it does not uninstall
-   the old launcher. The separate `--channel stable` build includes the guarded
-   retirement helper: extract Launcher first, wait for normal launcher closure, invoke
-   the original Squirrel uninstaller and verify old executables are gone. Its
-   synthetic rollback tests do not establish real partially failed Squirrel
-   recovery. Windows protocol launch, handler ownership and dead-handler cleanup
-   pass in the isolated replacement; finish the other platform/published scenarios.
-   Preserve any required old protocol
-   handler until the actual replacement sequence is established.
+4. **Windows installer lifecycle (F26, F33, F39).** Native install, boot,
+   protocol ownership, close and uninstall pass in Windows Sandbox. Finish
+   physical installation, running-user handoff, original live credentials and
+   older supported Windows acceptance. The installer must not delete
+   `%APPDATA%/industrialis-launcher`, `Local State`, accounts, cloud credentials
+   or instances. Cooperative owners are mutually exclusive. The packager's
+   `--replacement` flag registers `industrialislauncher:`; stable builds also
+   compile the stable update channel and register the protocol. Finish the other
+   platform/published scenarios.
 5. **Published updates (F32–F33).** Establish signing/notarization policy; build
    and launch native artifacts on all targets. Run a real published Launcher N → N+1
    Windows update with digest verification, busy/close/save guards, failure

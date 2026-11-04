@@ -1,6 +1,6 @@
 //! Port of `apps/launcher/electron/backend/paths.ts`.
 //!
-//! The data dir matches Electron's `app.getPath("appData")` layout:
+//! The data dir matches the original launcher's app-data layout:
 //! `%APPDATA%` on Windows, `~/Library/Application Support` on macOS,
 //! `$XDG_CONFIG_HOME`/`~/.config` on Linux — plus `industrialis-launcher`.
 //!

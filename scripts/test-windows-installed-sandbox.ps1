@@ -1,36 +1,30 @@
 param(
-  [Parameter(Mandatory=$true)][string]$LegacyInstaller,
   [Parameter(Mandatory=$true)][string]$StableArtifactDirectory,
-  [switch]$RunningLegacy,
   [switch]$NativeUi,
   [switch]$Run
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $app = Join-Path $repo 'apps/launcher'
-$legacy = (Resolve-Path -LiteralPath $LegacyInstaller).Path
 $stable = (Resolve-Path -LiteralPath $StableArtifactDirectory).Path
 $receipt = Get-Content -LiteralPath (Join-Path $stable 'verification.json') -Raw | ConvertFrom-Json
 if ($receipt.channel -ne 'stable') { throw 'Use a verified stable artifact directory' }
 if ($receipt.externalMsvcRuntime -ne $false) { throw 'Use a stable artifact verified to need no external MSVC runtime' }
-$legacyHash = '5B6A7B5ED7B94510124F3867B1C1ADB30D5A40E4F817AB89D3427743F8A8C746'
-if ((Get-FileHash -LiteralPath $legacy).Hash -ne $legacyHash) { throw 'Use the unchanged public launcher-v0.3.0 Windows installer' }
 $setup = Join-Path $stable 'IndustrialisLauncherSetup.exe'
 if ((Get-FileHash -LiteralPath $setup).Hash -ne $receipt.installerSha256) { throw 'Stable installer changed after verification' }
-$fixture = Join-Path $app ('target/live-acceptance/squirrel-sandbox-' + [guid]::NewGuid().ToString('N'))
+$fixture = Join-Path $app ('target/live-acceptance/installed-sandbox-' + [guid]::NewGuid().ToString('N'))
 $sandboxInputs = Join-Path $fixture 'input'
 $sandboxOutputs = Join-Path $fixture 'output'
 New-Item -ItemType Directory -Path $sandboxInputs,$sandboxOutputs | Out-Null
-Copy-Item -LiteralPath $legacy -Destination (Join-Path $sandboxInputs 'legacy-setup.exe')
 Copy-Item -LiteralPath $setup -Destination (Join-Path $sandboxInputs 'launcher-setup.exe')
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'test-windows-squirrel-guest.ps1') -Destination (Join-Path $sandboxInputs 'acceptance.ps1')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'test-windows-installed-guest.ps1') -Destination (Join-Path $sandboxInputs 'acceptance.ps1')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'test-windows-native-ui.ps1') -Destination (Join-Path $sandboxInputs 'native-ui.ps1')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'test-windows-editor-guest.ps1') -Destination (Join-Path $sandboxInputs 'editor.ps1')
 Copy-Item -LiteralPath (Join-Path $app 'crates/app/assets/brand.png') -Destination (Join-Path $sandboxInputs 'acceptance.png')
 $nonce = [guid]::NewGuid().ToString('N')
-[ordered]@{ kind='launcher-expendable-squirrel-acceptance-v1'; nonce=$nonce; hostComputer=$env:COMPUTERNAME;
-  legacySha256=$legacyHash; launcherInstallerSha256=$receipt.installerSha256; launcherExecutableSha256=$receipt.executableSha256;
-  runningLegacy=[bool]$RunningLegacy; nativeUi=[bool]$NativeUi } |
+[ordered]@{ kind='launcher-expendable-installed-acceptance-v1'; nonce=$nonce; hostComputer=$env:COMPUTERNAME;
+  launcherInstallerSha256=$receipt.installerSha256; launcherExecutableSha256=$receipt.executableSha256;
+  nativeUi=[bool]$NativeUi } |
   ConvertTo-Json | Set-Content -LiteralPath (Join-Path $sandboxInputs 'marker.json') -Encoding UTF8
 $escapedInput = [Security.SecurityElement]::Escape($sandboxInputs)
 $escapedOutput = [Security.SecurityElement]::Escape($sandboxOutputs)
@@ -84,7 +78,7 @@ for ($attempt=0; $attempt -lt 10 -and $null -eq $report; $attempt++) {
 }
 if ($null -eq $report -or $report.nonce -ne $nonce -or $report.guest -ne $true) { throw 'Owned guest result identity failed' }
 $report | ConvertTo-Json -Depth 4
-if ($report.passed -ne $true) { throw ('Actual Squirrel acceptance failed: ' + $report.error) }
+if ($report.passed -ne $true) { throw ('Installed launcher acceptance failed: ' + $report.error) }
 } finally {
   # Allow guest shutdown, then close only this fixture's identified host client,
   # including failure/timeout paths. No existing user Sandbox is ever selected.

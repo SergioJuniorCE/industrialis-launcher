@@ -4,7 +4,7 @@ $inputRoot = 'C:\LauncherAcceptanceInput'
 $outputRoot = 'C:\LauncherAcceptanceOutput'
 $marker = Get-Content -LiteralPath (Join-Path $inputRoot 'marker.json') -Raw | ConvertFrom-Json
 if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $env:COMPUTERNAME -eq $marker.hostComputer -or
-    $marker.kind -ne 'launcher-expendable-squirrel-acceptance-v1') { throw 'Disposable guest identity required' }
+    $marker.kind -ne 'launcher-expendable-installed-acceptance-v1') { throw 'Disposable guest identity required' }
 
 $report = [ordered]@{ nonce=$marker.nonce; guest=$true; osBuild=[Environment]::OSVersion.Version.ToString(); passed=$false }
 function Progress([string]$Message) {
@@ -27,24 +27,6 @@ function Owned-Processes([string]$Root) {
     $_.ExecutablePath -and $_.ExecutablePath.StartsWith($Root + '\',[StringComparison]::OrdinalIgnoreCase)
   })
 }
-function Close-ExpendableLegacy([string]$Root) {
-  foreach ($process in (Owned-Processes $Root)) {
-    try { [Diagnostics.Process]::GetProcessById($process.ProcessId).CloseMainWindow() | Out-Null } catch { }
-  }
-  $deadline = [DateTime]::UtcNow.AddSeconds(30)
-  while ((Owned-Processes $Root).Count -gt 0 -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 250 }
-  $remaining = @(Owned-Processes $Root)
-  foreach ($item in $remaining) {
-    $process = [Diagnostics.Process]::GetProcessById($item.ProcessId)
-    if (-not $process.Path.StartsWith($Root + '\',[StringComparison]::OrdinalIgnoreCase) -or
-        [Math]::Abs(($process.StartTime - $item.CreationDate).TotalMilliseconds) -gt 20) { throw 'Guest process identity changed' }
-    $process.Kill()
-    if (-not $process.WaitForExit(10000)) { throw 'Expendable legacy process did not exit' }
-  }
-  if ((Owned-Processes $Root).Count -gt 0) { throw 'Legacy fixture remains running' }
-  if ($remaining.Count -gt 0) { return 'forced fixture closure after normal-close deadline' }
-  return 'normal window closure'
-}
 function Snapshot([string]$Root) {
   $snapshot = @{}
   foreach ($file in (Get-ChildItem -LiteralPath $Root -Recurse -File -Force)) {
@@ -64,87 +46,6 @@ function Default-Protocol {
   $key = 'HKCU:\Software\Classes\industrialislauncher\shell\open\command'
   if (Test-Path -LiteralPath $key) { return (Get-Item -LiteralPath $key).GetValue('') }
   return ''
-}
-function Wait-GuestWindow($Process) {
-  $deadline = [DateTime]::UtcNow.AddSeconds(60)
-  do {
-    Start-Sleep -Milliseconds 250
-    $Process.Refresh()
-    if ($Process.HasExited -or [DateTime]::UtcNow -gt $deadline) { throw 'Owned legacy fixture did not open a native window' }
-  } while ($Process.MainWindowHandle -eq 0)
-}
-function Install-WithRunningLegacy([string]$LegacyExecutable, [string]$LegacyRoot, [string]$GuestDataDirectory) {
-  Progress 'Opening the actual released Electron window before replacement'
-  $old = Start-Process -FilePath $LegacyExecutable -ArgumentList @('--disable-gpu') -WindowStyle Normal -PassThru
-  $oldHandle = $old.Handle
-  Wait-GuestWindow $old
-  $report.runningLegacyProcessId = $old.Id
-  $report.runningLegacyWindow = $old.MainWindowHandle.ToString()
-  # These files are launcher-managed; Chromium is allowed to update its own state
-  # during a legitimate normal close. Snapshot those bytes after close separately.
-  $criticalBefore = Snapshot $GuestDataDirectory
-  $beforeLegacyClose = @{} + $criticalBefore
-  $criticalBefore = @{} + $criticalBefore
-  foreach ($name in @($criticalBefore.Keys)) {
-    if ($name -notmatch '^instances\\[^\\]+\\(\.minecraft\\|persistent-minecraft\\|mmc-pack\.json$|instance\.cfg$)') { $criticalBefore.Remove($name) }
-  }
-  $stateFile = Join-Path $GuestDataDirectory 'Local State'
-  $state = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
-  $originalKey = $state.os_crypt.encrypted_key
-  $setup = Start-Process -FilePath (Join-Path $inputRoot 'launcher-setup.exe') -ArgumentList @('/S') -WindowStyle Hidden -PassThru
-  $setupHandle = $setup.Handle
-  # NSIS launches a worker executable from its temporary directory; follow only
-  # the verified installer's descendants when locating its retirement helper.
-  $deadline = [DateTime]::UtcNow.AddSeconds(90)
-  do {
-    $rows = @(Get-CimInstance Win32_Process)
-    $descendants = New-Object 'Collections.Generic.HashSet[int]'
-    $descendants.Add($setup.Id) | Out-Null
-    do {
-      $added = $false
-      foreach ($row in $rows) {
-        if ($descendants.Contains([int]$row.ParentProcessId) -and $descendants.Add([int]$row.ProcessId)) { $added = $true }
-      }
-    } while ($added)
-    $helpers = @($rows | Where-Object { $descendants.Contains([int]$_.ProcessId) -and $_.Name -eq 'powershell.exe' -and $_.CommandLine -like '*retire-electron.ps1* -Apply*' })
-    if ($setup.HasExited -or $old.HasExited -or [DateTime]::UtcNow -gt $deadline) { throw 'Actual installer did not wait for the running legacy window' }
-    Start-Sleep -Milliseconds 250
-  } while ($helpers.Count -ne 1)
-  Start-Sleep -Seconds 2
-  if ($setup.HasExited -or $old.HasExited -or -not (Test-Path -LiteralPath $LegacyExecutable)) { throw 'Retirement removed or stopped the running legacy app' }
-  if (@(Get-CimInstance Win32_Process -Filter "Name = 'industrialis.exe'").Count -ne 0) { throw 'Replacement started beside an uncooperative legacy writer' }
-  $report.actualInstallerWaitedForLegacy = $true
-  Progress 'Closing only the owned released Electron window normally'
-  if (-not $old.CloseMainWindow() -or -not $old.WaitForExit(60000) -or $old.ExitCode -ne 0) { throw 'Released Electron window did not close normally' }
-  $deadline = [DateTime]::UtcNow.AddSeconds(30)
-  while ((Owned-Processes $LegacyRoot).Count -gt 0) {
-    if ([DateTime]::UtcNow -gt $deadline) { throw 'Actual Electron child remained after normal close' }
-    Start-Sleep -Milliseconds 100
-  }
-  Assert-Snapshot $GuestDataDirectory $criticalBefore
-  $state = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
-  if ($originalKey -and $state.os_crypt.encrypted_key -ne $originalKey) { throw 'Electron encryption key changed on normal close' }
-  $afterClose = Snapshot $GuestDataDirectory
-  $report.legacyMetadataChangesOnNormalBootClose = @($beforeLegacyClose.Keys | Where-Object { $afterClose[$_] -ne $beforeLegacyClose[$_] })
-  $instanceSettings = Get-Content -LiteralPath (Join-Path $GuestDataDirectory 'instances/FixtureOne/instance.json') -Raw | ConvertFrom-Json
-  if ($instanceSettings.name -ne 'Launcher Sandbox fixture') { throw 'Original launcher lost the generated instance name' }
-  if (-not $setup.WaitForExit(300000) -or $setup.ExitCode -ne 0) { throw ('Actual running-legacy installer failed: ' + $setup.ExitCode) }
-  Assert-Snapshot $GuestDataDirectory $afterClose
-  $report.runningLegacyNormalClose = $true
-  $report.runningLegacyEncryptionKeyRetained = [bool]$originalKey
-  $report.profilePreservedAfterLegacyClose = $afterClose.Count
-  return $afterClose
-}
-function Legacy-Shortcuts([string]$Root) {
-  $shell = New-Object -ComObject WScript.Shell
-  try {
-    foreach ($directory in @([Environment]::GetFolderPath('DesktopDirectory'),[Environment]::GetFolderPath('StartMenu'))) {
-      foreach ($file in (Get-ChildItem -LiteralPath $directory -Filter '*.lnk' -Recurse -File -ErrorAction SilentlyContinue)) {
-        $shortcut = $shell.CreateShortcut($file.FullName)
-        if ($shortcut.TargetPath.StartsWith($Root + '\',[StringComparison]::OrdinalIgnoreCase)) { $file.FullName }
-      }
-    }
-  } finally { [Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null }
 }
 function Save-AppDiagnostics($Process) {
   Add-Type -TypeDefinition @'
@@ -181,29 +82,11 @@ public static class LauncherGuestWindows {
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $outputRoot 'launcher-process.json') -Encoding UTF8
 }
 try {
-  Progress 'Verifying public legacy and local stable installer hashes'
-  foreach ($pair in @(@('legacy-setup.exe',$marker.legacySha256),@('launcher-setup.exe',$marker.launcherInstallerSha256))) {
-    if ((Get-FileHash -LiteralPath (Join-Path $inputRoot $pair[0])).Hash -ne $pair[1]) { throw 'Installer provenance changed' }
-  }
+  Progress 'Verifying local stable installer hash'
+  if ((Get-FileHash -LiteralPath (Join-Path $inputRoot 'launcher-setup.exe')).Hash -ne $marker.launcherInstallerSha256) { throw 'Installer provenance changed' }
   $local = [Environment]::GetFolderPath('LocalApplicationData')
-  $legacy = Join-Path $local 'IndustrialisLauncher'
   $dataDirectory = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'industrialis-launcher'
-  if (Test-Path -LiteralPath $legacy) { throw 'Guest already contains a legacy installation' }
-  Progress 'Installing actual launcher-v0.3.0 Squirrel release in fresh guest'
-  Run-Installer (Join-Path $inputRoot 'legacy-setup.exe') @('--silent')
-  $deadline = [DateTime]::UtcNow.AddSeconds(60)
-  while (-not (Test-Path -LiteralPath (Join-Path $legacy 'app-0.3.0/resources/app.asar'))) {
-    if ([DateTime]::UtcNow -gt $deadline) { throw 'Actual legacy installation did not appear' }
-    Start-Sleep -Milliseconds 500
-  }
-  $report.legacyFixtureClosure = Close-ExpendableLegacy $legacy
-  $oldShortcuts = @(Legacy-Shortcuts $legacy)
-  $oldUninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\IndustrialisLauncher'
-  $oldUninstallRegistered = Test-Path -LiteralPath $oldUninstallKey
-  $oldExecutables = @(Get-ChildItem -LiteralPath $legacy -Recurse -Filter 'industrialis-launcher.exe' -File | ForEach-Object FullName)
-  if ($oldExecutables.Count -eq 0 -or -not (Test-Path -LiteralPath (Join-Path $legacy 'Update.exe'))) { throw 'Actual Squirrel layout missing' }
-  $report.legacyInstalled = $true
-  $report.oldExecutableCount = $oldExecutables.Count
+  if (Test-Path -LiteralPath (Join-Path $local 'Programs/Industrialis Launcher')) { throw 'Guest already contains a launcher installation' }
   New-Item -ItemType Directory -Path (Join-Path $dataDirectory 'instances/FixtureOne/.minecraft/saves/acceptance') -Force | Out-Null
   [IO.File]::WriteAllText((Join-Path $dataDirectory 'accounts.json'), '[{"account_type":"offline","format_version":3,"id":"20000000-0000-4000-8000-000000000001","minecraft_profile":{"id":"20000000-0000-4000-8000-000000000002","name":"LauncherAcceptance"},"acceptanceExtension":{"preserve":true}},{"account_type":"offline","format_version":3,"id":"20000000-0000-4000-8000-000000000003","minecraft_profile":{"id":"20000000-0000-4000-8000-000000000004","name":"LauncherKeyboard"}}]')
   [IO.File]::WriteAllText((Join-Path $dataDirectory 'launcher-settings.json'), '{"default_account_id":"20000000-0000-4000-8000-000000000001","acceptanceExtension":{"preserve":true}}')
@@ -215,38 +98,17 @@ try {
   New-Item -ItemType Directory -Path (Join-Path $dataDirectory 'instances/FixtureOne/.minecraft/config'),(Join-Path $dataDirectory 'instances/FixtureOne/.minecraft/mods') -Force | Out-Null
   [IO.File]::WriteAllText((Join-Path $dataDirectory 'instances/FixtureOne/.minecraft/config/acceptance.cfg'), "general {`n I:amount=1`n S:labels <`n  original`n >`n}`n")
   [IO.File]::WriteAllText((Join-Path $dataDirectory 'instances/FixtureOne/.minecraft/mods/pack-owned.jar'), 'Generated pack mod bytes')
-  $report.legacyCreatedLocalState = Test-Path -LiteralPath (Join-Path $dataDirectory 'Local State')
-  if (-not $report.legacyCreatedLocalState) {
-    [IO.File]::WriteAllText((Join-Path $dataDirectory 'Local State'), '{"acceptanceExtension":{"preserve":true}}')
-  }
   $beforeInstall = Snapshot $dataDirectory
-  # Set an actual installed legacy command even if its initial app did not finish
-  # protocol registration before closing. This is exclusively the guest registry.
-  $protocolKey = 'HKCU:\Software\Classes\industrialislauncher\shell\open\command'
-  New-Item -Path $protocolKey -Force | Out-Null
-  Set-Item -LiteralPath $protocolKey -Value ('"' + $oldExecutables[0] + '" "%1"')
-  Progress 'Installing actual stable launcher package and delegating retirement to actual Squirrel updater'
-  if ($marker.runningLegacy) {
-    $releasedExecutable = Join-Path $legacy 'app-0.3.0/industrialis-launcher.exe'
-    $beforeInstall = Install-WithRunningLegacy $releasedExecutable $legacy $dataDirectory
-  } else {
-    Run-Installer (Join-Path $inputRoot 'launcher-setup.exe') @('/S')
-  }
+  Progress 'Installing launcher package in fresh guest'
+  Run-Installer (Join-Path $inputRoot 'launcher-setup.exe') @('/S')
   $installed = Join-Path $local 'Programs/Industrialis Launcher/industrialis.exe'
   if ((Get-FileHash -LiteralPath $installed).Hash -ne $marker.launcherExecutableSha256) { throw 'Installed launcher bytes differ from compiled input' }
-  foreach ($exe in $oldExecutables) { if (Test-Path -LiteralPath $exe) { throw 'Actual legacy executable survived retirement' } }
-  foreach ($shortcut in $oldShortcuts) { if (Test-Path -LiteralPath $shortcut) { throw 'Actual legacy shortcut survived retirement' } }
-  if ($oldUninstallRegistered -and (Test-Path -LiteralPath $oldUninstallKey)) { throw 'Legacy uninstall registration survived retirement' }
-  if ((Owned-Processes $legacy).Count -gt 0) { throw 'Legacy process survived retirement' }
   Assert-Snapshot $dataDirectory $beforeInstall
   if ((Default-Protocol) -ne ('"' + $installed + '" "%1"')) { throw 'Installed protocol does not belong to the launcher' }
-  $report.actualSquirrelRetirement = $true
-  $report.oldShortcutsRemoved = $oldShortcuts.Count
-  $report.oldUninstallRegistrationRemoved = [bool]$oldUninstallRegistered
   $report.profilePreservedBeforeFirstBoot = $beforeInstall.Count
   $report.protocolRegistered = $true
   $report.systemVcruntimePresent = Test-Path -LiteralPath (Join-Path $env:WINDIR 'System32/vcruntime140.dll')
-  Progress 'Booting installed launcher against same generated original-location profile'
+  Progress 'Booting installed launcher against same generated profile'
   # The host Sandbox client stays hidden; the guest app must expose its window
   # so MainWindowHandle and native normal-close exercise a visible guest window.
   $app = Start-Process -FilePath $installed -WindowStyle Normal -PassThru `
@@ -333,7 +195,7 @@ public static class LauncherGuestActivation {
   if ($settings.acceptanceExtension.preserve -ne $true) { throw 'Generated unknown settings lost on native close' }
   $report.nativeNormalClose = $true
   $afterBoot = Snapshot $dataDirectory
-  Progress 'Uninstalling actual launcher package and checking profile and dead-protocol cleanup'
+  Progress 'Uninstalling actual launcher package and checking profile and protocol cleanup'
   Run-Installer (Join-Path $local 'Programs/Industrialis Launcher/Uninstall.exe') @('/S')
   $deadline = [DateTime]::UtcNow.AddSeconds(30)
   while (Test-Path -LiteralPath $installed) {
@@ -341,21 +203,17 @@ public static class LauncherGuestActivation {
     Start-Sleep -Milliseconds 250
   }
   Assert-Snapshot $dataDirectory $afterBoot
-  if ((Default-Protocol)) { throw 'Uninstall retained or restored a dead legacy protocol' }
+  if ((Default-Protocol)) { throw 'Uninstall retained an unowned protocol handler' }
   $report.launcherUninstall = $true
   $report.profilePreservedAfterUninstall = $afterBoot.Count
-  $report.deadLegacyProtocolNotRestored = $true
-  $report.limits = 'Generated offline profile in Windows Sandbox; controlled released Electron window handoff and owned native UI checks when enabled; no original credentials, physical input, published update or older Windows baseline'
+  $report.protocolRemovedOnUninstall = $true
+  $report.limits = 'Generated offline profile in Windows Sandbox; owned native UI checks when enabled; no original credentials, physical input, published update or older Windows baseline'
   $report.passed = $true
-  Progress 'Actual Squirrel retirement and launcher lifecycle checks passed'
+  Progress 'Installed launcher lifecycle checks passed'
 } catch {
   $report.error = $_.Exception.Message
   Progress ('Failure: ' + $report.error)
 } finally {
-  $setupLog = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'SquirrelTemp/SquirrelSetup.log'
-  if (Test-Path -LiteralPath $setupLog) {
-    try { Copy-Item -LiteralPath $setupLog -Destination (Join-Path $outputRoot 'legacy-squirrel.log') } catch { }
-  }
   $report | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $outputRoot 'result.json') -Encoding UTF8
   # Guest identity was checked before entering this block. Never shut down a host.
   & shutdown.exe /s /t 0

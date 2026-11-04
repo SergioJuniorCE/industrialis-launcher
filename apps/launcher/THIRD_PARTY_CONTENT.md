@@ -73,7 +73,7 @@ before exposing an Install action. Keep library/API credentials out of UI state.
 Do not treat a ZIP extension alone as evidence that an artifact is a resource
 pack. New source catalogs should not change the GTNH updater or account store.
 
-Follow-up work for a general marketplace (separate from Electron parity):
+Follow-up work for a general marketplace (separate from UI parity):
 
 - [ ] Add another provider only after choosing its catalog and API/license policy
       (for example Modrinth or CurseForge); no provider credentials are required here.

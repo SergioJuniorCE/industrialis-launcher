@@ -15,9 +15,8 @@ allows only one writer.
 On Windows, the watch target uses the GUI subsystem to avoid an extra console.
 The runner must launch it with `windowsHide: false`: Node's hide flag sets
 `STARTF_USESHOWWINDOW`/`SW_HIDE`, which can hide the first native window too.
-The Electron,
-website and dashboard JavaScript dependencies are not compiled into this native
-build. pnpm may verify/install workspace dependencies when package manifests
+The website and dashboard JavaScript dependencies are not compiled into this
+native build. pnpm may verify/install workspace dependencies when package manifests
 change: it performed a 33.5-second one-time verification install after the dev
 script update. A warm pnpm-to-Cargo help dispatch then took 0.23 seconds. For Rust
 iteration without pnpm workspace verification, run `node

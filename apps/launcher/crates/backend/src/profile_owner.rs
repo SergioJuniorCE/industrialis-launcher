@@ -1,6 +1,6 @@
-//! Cross-runtime profile ownership. Electron implements the same small protocol
-//! in profile-owner.mjs. Bind before reading/writing profile state; retain the
-//! guard until backend shutdown. Kernel socket ownership needs no stale PID file.
+//! Cross-process profile ownership. Bind before reading/writing profile state;
+//! retain the guard until backend shutdown. Kernel socket ownership needs no
+//! stale PID file.
 
 use crate::paths::LauncherPaths;
 use anyhow::Context;
@@ -117,8 +117,7 @@ pub fn acquire(paths: &LauncherPaths, kind: OwnerKind) -> anyhow::Result<Acquisi
             let (owner, pid) = request_owner(address, &key, "probe")?;
             if kind == OwnerKind::Launcher && owner == OwnerKind::Launcher {
                 allow_foreground(pid);
-                // Permission handoff precedes the activation request, including
-                // when the current owner is Electron rather than the launcher.
+                // Permission handoff precedes the activation request.
                 return Ok(Acquisition::Existing(
                     request_owner(address, &key, "focus")?.0,
                 ));
@@ -127,7 +126,6 @@ pub fn acquire(paths: &LauncherPaths, kind: OwnerKind) -> anyhow::Result<Acquisi
         }
         Err(error) => return Err(error).context("Could not acquire launcher profile ownership"),
     };
-    crate::legacy_launcher::ensure_safe_start(paths)?;
     listener.set_nonblocking(true)?;
     let activation = Arc::new(AtomicBool::new(false));
     let stopped = Arc::new(AtomicBool::new(false));
