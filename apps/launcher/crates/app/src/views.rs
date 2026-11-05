@@ -38,6 +38,7 @@ mod library_groups;
 mod library_icons;
 mod lifetime;
 mod minecraft_files;
+mod mod_browser;
 mod pack_catalog;
 mod preferences;
 mod prism_import;
@@ -156,6 +157,7 @@ pub struct LauncherRoot {
     files_ui: minecraft_files::FilesUi,
     mods_ui: custom_mods::ModsUi,
     content_ui: content::ContentUi,
+    mod_browser_ui: mod_browser::ModBrowserUi,
     backups_ui: backups::BackupsUi,
     processes_ui: ProcessesUi,
     console_ui: ConsoleUi,
@@ -222,6 +224,7 @@ impl LauncherRoot {
             files_ui: Default::default(),
             mods_ui: Default::default(),
             content_ui: Default::default(),
+            mod_browser_ui: Default::default(),
             backups_ui,
             processes_ui: ProcessesUi::default(),
             console_ui: ConsoleUi::default(),

@@ -1,8 +1,56 @@
 # Third-party mods and resource packs
 
-The launcher instance **Add-ons** tab contains **Mods** and **Resource packs**.
-Existing custom mod imports remain available. Resource packs can be imported from
-ZIP files or installed individually from Modernity's GitHub release assets.
+The launcher instance **Add-ons** tab contains **Mods**, **Browse mods**, and
+**Resource packs**. Existing custom mod imports remain available. Resource packs
+can be imported from ZIP files or installed individually from Modernity's GitHub
+release assets. Mods can be found on Modrinth and installed as a reviewed set.
+
+## Modrinth
+
+**Browse mods** follows the instance's own `mmc-pack.json`: the Minecraft version
+and mod loader are read from its components, not hard-coded to GTNH. Supported
+loaders are Forge, NeoForge, Fabric, Quilt, and LiteLoader. A pack that declares
+several supported loaders is browsed with all of them (for example Forge +
+LiteLoader). The search catalog is public and needs no API key. Choose a
+project, choose one of its compatible versions, and add it to the install list.
+The list accepts one entry per project; choosing a different version replaces the
+previous entry. A vanilla instance or an instance with no recognized loader
+shows an error instead of browsing.
+
+The browser uses a two-pane layout: search results with icon tiles and selection
+boxes on the left, and the selected project's description, external links,
+versions and install review on the right. A persistent action bar shows the
+selected count and the review/install actions.
+
+**Review install** resolves every selected mod's required dependencies
+recursively. Dependencies already installed, already selected, or already queued
+are skipped. Optional and embedded dependencies are not installed. A required
+dependency with no file for the instance's Minecraft version and loader stops
+the review with an error instead of producing a broken set. An `incompatible`
+dependency that targets a selected, planned or already installed project is
+shown as a conflict and blocks install until the conflicting selection is
+removed. Dependencies that were added automatically show which mods require
+them; the review also lists already-installed projects that were skipped.
+
+The plan is bounded to 64 files and 512 MB, and it rejects duplicate mod
+identities before any download. This keeps a hostile or broken dependency graph
+from turning into an unbounded download.
+
+Only after the review is confirmed does **Install** begin. Every file is
+downloaded and verified first (exact size plus Modrinth's SHA-512, falling back
+to SHA-1). Only then are all files and receipts written in one content
+transaction. Any validation, download, or write failure removes every file from
+that batch and restores previous receipts, so no partial install survives.
+Installation requires a stopped instance and holds the same instance reservation
+as pack updates and other add-on changes.
+
+Receipts record the provider (`modrinth`), project id, version id, page URL,
+version number, exact download URL and the installed archive SHA-256. Pack-owned
+mods remain protected: a selected file whose mod identity matches an existing
+file is rejected or skipped rather than overwritten. Replacing an installed
+version and update notifications are not implemented yet; remove the old file in
+the **Mods** tab first. CurseForge is not included: it requires an API key and
+its author-controlled third-party download rules need a separate policy.
 
 ## Modernity
 
@@ -60,11 +108,14 @@ No third-party content is silently updated by the hourly GTNH pack-status poll.
 ## Provider foundation
 
 `content.rs` owns the shared typed `ContentKind`, `SourceRecord`, inventory,
-validated byte installation, safe local resource-pack imports and removal.
-`content_archive.rs` owns archive validation/normalization. `modernity.rs` resolves
-upstream releases into typed `ReleaseAsset` values and verifies downloads before
-calling the content service. UI state and asynchronous dispatch live in
-`views/content.rs`; existing local mod behavior stays in `custom_mods.rs`.
+validated byte installation, safe local resource-pack imports, batch
+installation and removal. `content_archive.rs` owns archive validation/
+normalization. `modernity.rs` resolves upstream releases into typed
+`ReleaseAsset` values and verifies downloads before calling the content service.
+`modrinth.rs` owns Modrinth search, version selection, required-dependency
+resolution, checksum verification and the reviewed install plan. UI state and
+asynchronous dispatch live in `views/content.rs` and `views/mod_browser.rs`;
+existing local mod behavior stays in `custom_mods.rs`.
 
 To add a provider, implement a separate catalog/resolver using the shared kind,
 provenance and installation contract. A provider must define its supported game/
@@ -75,9 +126,10 @@ pack. New source catalogs should not change the GTNH updater or account store.
 
 Follow-up work for a general marketplace (separate from UI parity):
 
-- [ ] Add another provider only after choosing its catalog and API/license policy
-      (for example Modrinth or CurseForge); no provider credentials are required here.
-- [ ] Add explicit dependency/conflict metadata and a reviewable multi-item plan.
+- [x] Add another provider after choosing its catalog and API/license policy:
+      Modrinth is implemented and needs no credentials.
+- [x] Add explicit dependency metadata and a reviewable multi-item plan.
+- [ ] Add CurseForge behind a build-time API key and an author-download policy.
 - [ ] Add opt-in third-party update checks and replacement/rollback per project.
 - [ ] Add in-launcher resource-pack activation and load-order management if wanted;
       current installation leaves Minecraft's existing selection untouched.
@@ -87,7 +139,9 @@ Follow-up work for a general marketplace (separate from UI parity):
 Automated Launcher tests exercise ZIP picker cancellation, valid imports, invalid
 archives, real paired files, confirmed removal and maintenance guards. Backend
 checks cover wrapper normalization, invalid archives, identity collisions,
-source receipts, restoration, safe removal and compatibility changes. The
+source receipts, restoration, safe removal, compatibility changes, Modrinth
+catalog/URL/checksum validation and all-or-nothing batch rollback. The Modrinth
+browser test adds and removes install-list entries without network access. The
 existing staged GTNH update test now preserves a real imported resource pack
 and its receipt through the actual maintenance pipeline.
 

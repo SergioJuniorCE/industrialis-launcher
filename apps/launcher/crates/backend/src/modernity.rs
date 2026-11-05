@@ -213,6 +213,9 @@ pub async fn install(paths: &LauncherPaths, id: &str, asset: ReleaseAsset) -> an
             url: asset.url,
             archive_sha256: asset.sha256,
             pack_series: Some(asset.series),
+            provider: Some("modernity".into()),
+            project_id: None,
+            version_id: None,
         }),
     )
     .await
