@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 $tokens = $null
 $parseErrors = $null
-$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'test-windows-squirrel-guest.ps1'),[ref]$tokens,[ref]$parseErrors)
+$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'test-windows-installed-guest.ps1'),[ref]$tokens,[ref]$parseErrors)
 if ($parseErrors.Count -gt 0) { throw 'Guest script could not be parsed' }
 $nativeTokens = $null
 $nativeParseErrors = $null

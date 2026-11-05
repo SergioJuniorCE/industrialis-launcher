@@ -21,7 +21,6 @@ pub mod java;
 pub mod launch;
 pub mod launch_config;
 pub mod lifecycle;
-mod legacy_launcher;
 pub mod migration;
 pub mod minecraft_files;
 pub mod minecraft_file_search;
@@ -39,6 +38,7 @@ pub mod running_pids;
 pub mod settings;
 
 pub mod custom_mods;
+pub mod mod_toggles;
 pub mod content;
 mod content_archive;
 pub mod modernity;

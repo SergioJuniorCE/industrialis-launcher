@@ -3,11 +3,7 @@ use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvI
 use anyhow::{ensure, Context};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-const APPS: [&str; 3] = [
-    "Industrialis Launcher",
-    "@industrialis/launcher",
-    "industrialis-launcher",
-];
+const APP: &str = "Industrialis Launcher";
 fn key(password: &[u8], iterations: u32) -> [u8; 16] {
     let mut key = [0; 16];
     ring::pbkdf2::derive(
@@ -344,27 +340,29 @@ pub(super) fn decrypt(value: &str) -> anyhow::Result<String> {
         raw.starts_with(prefix),
         "The existing credential format is unsupported; it has been kept"
     );
+    #[cfg(target_os = "macos")]
+    let candidates = vec![mac_password(APP, false)];
+    #[cfg(target_os = "linux")]
+    let lookups: [fn(&str, bool) -> anyhow::Result<Option<Vec<u8>>>; 2] =
+        [libsecret_password, kwallet_password];
+    #[cfg(target_os = "linux")]
+    let candidates = lookups.into_iter().map(|lookup| lookup(APP, false));
     let mut error = None;
-    for app in APPS {
-        #[cfg(target_os = "macos")]
-        let candidates = vec![mac_password(app, false)];
-        #[cfg(target_os = "linux")]
-        let lookups: [fn(&str, bool) -> anyhow::Result<Option<Vec<u8>>>; 2] =
-            [libsecret_password, kwallet_password];
-        #[cfg(target_os = "linux")]
-        let candidates = lookups.into_iter().map(|lookup| lookup(app, false));
-        for candidate in candidates {
-            match candidate {
-                Ok(Some(password)) => match open(&raw, &password, iterations) {
-                    Ok(value) => return Ok(value),
-                    Err(e) => error = Some(e),
-                },
-                Ok(None) => {}
+    for candidate in candidates {
+        match candidate {
+            Ok(Some(password)) => match open(&raw, &password, iterations) {
+                Ok(value) => return Ok(value),
                 Err(e) => error = Some(e),
-            }
+            },
+            Ok(None) => {}
+            Err(e) => error = Some(e),
         }
     }
-    Err(error.unwrap_or_else(||anyhow::anyhow!("The original launcher credential key was not found; existing credentials have been kept")))
+    Err(error.unwrap_or_else(|| {
+        anyhow::anyhow!(
+            "The launcher credential key was not found; existing credentials have been kept"
+        )
+    }))
 }
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(super) fn encrypt(value: &str, existing: Option<&str>) -> anyhow::Result<String> {
@@ -374,49 +372,43 @@ pub(super) fn encrypt(value: &str, existing: Option<&str>) -> anyhow::Result<Str
         let iterations = 1003;
         #[cfg(target_os = "linux")]
         let iterations = 1;
-        for app in APPS {
-            #[cfg(target_os = "macos")]
-            let candidates = vec![mac_password(app, false)];
-            #[cfg(target_os = "linux")]
-            let lookups: [fn(&str, bool) -> anyhow::Result<Option<Vec<u8>>>; 2] =
-                [libsecret_password, kwallet_password];
-            #[cfg(target_os = "linux")]
-            let candidates = lookups.into_iter().map(|lookup| lookup(app, false));
-            for candidate in candidates {
-                if let Ok(Some(password)) = candidate {
-                    if open(&raw, &password, iterations).is_ok() {
-                        return Ok(seal(value, &password, iterations, &raw[..3]));
-                    }
+        #[cfg(target_os = "macos")]
+        let candidates = vec![mac_password(APP, false)];
+        #[cfg(target_os = "linux")]
+        let lookups: [fn(&str, bool) -> anyhow::Result<Option<Vec<u8>>>; 2] =
+            [libsecret_password, kwallet_password];
+        #[cfg(target_os = "linux")]
+        let candidates = lookups.into_iter().map(|lookup| lookup(APP, false));
+        for candidate in candidates {
+            if let Ok(Some(password)) = candidate {
+                if open(&raw, &password, iterations).is_ok() {
+                    return Ok(seal(value, &password, iterations, &raw[..3]));
                 }
             }
         }
-        anyhow::bail!("The existing credential key is unavailable; it has been kept. Unlock the original OS credential store and retry.");
+        anyhow::bail!("The existing credential key is unavailable; it has been kept. Unlock the OS credential store and retry.");
     }
-    // Prefer the original app's existing key. Creation is only allowed when no
+    // Reuse the existing launcher key. Creation is only allowed when no
     // encrypted provider credential exists, and never replaces a missing key.
     #[cfg(target_os = "macos")]
     {
-        for app in APPS {
-            if let Some(password) = mac_password(app, false)? {
-                return Ok(seal(value, &password, 1003, b"v10"));
-            }
+        if let Some(password) = mac_password(APP, false)? {
+            return Ok(seal(value, &password, 1003, b"v10"));
         }
-        let password = mac_password(APPS[0], true)?.context("Keychain is unavailable")?;
+        let password = mac_password(APP, true)?.context("Keychain is unavailable")?;
         Ok(seal(value, &password, 1003, b"v10"))
     }
     #[cfg(target_os = "linux")]
     {
-        for app in APPS {
-            if let Ok(Some(password)) = libsecret_password(app, false) {
-                return Ok(seal(value, &password, 1, b"v11"));
-            }
-            if let Some(password) = kwallet_password(app, false).unwrap_or(None) {
-                return Ok(seal(value, &password, 1, b"v11"));
-            }
+        if let Ok(Some(password)) = libsecret_password(APP, false) {
+            return Ok(seal(value, &password, 1, b"v11"));
         }
-        let password = match libsecret_password(APPS[0], true) {
+        if let Some(password) = kwallet_password(APP, false).unwrap_or(None) {
+            return Ok(seal(value, &password, 1, b"v11"));
+        }
+        let password = match libsecret_password(APP, true) {
             Ok(Some(secret)) => secret,
-            secret_result => kwallet_password(APPS[0], true)?
+            secret_result => kwallet_password(APP, true)?
                 .or_else(|| secret_result.ok().flatten())
                 .context("Secure credential storage is unavailable")?,
         };

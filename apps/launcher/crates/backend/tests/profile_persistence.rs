@@ -1,4 +1,4 @@
-//! Electron-shaped profiles, copied before exercising the launcher services.
+//! Legacy-shaped profiles, copied before exercising the launcher services.
 //! These fixtures contain synthetic credentials only and never touch user data.
 
 use industrialis_backend::{accounts, fs_utils, groups, instances, paths::LauncherPaths, settings};
@@ -133,7 +133,7 @@ async fn account_edits_preserve_untouched_legacy_rows_nulls_and_order_in_place()
 }
 
 #[tokio::test]
-async fn copied_electron_profile_keeps_extensions_credentials_groups_and_opaque_files() {
+async fn copied_legacy_profile_keeps_extensions_credentials_groups_and_opaque_files() {
     let source = Profile::new();
     let copy = Profile::new();
     let old = source.paths();

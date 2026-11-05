@@ -5,14 +5,12 @@ on:
     tags:
       - "launcher-v*"
       - "launcher-preview-v*"
-  pull_request:
-    branches: [master]
   workflow_dispatch:
     inputs:
       version:
         description: "major.minor.patch (build artifacts only; does not publish)"
         required: true
-        default: "0.4.3"
+        default: "0.4.4"
       channel:
         description: "Build-only channel; tag pushes publish releases"
         type: choice
@@ -97,39 +95,9 @@ jobs:
         if: runner.os == 'Windows'
         working-directory: apps/launcher
         run: cargo build -p industrialis-app -p industrialis-backend -p industrialis-cli --examples --bin industrialis-cli --jobs 1 --locked
-      - name: Test cross-runtime ownership and detached game lifetime
+      - name: Test detached game lifetime
         if: runner.os == 'Windows'
-        run: node --test scripts/profile-owner.test.mjs scripts/game-broker.test.mjs
-      - name: Build Linux credential interoperability fixture
-        if: runner.os == 'Linux'
-        working-directory: apps/launcher
-        run: cargo build --workspace --example credential_compat --jobs 1 --locked --features industrialis-app/packaged-updates
-      - name: Test original Electron and native Linux credential interoperability
-        if: runner.os == 'Linux'
-        run: |
-          docker build -f apps/launcher/packaging/acceptance/linux-credentials.Dockerfile -t industrialis-credential-acceptance:local apps/launcher/packaging/acceptance
-          mkdir -p apps/launcher/target/credential-acceptance
-          docker run --rm --network none --name industrialis-credential-acceptance \
-            --mount "type=bind,source=$PWD,target=/repo,readonly" \
-            --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
-            --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
-            -e LAUNCHER_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
-            industrialis-credential-acceptance:local \
-            sh scripts/test-linux-credentials.sh /opt/electron-fixture/electron /target/debug/examples/credential_compat /receipt/verification.json
-          docker run --rm --network none --name industrialis-kwallet-acceptance \
-            --mount "type=bind,source=$PWD,target=/repo,readonly" \
-            --mount "type=bind,source=$PWD/apps/launcher/target,target=/target,readonly" \
-            --mount "type=bind,source=$PWD/apps/launcher/target/credential-acceptance,target=/receipt" \
-            -e LAUNCHER_ISOLATED_CREDENTIAL_CONTAINER=1 -w /repo \
-            industrialis-credential-acceptance:local \
-            sh scripts/test-linux-kwallet.sh /opt/electron-fixture/electron /target/debug/examples/credential_compat /receipt/kwallet-verification.json
-      - name: Retain Linux credential interoperability evidence
-        if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: launcher-linux-credentials
-          path: apps/launcher/target/credential-acceptance/*verification.json
-          if-no-files-found: warn
+        run: node --test scripts/game-broker.test.mjs
       - name: Linux native renderer startup and shutdown
         if: runner.os == 'Linux'
         run: sh scripts/test-linux-render.sh
@@ -188,10 +156,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: powershell -NoProfile -File scripts/test-windows-updater.ps1 -MakeNSIS "$env:MAKENSIS"
-      - name: Windows old-installer retirement guards
+      - name: Windows legacy-folder migration
         if: runner.os == 'Windows'
         shell: powershell
-        run: powershell -NoProfile -File scripts/test-windows-retirement.ps1 -MakeNSIS "$env:MAKENSIS"
+        run: powershell -NoProfile -File scripts/test-windows-migration.ps1 -MakeNSIS "$env:MAKENSIS"
       - uses: actions/upload-artifact@v4
         with:
           name: launcher-${{ matrix.artifact }}

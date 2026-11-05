@@ -2,6 +2,7 @@
 //! and persistent-overlay restores. Ports the corresponding helpers from
 //! `pack.ts` / `minecraft-files.ts` (full install/update flows arrive later).
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::fs_utils::{copy_tree, exists};
@@ -175,6 +176,15 @@ pub async fn prepare_instance_configs(
 /// Copy every file from the persistent-mods overlay into the active mods dir.
 /// Returns the restored count. Mirrors `applyPersistentCustomMods`.
 pub async fn apply_persistent_custom_mods(instance: &Path) -> Result<usize, anyhow::Error> {
+    apply_persistent_custom_mods_excluding(instance, &HashSet::new()).await
+}
+
+/// Same as [`apply_persistent_custom_mods`], but disabled mod identities are
+/// never copied into the active tree.
+pub async fn apply_persistent_custom_mods_excluding(
+    instance: &Path,
+    disabled: &HashSet<String>,
+) -> Result<usize, anyhow::Error> {
     let persistent = persistent_custom_mods_dir(instance);
     if !exists(&persistent).await {
         return Ok(0);
@@ -184,14 +194,19 @@ pub async fn apply_persistent_custom_mods(instance: &Path) -> Result<usize, anyh
     let mut restored = 0;
     let mut entries = tokio::fs::read_dir(&persistent).await?;
     while let Some(entry) = entries.next_entry().await? {
-        if tokio::fs::symlink_metadata(entry.path())
+        if !tokio::fs::symlink_metadata(entry.path())
             .await
             .map(|m| m.is_file())
             .unwrap_or(false)
         {
-            tokio::fs::copy(entry.path(), active.join(entry.file_name())).await?;
-            restored += 1;
+            continue;
         }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if crate::mod_toggles::is_disabled(&name, disabled) {
+            continue;
+        }
+        tokio::fs::copy(entry.path(), active.join(entry.file_name())).await?;
+        restored += 1;
     }
     Ok(restored)
 }

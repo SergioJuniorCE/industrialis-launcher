@@ -3,7 +3,7 @@ param([Parameter(Mandatory=$true)][string]$Path)
 $ErrorActionPreference = 'Stop'
 $marker = Get-Content -LiteralPath 'C:/LauncherAcceptanceInput/marker.json' -Raw | ConvertFrom-Json
 if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $env:COMPUTERNAME -eq $marker.hostComputer -or
-    $marker.kind -ne 'launcher-expendable-squirrel-acceptance-v1') { throw 'Disposable guest editor required' }
+    $marker.kind -ne 'launcher-expendable-installed-acceptance-v1') { throw 'Disposable guest editor required' }
 try {
 $expected = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'industrialis-launcher/instances/FixtureOne/.minecraft/config/acceptance.cfg'
 @{ nonce=$marker.nonce; guest=$true; pid=$PID; argumentPath=$Path; expectedPath=$expected } |

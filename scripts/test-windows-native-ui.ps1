@@ -1,6 +1,6 @@
 # Dot-source only after the parent has verified the disposable guest and app.
 if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $env:COMPUTERNAME -eq $marker.hostComputer -or
-    $marker.kind -ne 'launcher-expendable-squirrel-acceptance-v1') { throw 'Disposable guest required for native UI actions' }
+    $marker.kind -ne 'launcher-expendable-installed-acceptance-v1') { throw 'Disposable guest required for native UI actions' }
 
 function Wait-GuestCondition([scriptblock]$Test, [string]$Message) {
   $deadline = [DateTime]::UtcNow.AddSeconds(30)
@@ -113,7 +113,7 @@ function Guest-Folder([IntPtr]$Window, [string]$Control, [string]$Expected) {
 }
 function Invoke-GuestNativeUi($Process, [IntPtr]$Window, [string]$GuestDataDirectory, $Report) {
   if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $env:COMPUTERNAME -eq $marker.hostComputer -or
-      $marker.kind -ne 'launcher-expendable-squirrel-acceptance-v1' -or $Process.Path -ne $installed) { throw 'Verified owned guest app required' }
+      $marker.kind -ne 'launcher-expendable-installed-acceptance-v1' -or $Process.Path -ne $installed) { throw 'Verified owned guest app required' }
   $guestUiProcessId = [uint32]$Process.Id
   Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,System.Windows.Forms
   Add-Type -TypeDefinition @'

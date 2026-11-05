@@ -3,9 +3,8 @@
 Native production launcher as of 0.4.0. See [release notes](RELEASE_NOTES.md)
 for downloads, accepted limitations and rollback.
 
-`@industrialis/launcher` is the Rust desktop app,
-replacing the former Electron + React launcher. Single native binary, no Chromium,
-no Node runtime.
+`@industrialis/launcher` is the Rust desktop app: a single native binary with no
+Chromium or Node runtime.
 
 The Files panel uses the native code editor with Syntect syntax
 highlighting, line numbers, search, wrapping, selection and undo. Forge configs
@@ -100,21 +99,18 @@ apps/launcher/
 ```
 
 `core` ports the TS settings and log helpers using compatible JSON shapes.
-The app uses Electron's existing data directory and files in place. Replacing the
-launcher must require no user data migration or reauthentication. An explicit
-`INDUSTRIALIS_DATA_DIR` override is available for isolated development/tests.
-Real-pack/client and remaining provider/desktop/installer acceptance scenarios
-are documented in [LIVE_ACCEPTANCE.md](LIVE_ACCEPTANCE.md). The original profile
-remains in place; acceptance fixtures never require copying it.
+The app uses the existing launcher data directory and file formats in place. An
+explicit `INDUSTRIALIS_DATA_DIR` override is available for isolated
+development/tests. Real-pack/client and remaining provider/desktop/installer
+acceptance scenarios are documented in [LIVE_ACCEPTANCE.md](LIVE_ACCEPTANCE.md).
 Windows packages use static CRT linkage and reject external MSVC runtime imports
-before distribution. Clean-Windows installer checks use the actual public Electron
-installer inside an expendable Sandbox, without touching the personal installation.
-Actual Electron/Rust credential interoperability also passes on Windows DPAPI
-and disposable Linux GNOME Secret Service/KWallet 6 stores, retaining the original generated
-key. Linux keeps its loaded libsecret/GLib libraries alive across calls. Live
-Google, macOS Keychain and older KWallet/platform acceptance remain open.
-Unknown profile fields and atomic saves are covered in
-[profile persistence](PERSISTENCE.md). Full existing-profile compatibility still needs verification and fixes tracked
+before distribution. Clean-Windows installer checks use the actual stable
+installer inside an expendable Sandbox, without touching the personal
+installation. Native credential stores are covered by disposable Linux GNOME
+Secret Service/KWallet 6 checks; Linux keeps its loaded libsecret/GLib libraries
+alive across calls. Live Google, macOS Keychain and older KWallet/platform
+acceptance remain open. Unknown profile fields and atomic saves are covered in
+[profile persistence](PERSISTENCE.md). Remaining compatibility checks are tracked
 in [the migration checklist](MIGRATION_TRACKER.md#persistence-process-lifetime-and-desktop-behavior):
 
 | Rust module         | TS source                        |
@@ -192,9 +188,8 @@ installer handoff, manual updates on other targets, packaging commands, and
 remaining distribution verification. Development builds do not check updates.
 
 See [the functional migration tracker](MIGRATION_TRACKER.md) for the audited
-missing features, verification work, and gates for deleting the Electron
-launcher. Keep it updated as workflows land; aesthetic work remains in
-[UI parity](UI_PARITY.md).
+missing features and remaining verification work. Keep it updated as workflows
+land; aesthetic work remains in [UI parity](UI_PARITY.md).
 
 The native window has the top toolbar, Instances, Processes, Accounts, and
 Settings views, install/delete/copy dialogs, and live launch logs. Accounts use
@@ -247,8 +242,8 @@ picker and folder actions. The shared Java chooser supports search and sorting.
 
 Backups use the original provider/queue files and Drive folder layout, with manual
 upload/verified download/deletion, automatic settling/retries, cloud-only retention,
-progress and health. Existing Windows encrypted credentials interoperate with
-Electron. Live provider and native macOS/Linux key-store checks remain open.
+progress and health. Windows encrypted credentials use the DPAPI Local State key.
+Live provider and native macOS/Linux key-store checks remain open.
 
 The retained Aditya configuration service is available through
 `industrialis-cli preset-status <id>` and `apply-preset <id> [--disable]`.
@@ -275,20 +270,11 @@ physical input/IME and window behavior, installed upgrades, and native platform
 checks in [MIGRATION_TRACKER.md](MIGRATION_TRACKER.md). Precise visual
 parity is tracked separately. Offline fixtures do not prove live services.
 
-Run `node scripts/rehearse-cutover.mjs` from the repository root to build and
-test a source-only snapshot containing no original launcher directory. It uses
-the existing Cargo cache and a separate example filename for the real app, so
-it does not replace a running development executable. Process tests use synthetic
-temporary profiles; the final render benchmark opens a hidden window. Evidence
-and source hashes remain under `target/source-removal-*`. The rehearsal does not
-delete source, change the user's profile, or switch production downloads.
-
-Root `pnpm dev` and `pnpm dev:launcher` select Launcher. The legacy app is available
-as `pnpm dev:launcher:electron` for comparison, after closing Launcher. Turbo preserves
+Root `pnpm dev` and `pnpm dev:launcher` select Launcher. Turbo preserves
 `INDUSTRIALIS_DATA_DIR` and `JAVA_HOME` for native development. Cargo owns native
 build/test caching; Turbo does not cache a successful build without its executable.
-Root launcher packaging commands also select Launcher. Production downloads and the
-Electron release feed remain separate until [cutover acceptance](CUTOVER.md).
+Root launcher packaging commands select Launcher and publish through the native
+release workflow.
 
 ## Window materials
 

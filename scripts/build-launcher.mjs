@@ -102,7 +102,6 @@ if (process.platform === "win32") {
       `/DNOTICEFILE=${notices}`,
       `/DLICENSEFILE=${license}`,
       ...(replacement ? ["/DREGISTER_PROTOCOL"] : []),
-      ...(channel === "stable" ? [`/DRETIRE_SCRIPT_FILE=${path.join(app, "packaging/retire-electron.ps1")}`] : []),
       path.join(app, "packaging/windows.nsi"),
     ]);
   }

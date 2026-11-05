@@ -27,7 +27,9 @@ test("Windows packaging exposes the public product name without the migration co
   const installer = await readFile(path.join(app, "packaging/windows.nsi"), "utf8");
   const build = await readFile(path.join(app, "crates/app/build.rs"), "utf8");
   assert.match(installer, /^Name "Industrialis Launcher"$/m);
-  assert.match(installer, /^InstallDir "\$LOCALAPPDATA\\Programs\\Industrialis Launcher"$/m);
+  assert.match(installer, /^!define CURRENT_FOLDER_NAME "Industrialis Launcher"$/m);
+  assert.match(installer, /^!define LEGACY_FOLDER_NAME "Industrialis GPUI"$/m);
+  assert.match(installer, /^InstallDir "\$LOCALAPPDATA\\Programs\\\$\{CURRENT_FOLDER_NAME\}"$/m);
   assert.match(installer, /^InstallDirRegKey HKCU "\$\{APP_REGKEY\}" "InstallDir"$/m);
   assert.match(installer, /!define APP_REGKEY "Software\\Industrialis\\Launcher"/);
   assert.match(installer, /!define UNINSTALL_KEY "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\IndustrialisLauncher"/);
@@ -54,13 +56,16 @@ test("stable native release and optional previews use the correct update channel
   const workflow = await readFile(path.join(app, "../../.github/workflows/launcher-release.yml"), "utf8");
   const updater = await readFile(path.join(app, "crates/backend/src/release_updater.rs"), "utf8");
   const packager = await readFile(path.join(app, "../../scripts/build-launcher.mjs"), "utf8");
+  const installer = await readFile(path.join(app, "packaging/windows.nsi"), "utf8");
   assert.match(workflow, /launcher-preview-v\*/);
   assert.match(workflow, /launcher-v\*/);
   assert.ok(workflow.includes("prerelease: ${{ startsWith(github.ref_name, 'launcher-preview-v') }}"));
   assert.ok(workflow.includes("make_latest: ${{ startsWith(github.ref_name, 'launcher-v') }}"));
-  assert.match(workflow, /pull_request:/);
+  assert.ok(!workflow.includes("pull_request"));
   assert.ok(!workflow.includes("electron-forge"));
   assert.ok(!workflow.toLowerCase().includes("gpui"));
+  assert.ok(!installer.includes("RETIRE_SCRIPT_FILE"));
+  assert.ok(!packager.includes("retire-electron"));
   const notes = await readFile(path.join(app, "RELEASE_NOTES.md"), "utf8");
   assert.ok(notes.includes("<!-- industrialis-launcher-release-v1 -->"));
   const manifest = JSON.parse(await readFile(path.join(app, "../../package.json"), "utf8"));

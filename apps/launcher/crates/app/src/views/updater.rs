@@ -271,8 +271,8 @@ impl LauncherRoot {
     }
 
     fn update_blocker(&self) -> Option<&'static str> {
-        if self.data.has_active_games() {
-            Some("Stop running games before updating the launcher.")
+        if !self.data.launching.is_empty() {
+            Some("Wait for the game launch to finish before updating.")
         } else if !self.busy.is_empty() || self.processes_ui.history.running_count() > 0 {
             Some("Wait for instance operations to finish before updating.")
         } else if self.accounts_ui.is_busy() {
@@ -455,7 +455,7 @@ impl LauncherRoot {
                 );
             }
             body = body.child(div().text_sm().text_color(self.theme.muted_foreground()).child(if self.launcher_update.automatic() {
-                "The launcher will close, install the verified update, and restart. Your instances and settings stay in the data directory."
+                "The launcher will close, install the verified update, and restart. Running games stay open; your instances and settings stay in the data directory."
             } else { "This build uses manual updates. Download the matching launcher artifact from the release page." }));
         }
         if let State::Downloading(p) = self.launcher_update.state {
@@ -746,15 +746,21 @@ mod tests {
     }
 
     #[test]
-    fn development_and_busy_guards_protect_games_operations_and_pending_preferences() {
+    fn development_and_busy_guards_protect_operations_and_pending_preferences() {
         let rt = Arc::new(tokio::runtime::Runtime::new().unwrap());
         let mut root = LauncherRoot::new(data(rt, ThemeMode::Dark));
         root.launcher_update = UpdaterUi::new(false);
         assert!(matches!(root.launcher_update.state, State::Disabled));
         assert!(root.update_blocker().is_none());
         root.data.launching.insert("game".into());
-        assert!(root.update_blocker().unwrap().contains("games"));
+        assert!(root.update_blocker().unwrap().contains("launch"));
         root.data.launching.clear();
+        root.data.running.insert("game".into(), (1, true));
+        assert!(
+            root.update_blocker().is_none(),
+            "running games must not block a launcher update"
+        );
+        root.data.running.clear();
         root.busy.insert("maintenance:game".into());
         assert!(root.update_blocker().unwrap().contains("operations"));
         root.busy.clear();
