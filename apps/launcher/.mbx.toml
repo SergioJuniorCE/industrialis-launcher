@@ -1,0 +1,7 @@
+# Shared Cargo build cache (mbx) policy for this workspace.
+# Only workspace settings are allowed here; see BUILD_CACHE.md for the
+# machine-level budgets and the measurements behind this file.
+
+# Keep Cargo's own incremental state for profile.dev. Without this mbx sets
+# CARGO_INCREMENTAL=0 and a small app edit takes 20-45 s instead of 8-18 s.
+incremental = true

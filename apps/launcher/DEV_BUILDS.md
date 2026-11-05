@@ -24,6 +24,14 @@ iteration without pnpm workspace verification, run `node
 use `pnpm --filter @industrialis/launcher dev:once` or `cargo run -p
 industrialis-app --locked --jobs 2` from that directory.
 
+## Build cache for worktrees
+
+Dependency compilations are shared across worktrees with
+[mr-boxington](https://mr-boxington.jdx.dev); see [`BUILD_CACHE.md`](BUILD_CACHE.md)
+for the measurements, the checked-in `.mbx.toml`, and the machine-level disk
+budget. In throwaway worktrees run `mbx build -p industrialis-app --locked -j 4`
+instead of `cargo build`. The commands above stay plain Cargo.
+
 ## Automatic rebuild and restart
 
 The watcher polls only the `crates/` tree, workspace `.cargo/`, Cargo manifests,
