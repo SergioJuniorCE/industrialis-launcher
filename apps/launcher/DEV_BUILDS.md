@@ -100,6 +100,45 @@ avoid accumulating experimental dev feature combinations. Registry dependencies
 still reuse their normal compiled artifacts. A profile/feature/toolchain change
 can require a one-time rebuild of affected dependencies.
 
+## Shared cache for worktrees (mbx)
+
+Dependency compilations can be reused across checkouts with
+[mr-boxington](https://mr-boxington.jdx.dev) (verified with mbx 1.29.2), which
+caches compiler outputs and bounds build directories. It is optional: plain
+`cargo` is unchanged, and only builds run through `mbx` use the cache. Use
+`mbx build -p industrialis-app --locked -j 4` in throwaway and agent worktrees;
+the commands above stay plain Cargo.
+
+- `apps/launcher/.mbx.toml` (checked in) sets `incremental = true`, keeping the
+  `profile.dev` incremental state for `industrialis-app`. Without it mbx forces
+  `CARGO_INCREMENTAL=0` and a small edit took 20-45 s instead of 15 s.
+- The disk budget cannot be checked in, because a repository `.mbx.toml` may only
+  carry workspace settings. `%APPDATA%\mbx\config.toml` holds
+  `gc.max_total_size = "40GiB"` plus
+  `target.evict_first = [".t3/worktrees", ".codex/worktrees"]` so agent
+  checkouts are collected before the main checkout. Copy both settings there to
+  get the same behavior on another machine.
+- Close running launchers before `mbx clean`: a running executable blocks
+  removal on Windows. Undo at any time with `mbx cache remove <workspace>`,
+  replacing a `target` symlink with the directory it points into, then removing
+  `%LOCALAPPDATA%\mbx`; Cargo needs no changes.
+
+Measured on 2026-11-05, same machine as the table below:
+
+| Scenario                               | Wall time | Cache                 |
+| -------------------------------------- | --------: | --------------------- |
+| Cold, empty target and store           |   397.4 s | 0 hits / 539 compiled |
+| New worktree, warm store               |   144.1 s | 524 hits / 13 misses  |
+| Empty target, warm store (`mbx clean`) |   123.6 s | 540 hits / 0 misses   |
+| App edit, checked-in policy            |    14.8 s | —                     |
+| App edit, policy removed (mbx default) |   20-45 s | —                     |
+
+On NTFS every restored output is a copy, so the store does not save bytes in a
+new worktree; the saving comes from the budget above and from collecting targets
+of dead checkouts, which plain Cargo never does. Adopting the nine existing
+worktree targets and collecting to the budget released 48.9 GiB while keeping a
+warm cache.
+
 ## Measurements on 2026-10-14
 
 Windows, 12 logical processors, about 15 GiB free physical memory at measurement.
