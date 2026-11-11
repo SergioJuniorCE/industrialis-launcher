@@ -194,6 +194,7 @@ impl LauncherRoot {
         &self,
         group: &str,
         mut items: Vec<&InstanceInfo>,
+        slot_hints: &HashMap<String, String>,
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<Div> {
         let preview = self.workspace_ui.drag.target.as_ref();
@@ -228,7 +229,11 @@ impl LauncherRoot {
                             preview.is_some() && Some(info.id.as_str()) == source,
                             |tile| tile.opacity(0.25),
                         )
-                        .child(self.instance_card(info, cx))
+                        .child(self.instance_card(
+                            info,
+                            slot_hints.get(&info.id).map(String::as_str),
+                            cx,
+                        ))
                         .into_any_element(),
                 );
             }

@@ -44,6 +44,7 @@ impl AssetSource for LauncherAssets {
             "icons/sliders-horizontal.svg" => {
                 include_bytes!("../assets/icons/sliders-horizontal.svg")
             }
+            "icons/keyboard.svg" => include_bytes!("../assets/icons/keyboard.svg"),
             "icons/check.svg" => include_bytes!("../assets/icons/check.svg"),
             "icons/star-filled.svg" => include_bytes!("../assets/icons/star-filled.svg"),
             "brand.png" => include_bytes!("../assets/brand.png"),
