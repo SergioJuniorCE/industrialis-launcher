@@ -43,6 +43,7 @@ mod pack_catalog;
 mod preferences;
 mod prism_import;
 mod shell;
+mod shortcuts;
 #[cfg(test)]
 mod test_support;
 mod themes;
@@ -1079,6 +1080,10 @@ impl Render for LauncherRoot {
         self.theme.window_material = self.backdrop.effective;
         self.theme.window_tint_opacity = self.data.settings.window_tint_opacity;
         let modal = self.dialog.is_some();
+        if self.tab != Tab::Settings || modal {
+            self.preferences_ui.capture_slot = None;
+            self.preferences_ui.shortcut_error = None;
+        }
         let modal_focus = self
             .modal_focus
             .get_or_insert_with(|| cx.focus_handle())
@@ -1118,6 +1123,22 @@ impl Render for LauncherRoot {
         }
         let mut root = div()
             .capture_key_down(cx.listener(move |v, event: &KeyDownEvent, window, cx| {
+                if v.preferences_ui.capture_slot.is_some() {
+                    if event.keystroke.key == "escape" {
+                        v.preferences_ui.capture_slot = None;
+                        v.preferences_ui.shortcut_error = None;
+                        cx.notify();
+                        cx.stop_propagation();
+                    }
+                    return;
+                }
+                if v.dialog.is_none() {
+                    if let Some(slot) = v.launch_shortcut_slot(&event.keystroke) {
+                        v.activate_launch_slot(slot, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
                 let code_focus = v
                     .native_fields
                     .values()

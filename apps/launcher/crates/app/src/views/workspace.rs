@@ -437,6 +437,7 @@ impl LauncherRoot {
     pub(super) fn instance_card(
         &self,
         info: &InstanceInfo,
+        slot_hint: Option<&str>,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let t = &self.theme;
@@ -605,6 +606,20 @@ impl LauncherRoot {
                     v.play(id.clone(), cx);
                 }
             }));
+        if let Some(hint) = slot_hint.filter(|_| active.is_none()) {
+            let chip = format!("launch-slot:{}", info.id);
+            tile = tile.child(
+                div()
+                    .debug_selector(move || chip.clone().into())
+                    .absolute()
+                    .top(px(7.0))
+                    .left(px(8.0))
+                    .text_size(px(9.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(t.muted_foreground())
+                    .child(hint.to_string()),
+            );
+        }
         let status_badge = if let Some(p) = active {
             let process_key = active_key.clone().unwrap_or_default();
             let selector = format!("instance-progress:{}", info.id);
@@ -718,6 +733,61 @@ impl LauncherRoot {
         tile.into_any_element()
     }
 
+    /// Card order shared by the library grid and the nine launch slots.
+    /// Named groups sort alphabetically, the ungrouped section comes last, and
+    /// each group keeps its saved card order. Transient copy/install cards are
+    /// not part of the library and do not take a slot.
+    pub(super) fn library_order(&self) -> Vec<(String, Vec<&InstanceInfo>)> {
+        let creating: HashSet<_> = self
+            .processes_ui
+            .history
+            .sorted()
+            .into_iter()
+            .filter(|(_, p)| {
+                p.status == Status::Running
+                    && matches!(
+                        p.operation,
+                        Operation::Copy | Operation::Install | Operation::Import
+                    )
+            })
+            .map(|(_, p)| p.id.as_str())
+            .collect();
+        let mut groups: BTreeMap<String, Vec<&InstanceInfo>> = BTreeMap::new();
+        for info in &self.data.instances {
+            if !creating.contains(info.id.as_str()) {
+                groups.entry(info.group.clone()).or_default().push(info);
+            }
+        }
+        for group in self.workspace_ui.order.keys().filter(|g| !g.is_empty()) {
+            groups.entry(group.clone()).or_default();
+        }
+        groups.entry(String::new()).or_default();
+        let ungrouped = groups.remove("");
+        let mut ordered: Vec<_> = groups.into_iter().collect();
+        ordered.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        if let Some(items) = ungrouped {
+            ordered.push((String::new(), items));
+        }
+        for (group, items) in &mut ordered {
+            if let Some(order) = self.workspace_ui.order.get(group) {
+                items.sort_by_key(|info| {
+                    order
+                        .iter()
+                        .position(|id| id == &info.id)
+                        .unwrap_or(usize::MAX)
+                });
+            }
+        }
+        ordered
+    }
+
+    pub(super) fn launch_slot_ids(&self) -> Vec<String> {
+        self.library_order()
+            .into_iter()
+            .flat_map(|(_, items)| items.into_iter().map(|info| info.id.clone()))
+            .collect()
+    }
+
     pub(super) fn instances_view(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
         let t = self.theme.clone();
         let drag_focus = self
@@ -741,23 +811,8 @@ impl LauncherRoot {
                     )
             })
             .collect();
-        let ids: HashSet<_> = creating.iter().map(|(_, p)| p.id.as_str()).collect();
-        let mut groups: BTreeMap<String, Vec<&InstanceInfo>> = BTreeMap::new();
-        for info in &self.data.instances {
-            if !ids.contains(info.id.as_str()) {
-                groups.entry(info.group.clone()).or_default().push(info);
-            }
-        }
-        for group in self.workspace_ui.order.keys().filter(|g| !g.is_empty()) {
-            groups.entry(group.clone()).or_default();
-        }
-        groups.entry(String::new()).or_default();
-        let ungrouped = groups.remove("");
-        let mut ordered: Vec<_> = groups.into_iter().collect();
-        ordered.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
-        if let Some(items) = ungrouped {
-            ordered.push((String::new(), items));
-        }
+        let ordered = self.library_order();
+        let slot_hints = self.launch_slot_hints();
         let mut list = div().flex().flex_col().gap_2().p_2();
         if let Some(error) = &self.catalog_ui.error {
             list = list.child(
@@ -844,15 +899,7 @@ impl LauncherRoot {
                 }),
             ));
         }
-        for (group, mut items) in ordered {
-            if let Some(order) = self.workspace_ui.order.get(&group) {
-                items.sort_by_key(|i| {
-                    order
-                        .iter()
-                        .position(|id| id == &i.id)
-                        .unwrap_or(usize::MAX)
-                });
-            }
+        for (group, items) in ordered {
             let collapsed = self.workspace_ui.collapsed.contains(&group);
             let label = if group.is_empty() {
                 self.workspace_ui.ungrouped.to_uppercase()
@@ -867,7 +914,7 @@ impl LauncherRoot {
                 cx,
             ));
             if !collapsed {
-                section = section.child(self.library_group_grid(&group, items, cx));
+                section = section.child(self.library_group_grid(&group, items, &slot_hints, cx));
             } else if self
                 .workspace_ui
                 .drag
@@ -875,7 +922,8 @@ impl LauncherRoot {
                 .as_ref()
                 .is_some_and(|target| target.group == group)
             {
-                section = section.child(self.library_group_grid(&group, Vec::new(), cx));
+                section =
+                    section.child(self.library_group_grid(&group, Vec::new(), &slot_hints, cx));
             }
             list = list.child(section);
         }

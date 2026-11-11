@@ -2,9 +2,9 @@
 use super::LauncherRoot;
 use crate::{
     input::FieldState,
-    ui::{action_button, btn, card, icon, tint, ButtonVariant},
+    ui::{action_button, btn, card, icon, icon_btn, tint, ButtonVariant},
 };
-use gpui::{div, prelude::*, px, Context, Div, FontWeight, PathPromptOptions};
+use gpui::{div, prelude::*, px, Context, Div, FontWeight, PathPromptOptions, Window};
 use industrialis_backend::java::JavaInfo;
 #[cfg(test)]
 use industrialis_core::launcher_settings::ThemeMode;
@@ -14,6 +14,7 @@ pub(super) enum Section {
     #[default]
     Java,
     Appearance,
+    Shortcuts,
     Backups,
     About,
 }
@@ -24,6 +25,9 @@ pub(super) struct PreferencesUi {
     pub(super) installations: Option<Vec<JavaInfo>>,
     pub(super) scanning: bool,
     error: Option<String>,
+    pub(super) capture_slot: Option<usize>,
+    pub(super) shortcut_error: Option<String>,
+    shortcut_focus: Option<gpui::FocusHandle>,
 }
 
 impl LauncherRoot {
@@ -76,6 +80,185 @@ impl LauncherRoot {
         })
         .detach();
     }
+
+    fn start_shortcut_capture(&mut self, slot: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.preferences_ui.capture_slot = Some(slot);
+        self.preferences_ui.shortcut_error = None;
+        let focus = self
+            .preferences_ui
+            .shortcut_focus
+            .get_or_insert_with(|| cx.focus_handle())
+            .clone();
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    fn apply_shortcut_capture(&mut self, keystroke: &gpui::Keystroke, cx: &mut Context<Self>) {
+        let Some(slot) = self.preferences_ui.capture_slot else {
+            return;
+        };
+        if super::shortcuts::is_modifier_key(keystroke) {
+            return;
+        }
+        let slots = super::shortcuts::resolved(&self.data.settings.instance_shortcuts);
+        match super::shortcuts::validate(keystroke, &slots, slot) {
+            Ok(()) => {
+                let mut next = slots;
+                next[slot] = Some(keystroke.clone());
+                self.write_launch_slots(next, cx);
+            }
+            Err(message) => {
+                self.preferences_ui.shortcut_error = Some(message);
+                cx.notify();
+            }
+        }
+    }
+
+    fn shortcuts_section(&mut self, cx: &mut Context<Self>) -> Div {
+        let t = self.theme.clone();
+        let focus = self
+            .preferences_ui
+            .shortcut_focus
+            .get_or_insert_with(|| cx.focus_handle())
+            .clone();
+        let slots = super::shortcuts::resolved(&self.data.settings.instance_shortcuts);
+        let targets = self.launch_slot_ids();
+        let mut rows = div()
+            .id("launch-shortcut-rows")
+            .track_focus(&focus)
+            .debug_selector(|| "launch-shortcut-rows".into())
+            .flex()
+            .flex_col()
+            .on_key_down(cx.listener(|v, event: &gpui::KeyDownEvent, _, cx| {
+                v.apply_shortcut_capture(&event.keystroke, cx);
+                cx.stop_propagation();
+            }));
+        for slot in 0..super::shortcuts::SLOT_COUNT {
+            let capturing = self.preferences_ui.capture_slot == Some(slot);
+            let combo = slots[slot].as_ref().map(super::shortcuts::display);
+            let target = targets
+                .get(slot)
+                .and_then(|id| self.data.selected_instance(Some(id.as_str())))
+                .map(super::workspace::display_name);
+            let mut row = div()
+                .flex()
+                .items_center()
+                .gap_3()
+                .px_3()
+                .py_2()
+                .border_b_1()
+                .border_color(tint(t.border(), 0.5))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .min_w_0()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(format!("Slot {}", slot + 1)),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(t.muted_foreground())
+                                .text_ellipsis()
+                                .child(
+                                    target.unwrap_or_else(|| "No instance at this position".into()),
+                                ),
+                        ),
+                )
+                .child(div().flex_1())
+                .child(
+                    btn(
+                        &t,
+                        if capturing {
+                            "Press keys…"
+                        } else {
+                            combo.as_deref().unwrap_or("Not set")
+                        },
+                        if capturing {
+                            ButtonVariant::Primary
+                        } else {
+                            ButtonVariant::Outline
+                        },
+                    )
+                    .id(format!("launch-shortcut:{slot}"))
+                    .debug_selector({
+                        let selector = format!("launch-shortcut:{slot}");
+                        move || selector.clone().into()
+                    })
+                    .text_xs()
+                    .on_click(cx.listener(move |v, _, window, cx| {
+                        v.start_shortcut_capture(slot, window, cx);
+                    })),
+                );
+            if combo.is_some() {
+                row = row.child(
+                    icon_btn(&t, "x", ButtonVariant::Ghost)
+                        .id(format!("launch-shortcut-clear:{slot}"))
+                        .aria_label(format!("Clear slot {}", slot + 1))
+                        .debug_selector({
+                            let selector = format!("launch-shortcut-clear:{slot}");
+                            move || selector.clone().into()
+                        })
+                        .size(px(26.0))
+                        .on_click(cx.listener(move |v, _, _, cx| {
+                            let mut next =
+                                super::shortcuts::resolved(&v.data.settings.instance_shortcuts);
+                            next[slot] = None;
+                            v.write_launch_slots(next, cx);
+                        })),
+                );
+            }
+            rows = rows.child(row);
+        }
+        let mut panel = card(&t)
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(div().font_weight(FontWeight::SEMIBOLD).child("Launch slots"))
+            .child(div().text_xs().text_color(t.muted_foreground()).child(
+                "Slot 1 is the first card in your library. Named groups sort alphabetically, the ungrouped section comes last, and each section keeps its saved card order. Shortcuts work while the launcher is focused and are ignored in dialogs.",
+            ))
+            .child(rows);
+        if self.preferences_ui.capture_slot.is_some() {
+            panel = panel.child(
+                div()
+                    .text_xs()
+                    .text_color(t.muted_foreground())
+                    .child("Press the keys to use for this slot. Esc cancels."),
+            );
+        }
+        if let Some(error) = &self.preferences_ui.shortcut_error {
+            panel = panel.child(
+                div()
+                    .text_xs()
+                    .text_color(t.destructive())
+                    .child(error.clone()),
+            );
+        }
+        panel.child(
+            div().flex().child(
+                btn(&t, "Reset to defaults", ButtonVariant::Ghost)
+                    .id("launch-shortcut-reset")
+                    .debug_selector(|| "launch-shortcut-reset".into())
+                    .text_xs()
+                    .on_click(cx.listener(|v, _, _, cx| {
+                        v.data.settings.instance_shortcuts =
+                            industrialis_core::launcher_settings::LauncherSettingsData::default()
+                                .instance_shortcuts;
+                        v.preferences_ui.capture_slot = None;
+                        v.preferences_ui.shortcut_error = None;
+                        v.persist_launcher_preferences(cx);
+                        cx.notify();
+                    })),
+            ),
+        )
+    }
+
     pub(super) fn settings_view(&mut self, cx: &mut Context<Self>) -> Div {
         if self.preferences_ui.installations.is_none() && !self.preferences_ui.scanning {
             self.scan_launcher_java(cx);
@@ -117,6 +300,7 @@ impl LauncherRoot {
                     [
                         (Section::Java, "Java", "terminal"),
                         (Section::Appearance, "Appearance", "sliders-horizontal"),
+                        (Section::Shortcuts, "Shortcuts", "keyboard"),
                         (Section::Backups, "Backups", "copy"),
                         (Section::About, "About", "info"),
                     ]
@@ -209,6 +393,15 @@ impl LauncherRoot {
             }
             Section::Appearance => {
                 content = content.child(self.appearance_view(cx));
+            }
+            Section::Shortcuts => {
+                content = content.child(
+                    div()
+                        .py(px(14.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Shortcuts"),
+                );
+                content = content.child(self.shortcuts_section(cx));
             }
             Section::Backups => {
                 content = content
@@ -383,12 +576,73 @@ impl LauncherRoot {
 mod tests {
     use super::*;
     use crate::state::AppData;
+    use crate::views::test_support::Fixture;
     use gpui::{size, TestAppContext, VisualTestContext};
     use industrialis_backend::{paths::LauncherPaths, settings};
     use std::{
         sync::Arc,
         time::{Duration, Instant},
     };
+
+    #[gpui::test]
+    async fn shortcut_capture_persists_and_rejects_reserved_combos(cx: &mut TestAppContext) {
+        let fixture = Fixture::new(&["a", "b"]);
+        let (window, root) = fixture.open(cx, |root| {
+            root.tab = super::super::Tab::Settings;
+            root.preferences_ui.section = Section::Shortcuts;
+            root.preferences_ui.installations = Some(Vec::new());
+        });
+        Fixture::click(cx, window, "launch-shortcut:0");
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        {
+            let mut visual = VisualTestContext::from_window(window.into(), cx);
+            visual.simulate_keystrokes("ctrl-shift-9");
+        }
+        root.read_with(cx, |v, _| {
+            assert_eq!(
+                v.data.settings.instance_shortcuts[0].as_deref(),
+                Some("ctrl-shift-9")
+            );
+            assert_eq!(v.preferences_ui.capture_slot, None);
+            assert_eq!(v.preferences_ui.shortcut_error, None);
+        });
+        // Reserved combinations are refused and leave capture armed.
+        Fixture::click(cx, window, "launch-shortcut:1");
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        {
+            let mut visual = VisualTestContext::from_window(window.into(), cx);
+            visual.simulate_keystrokes("ctrl-s");
+        }
+        root.read_with(cx, |v, _| {
+            assert_eq!(v.preferences_ui.capture_slot, Some(1));
+            assert!(v
+                .preferences_ui
+                .shortcut_error
+                .as_deref()
+                .is_some_and(|error| error.contains("used by the launcher")));
+            assert_eq!(
+                v.data.settings.instance_shortcuts[1].as_deref(),
+                Some(if cfg!(target_os = "macos") {
+                    "cmd-2"
+                } else {
+                    "ctrl-2"
+                })
+            );
+        });
+        fixture
+            .until(cx, &root, |v| {
+                !v.settings_saving && v.settings_save_pending.is_none()
+            })
+            .await;
+        let saved = fixture
+            .rt
+            .block_on(settings::load_launcher_settings(&fixture.paths))
+            .unwrap();
+        assert_eq!(saved.instance_shortcuts[0].as_deref(), Some("ctrl-shift-9"));
+        fixture.cleanup();
+    }
 
     #[gpui::test]
     async fn failed_save_keeps_latest_edits_blocks_close_and_retries_from_the_ui(

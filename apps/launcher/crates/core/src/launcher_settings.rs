@@ -28,6 +28,20 @@ fn default_window_tint_opacity() -> u8 {
     60
 }
 
+/// Number of positional launch slots shown in Settings and on library cards.
+pub const LAUNCH_SLOT_COUNT: usize = 9;
+
+fn default_launch_shortcuts() -> [Option<String>; LAUNCH_SLOT_COUNT] {
+    std::array::from_fn(|slot| {
+        let modifier = if cfg!(target_os = "macos") {
+            "cmd"
+        } else {
+            "ctrl"
+        };
+        Some(format!("{modifier}-{}", slot + 1))
+    })
+}
+
 impl ThemeOverrides {
     /// Set (non-empty) overrides as pairs, for the launcher theme bridge.
     pub fn as_pairs(&self) -> Vec<(String, String)> {
@@ -138,6 +152,9 @@ pub struct LauncherSettingsData {
     /// One-time first-run Prism import prompt was answered (either choice).
     #[serde(default)]
     pub prism_import_prompted: bool,
+    /// Positional launch shortcuts; `None` leaves that slot unbound.
+    #[serde(default = "default_launch_shortcuts")]
+    pub instance_shortcuts: [Option<String>; LAUNCH_SLOT_COUNT],
     #[serde(flatten)]
     pub window: LauncherWindowSettings,
 }
@@ -180,6 +197,7 @@ impl Default for LauncherSettingsData {
             instance_grid_columns: default_grid_columns(),
             backup_retention_limit: default_backup_retention(),
             prism_import_prompted: false,
+            instance_shortcuts: default_launch_shortcuts(),
             window: LauncherWindowSettings {
                 launch_maximized: false,
                 window_width: DEFAULT_LAUNCHER_WINDOW_WIDTH,
@@ -291,6 +309,16 @@ pub fn parse_launcher_settings_json(raw: &str) -> LauncherSettingsData {
         .get("prism_import_prompted")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    // A present array replaces slots positionally; null, empty, or non-string
+    // entries unbind that slot. A missing field keeps the defaults.
+    if let Some(entries) = obj.get("instance_shortcuts").and_then(|v| v.as_array()) {
+        for (slot, entry) in settings.instance_shortcuts.iter_mut().zip(entries) {
+            *slot = entry
+                .as_str()
+                .filter(|combo| !combo.trim().is_empty())
+                .map(str::to_string);
+        }
+    }
     let partial_window = crate::launcher_window::PartialLauncherWindowSettings {
         launch_maximized: obj.get("launch_maximized").and_then(|v| v.as_bool()),
         window_width: obj.get("window_width").and_then(|v| v.as_i64()),
@@ -317,6 +345,60 @@ mod tests {
         assert_eq!(settings.theme_preset, "industrialis");
         assert_eq!(settings.backup_retention_limit, 10);
         assert_eq!(resolve_default_account_id(&settings), None);
+    }
+
+    #[test]
+    fn launch_shortcuts_default_to_secondary_digits() {
+        let shortcuts = LauncherSettingsData::default().instance_shortcuts;
+        assert_eq!(shortcuts.len(), LAUNCH_SLOT_COUNT);
+        let modifier = if cfg!(target_os = "macos") {
+            "cmd"
+        } else {
+            "ctrl"
+        };
+        for (slot, combo) in shortcuts.iter().enumerate() {
+            assert_eq!(
+                combo.as_deref(),
+                Some(format!("{modifier}-{}", slot + 1).as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn launch_shortcuts_round_trip_unbound_slots_and_tolerate_bad_entries() {
+        let raw = serde_json::json!({
+            "instance_shortcuts": ["ctrl-shift-l", null, "", 7, "alt-f5"],
+        });
+        let parsed = parse_launcher_settings_json(&raw.to_string());
+        assert_eq!(
+            parsed.instance_shortcuts[0].as_deref(),
+            Some("ctrl-shift-l")
+        );
+        assert_eq!(parsed.instance_shortcuts[1], None);
+        assert_eq!(parsed.instance_shortcuts[2], None);
+        assert_eq!(parsed.instance_shortcuts[3], None);
+        assert_eq!(parsed.instance_shortcuts[4].as_deref(), Some("alt-f5"));
+        // Entries past a short array retain their defaults.
+        assert_eq!(
+            parsed.instance_shortcuts[8],
+            LauncherSettingsData::default().instance_shortcuts[8]
+        );
+        let saved = serde_json::to_string(&parsed).unwrap();
+        assert_eq!(parse_launcher_settings_json(&saved), parsed);
+        assert!(!parsed.extra_fields.contains_key("instance_shortcuts"));
+    }
+
+    #[test]
+    fn launch_shortcuts_keep_defaults_when_field_is_missing_or_not_an_array() {
+        let defaults = LauncherSettingsData::default().instance_shortcuts;
+        assert_eq!(
+            parse_launcher_settings_json("{}").instance_shortcuts,
+            defaults
+        );
+        assert_eq!(
+            parse_launcher_settings_json(r#"{"instance_shortcuts":"ctrl-1"}"#).instance_shortcuts,
+            defaults
+        );
     }
 
     #[test]
