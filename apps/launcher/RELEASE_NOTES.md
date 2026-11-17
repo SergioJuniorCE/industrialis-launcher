@@ -1,20 +1,18 @@
 <!-- industrialis-launcher-release-v1 -->
 
-# Industrialis Launcher 0.4.4
+# Industrialis Launcher 0.5.0
 
-This patch fixes launcher self-updates: installed builds can update while a game keeps running, and installations still using the retired `Industrialis GPUI` folder can move to the current directory without aborting. It builds on the 0.4.3 native stable release without changing launcher data or user settings.
+This release adds a built-in Modrinth mod browser, mod enable/disable toggles that survive updates, and configurable keyboard shortcuts for the first nine library slots. It also stops repeated sign-ins from tripping authentication rate limits. It builds on the 0.4.4 native stable release without changing launcher data or user settings.
+
+## Features
+
+- A new **Browse mods** tab in an instance's Add-ons searches Modrinth for mods compatible with that instance's game version and loader. A two-pane view shows project details, links and available versions, and each install resolves required dependencies, validates conflicts and verifies downloads before applying the set atomically with rollback.
+- Pack mods can now be enabled or disabled from the Mods tab. Disabled mods are renamed to `.disabled` on disk and remain disabled across pack updates, reinstalls and launches.
+- Preferences → Shortcuts binds configurable keys to the first nine library slots. Shortcut hints appear on instance cards, and shortcuts can be changed, cleared or reset; they work while the launcher is focused and are ignored in dialogs.
 
 ## Fixes
 
-- Running games no longer block an in-app launcher update. Only a game launch that is still starting blocks, because the installer handoff waits for the old launcher to exit.
-- A self-update from `%LOCALAPPDATA%\Programs\Industrialis GPUI` now recognizes the old install marker, moves the files to `Industrialis Launcher`, restarts, and preserves unrelated files.
-- The historical Electron retirement helpers, including the bundled Squirrel uninstall step, were removed.
-- A rollback executable still mapped by a running game no longer blocks a later update; the installer switches to a unique rollback name.
-- Installer smoke tests no longer read or migrate a real developer installation.
-
-## Upgrading from 0.4.2 or 0.4.3
-
-Close running games once for this update; the older launcher still enforces that check. After 0.4.4 is installed, later launcher updates run with games open.
+- Launching a game reuses an existing game token when at least one hour of validity remains. This avoids a fresh sign-in on every launch and the HTTP 429 rate limits that came with it.
 
 ## Downloads
 
