@@ -115,6 +115,10 @@ const MSA_TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/
 const MSA_DEVICE_CODE_URL: &str =
     "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const REFRESH_WINDOW_SECONDS: i64 = 12 * 60 * 60;
+/// The MSA token only lives an hour, so a full re-login must be rarer than the
+/// game token allows: reuse the game token while it has this much life left.
+/// `login_with_xbox` rate-limits hard (HTTP 429) and one call per launch trips it.
+const GAME_TOKEN_MIN_REMAINING_SECONDS: i64 = 60 * 60;
 
 fn now_epoch() -> i64 {
     std::time::SystemTime::now()
@@ -1086,6 +1090,14 @@ pub async fn ensure_fresh_token(
     let Some(msa) = account.msa_token.as_ref() else {
         return Ok(access_token(account).to_string());
     };
+    if account
+        .yggdrasil_token
+        .as_ref()
+        .map(|game| game.expires_at - now_epoch() > GAME_TOKEN_MIN_REMAINING_SECONDS)
+        .unwrap_or(false)
+    {
+        return Ok(access_token(account).to_string());
+    }
     if msa.expires_at - now_epoch() > REFRESH_WINDOW_SECONDS {
         return Ok(access_token(account).to_string());
     }
@@ -1137,6 +1149,39 @@ mod tests {
         remove_account(&paths, &info.id).await.unwrap();
         assert!(persist_refreshed_account(&paths, snapshot).await.is_err());
         assert!(load_accounts(&paths).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn valid_game_token_skips_the_microsoft_login_chain() {
+        let paths = temp_paths("valid-game-token");
+        let account = AccountData {
+            extra_fields: Default::default(),
+            format_version: 3,
+            account_type: "msa".to_string(),
+            id: "account".to_string(),
+            msa_token: Some(MsaToken {
+                extra_fields: Default::default(),
+                access_token: "msa".to_string(),
+                refresh_token: "refresh".to_string(),
+                expires_at: now_epoch() - 60,
+            }),
+            user_token: None,
+            mojangservices_token: None,
+            yggdrasil_token: Some(StoredToken {
+                extra_fields: Default::default(),
+                token: "game-token".to_string(),
+                expires_at: now_epoch() + GAME_TOKEN_MIN_REMAINING_SECONDS + 60,
+                extra: None,
+            }),
+            minecraft_profile: None,
+            minecraft_entitlement: None,
+            skin_png_base64: None,
+        };
+        // No network in tests: a login attempt here would hang or fail on 429.
+        assert_eq!(
+            ensure_fresh_token(&paths, &account).await.unwrap(),
+            "game-token"
+        );
     }
 
     fn temp_paths(name: &str) -> LauncherPaths {
