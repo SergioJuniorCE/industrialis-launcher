@@ -13,6 +13,7 @@ This release adds a built-in Modrinth mod browser, mod enable/disable toggles th
 ## Fixes
 
 - Launching a game reuses an existing game token when at least one hour of validity remains. This avoids a fresh sign-in on every launch and the HTTP 429 rate limits that came with it.
+- The **Launcher releases** button now opens the releases page directly. The previous search-filtered URL showed no releases.
 
 ## Downloads
 
