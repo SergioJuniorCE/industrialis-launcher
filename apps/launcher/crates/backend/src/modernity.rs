@@ -47,7 +47,10 @@ pub fn pack_series(version: &str) -> anyhow::Result<String> {
     ensure!(pieces.len() >= 2 && pieces[0] == "2" && ["8", "9"].contains(&pieces[1]), "Modernity weekly builds are available for GTNH 2.8 and 2.9. Set the instance pack version before browsing.");
     Ok(format!("2.{}", pieces[1]))
 }
-fn client() -> anyhow::Result<reqwest::Client> {
+/// Shared third-party download policy: HTTPS only, GitHub hosts only, bounded
+/// redirects. The recommended add-on catalog reuses it so both providers accept
+/// the same URLs and refuse the same ones.
+pub(crate) fn client() -> anyhow::Result<reqwest::Client> {
     Ok(reqwest::Client::builder()
         .user_agent("IndustrialisLauncher/third-party-content")
         .timeout(Duration::from_secs(180))
@@ -71,7 +74,7 @@ fn client() -> anyhow::Result<reqwest::Client> {
         }))
         .build()?)
 }
-async fn bounded(mut response: reqwest::Response, limit: u64) -> anyhow::Result<Vec<u8>> {
+pub(crate) async fn bounded(mut response: reqwest::Response, limit: u64) -> anyhow::Result<Vec<u8>> {
     ensure!(
         response.status().is_success(),
         "GitHub returned HTTP {}. Try again later or import a downloaded file.",
