@@ -20,10 +20,14 @@ function option(name) {
 }
 const skipBuild = args.includes("--skip-build");
 const channel = option("--channel") ?? "preview";
-if (!["preview", "stable"].includes(channel)) throw new Error("Channel must be preview or stable");
+if (!["preview", "nightly", "stable"].includes(channel)) throw new Error("Channel must be preview, nightly or stable");
 if (channel === "stable" && skipBuild) throw new Error("Stable packaging requires compiling the stable-updates feature; --skip-build is not allowed");
 const replacement = args.includes("--replacement") || channel === "stable";
-const windowsInstaller = channel === "stable" ? "IndustrialisLauncherSetup.exe" : "IndustrialisLauncherPreviewSetup-x64.exe";
+const windowsInstaller =
+  {
+    stable: "IndustrialisLauncherSetup.exe",
+    nightly: "IndustrialisLauncherNightlySetup-x64.exe",
+  }[channel] ?? "IndustrialisLauncherPreviewSetup-x64.exe";
 const known = new Set(["--skip-build", "--replacement", "--binary", "--out", "--makensis", "--channel"]);
 for (let i = 0; i < args.length; i++) {
   if (!known.has(args[i])) throw new Error(`Unknown option ${args[i]}`);

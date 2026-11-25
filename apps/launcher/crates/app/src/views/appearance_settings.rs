@@ -10,7 +10,7 @@ use industrialis_core::{
     theme::ThemePreset,
 };
 
-fn heading(text: &str, theme: &ActiveTheme) -> Div {
+pub(super) fn heading(text: &str, theme: &ActiveTheme) -> Div {
     div()
         .text_xs()
         .text_color(theme.muted_foreground())
@@ -18,7 +18,7 @@ fn heading(text: &str, theme: &ActiveTheme) -> Div {
         .child(text.to_owned())
 }
 
-fn setting_row(
+pub(super) fn setting_row(
     theme: &ActiveTheme,
     title: &str,
     description: &str,

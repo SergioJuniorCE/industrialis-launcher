@@ -9,11 +9,16 @@ on:
         type: string
         default: ""
       channel:
-        description: "Packaging channel: preview or stable"
+        description: "Packaging channel: preview, nightly or stable"
         required: true
         type: string
       artifact_suffix:
         description: "Optional suffix appended to uploaded artifact names"
+        required: false
+        type: string
+        default: ""
+      build_tag:
+        description: "Release tag compiled into the build when the ref is not itself a release tag"
         required: false
         type: string
         default: ""
@@ -67,6 +72,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           BUILD_VERSION: ${{ inputs.version }}
+          BUILD_TAG: ${{ inputs.build_tag }}
         run: |
           cargo fetch --locked --manifest-path apps/launcher/Cargo.toml
           if [[ "$RELEASE_TAG" == launcher-preview-v* ]]; then
@@ -78,6 +84,14 @@ jobs:
           fi
           node scripts/launcher-version.mjs "$version"
           cargo update --workspace --offline --manifest-path apps/launcher/Cargo.toml
+          # The release tag is compiled in so the launcher can name its own channel.
+          build_tag="$BUILD_TAG"
+          if [[ "$RELEASE_TAG" == launcher-*v* ]]; then
+            build_tag="$RELEASE_TAG"
+          fi
+          if [[ -n "$build_tag" ]]; then
+            echo "INDUSTRIALIS_BUILD_TAG=$build_tag" >>"$GITHUB_ENV"
+          fi
       - name: Test macOS backend and core
         if: runner.os == 'macOS'
         working-directory: apps/launcher

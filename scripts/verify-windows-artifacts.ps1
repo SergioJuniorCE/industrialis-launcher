@@ -1,6 +1,6 @@
 param(
   [string]$AppDirectory = (Join-Path $PSScriptRoot '../apps/launcher'),
-  [ValidateSet('preview', 'stable')][string]$Channel = 'preview',
+  [ValidateSet('preview', 'nightly', 'stable')][string]$Channel = 'preview',
   [string]$ArtifactDirectory
 )
 $ErrorActionPreference = 'Stop'
@@ -11,7 +11,11 @@ $runtimeJson = & node (Join-Path $PSScriptRoot 'windows-runtime.mjs') $binary
 if ($LASTEXITCODE -ne 0) { throw 'Windows executable runtime verification failed' }
 $runtime = $runtimeJson | ConvertFrom-Json
 $artifactRoot = if ($ArtifactDirectory) { (Resolve-Path -LiteralPath $ArtifactDirectory).Path } else { Join-Path $appRoot 'dist' }
-$installerName = if ($Channel -eq 'stable') { 'IndustrialisLauncherSetup.exe' } else { 'IndustrialisLauncherPreviewSetup-x64.exe' }
+$installerName = switch ($Channel) {
+  'stable' { 'IndustrialisLauncherSetup.exe' }
+  'nightly' { 'IndustrialisLauncherNightlySetup-x64.exe' }
+  default { 'IndustrialisLauncherPreviewSetup-x64.exe' }
+}
 $installer = Join-Path $artifactRoot $installerName
 $portable = Join-Path $artifactRoot 'IndustrialisLauncher-windows-x64.zip'
 Add-Type -AssemblyName System.IO.Compression.FileSystem

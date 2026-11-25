@@ -171,7 +171,7 @@ def main():
     archive, reference, output = (Path(arg).resolve(strict=True) for arg in sys.argv[1:])
     assert output == archive.parent, "Keep evidence next to the generated artifact"
     channel = os.environ.get("LAUNCHER_PACKAGE_CHANNEL", "preview")
-    assert channel in ("preview", "stable"), "Unknown package channel"
+    assert channel in ("preview", "nightly", "stable"), "Unknown package channel"
     repo = Path(__file__).resolve().parent.parent
     app = repo / "apps/launcher"
     version = json.loads((app / "package.json").read_text())["version"]
