@@ -236,9 +236,11 @@ Build-only stable preparation:
 node scripts/build-launcher.mjs --channel stable --out apps/launcher/target/stable-review
 ```
 
-Stable builds compile the stable update channel and register
+Stable builds compile the stable update channel as their default and register
 `industrialislauncher:`. `--replacement` enables the same registration for a
-preview build.
+preview or nightly build. `--channel nightly` packages
+`IndustrialisLauncherNightlySetup-x64.exe` and leaves the channel to the
+compiled release tag.
 
 The canonical `.github/workflows/launcher-release.yml` tests and builds all
 three native platforms only for release tags and manual `workflow_dispatch`;
@@ -290,7 +292,11 @@ preservation, restart, and cleanup. Both use fixture executables, not a real
 GitHub release, and unique folders that are removed afterwards.
 
 Stable-channel tests reject unmarked historical releases, GitHub prereleases and
-the opposite channel.
+the opposite channel. The channel tests cover one channel per release, a newer
+nightly never reaching stable, the equal-version switch in both directions, an
+older stable offered as a deliberate downgrade, nightly ordering by date then
+publication then commit, nightly tag parsing, and the running build's own
+channel and label.
 
 The separate [Windows Sandbox acceptance](LIVE_ACCEPTANCE.md#installed-launcher-in-windows-sandbox)
 uses the actual stable launcher artifact. Only generated profile data and owned
