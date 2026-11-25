@@ -2,7 +2,12 @@
 
 # Industrialis Launcher 0.6.0
 
-This release adds world backups for in-place pack updates, a Recommended add-ons tab for GT New Horizons, and reusable config profiles.
+This release adds selectable launcher update channels, world backups for in-place pack updates, a Recommended add-ons tab for GT New Horizons, and reusable config profiles.
+
+## Launcher update channels
+
+- Choose **Stable**, **Nightly**, or **Preview** in **Settings → Updates**. Stable is the default for this release. Nightly offers builds from recent changes and may contain regressions.
+- When you switch channels, the next update check offers the newest build in the selected channel, even if its version number matches or is older than your current build. The Updates page shows which build you're running.
 
 ## Pack updates and world backups
 
@@ -24,7 +29,7 @@ This release adds world backups for in-place pack updates, a Recommended add-ons
 - Windows x64 installer: **IndustrialisLauncherSetup.exe**. Windows portable: **IndustrialisLauncher-windows-x64.zip**.
 - macOS Apple Silicon: **IndustrialisLauncher-macos-arm64.dmg**.
 - Linux x64: **IndustrialisLauncher-linux-x64.tar.gz**. Requires a graphical desktop, Vulkan or OpenGL drivers, Fontconfig and X11/Wayland libraries.
-- Windows installed builds support in-app updates. Portable, Linux and macOS updates are manual.
+- The installed Windows launcher supports in-app updates and channel switches. Download the matching build manually on portable Windows, Linux, and macOS.
 
 ## Known limitations
 
