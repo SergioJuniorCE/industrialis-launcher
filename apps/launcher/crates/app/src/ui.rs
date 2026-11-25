@@ -292,12 +292,29 @@ pub fn mix(a: Rgba, b: Rgba, weight: f32) -> Rgba {
 #[track_caller]
 pub fn checkbox(theme: &ActiveTheme, label: &str, checked: bool) -> gpui::Stateful<Div> {
     let location = std::panic::Location::caller();
-    div()
-        .id(format!(
+    checkbox_with_id(
+        theme,
+        format!(
             "checkbox:{}:{}:{label}",
             location.file(),
             location.line()
-        ))
+        ),
+        label,
+        checked,
+    )
+}
+
+/// A checkbox with an explicit element id. Repeated labels (such as one
+/// "Override" per settings section) would otherwise share an id and be
+/// discarded from the accessibility tree.
+pub fn checkbox_with_id(
+    theme: &ActiveTheme,
+    id: impl Into<gpui::ElementId>,
+    label: &str,
+    checked: bool,
+) -> gpui::Stateful<Div> {
+    div()
+        .id(id)
         .role(gpui::accesskit::Role::CheckBox)
         .aria_label(label.to_string())
         .aria_toggled(if checked {

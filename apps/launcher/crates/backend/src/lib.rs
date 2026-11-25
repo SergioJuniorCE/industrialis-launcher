@@ -6,6 +6,7 @@
 pub mod accounts;
 pub mod console_log;
 pub mod config_presets;
+pub mod config_profiles;
 pub mod fs_utils;
 pub mod game_broker;
 mod game_capture;

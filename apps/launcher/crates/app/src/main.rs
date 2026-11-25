@@ -203,6 +203,7 @@ fn main() {
                         root.monitor_restored_games(cx);
                         root.refresh_instance_sizes(None, cx);
                         root.refresh_groups(cx);
+                        root.load_config_profiles(cx);
                         root.start_pack_polling(cx);
                         root.maybe_prompt_prism_import(cx);
                         root

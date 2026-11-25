@@ -234,6 +234,7 @@ enum Work {
         group: String,
         version: String,
         java: String,
+        profile: Option<String>,
     },
     Delete,
     Copy {
@@ -259,7 +260,7 @@ enum Work {
 enum WorkResult {
     Preview(UpdateModPreview),
     Maintained(MaintainOutcome),
-    Done,
+    Done(Option<String>),
 }
 
 impl MaintenanceDialog {
@@ -1044,6 +1045,7 @@ impl LauncherRoot {
         group: String,
         version: String,
         java: String,
+        profile: Option<String>,
         cx: &mut Context<Self>,
     ) {
         self.close_dialog(cx);
@@ -1054,6 +1056,7 @@ impl LauncherRoot {
                 group,
                 version,
                 java,
+                profile,
             },
             cx,
         );
@@ -1181,6 +1184,7 @@ impl LauncherRoot {
                         group,
                         version,
                         java,
+                        profile,
                     } => {
                         industrialis_backend::install::download_install(
                             &paths,
@@ -1196,7 +1200,23 @@ impl LauncherRoot {
                             emit,
                         )
                         .await?;
-                        Ok(WorkResult::Done)
+                        let note = if let Some(name) = profile {
+                            Some(
+                                match industrialis_backend::config_profiles::apply_profile(
+                                    &paths, &target, &name,
+                                )
+                                .await
+                                {
+                                    Ok(report) => report.summary(&name),
+                                    Err(error) => format!(
+                                        "Instance installed, but config profile {name:?} failed: {error:#}"
+                                    ),
+                                },
+                            )
+                        } else {
+                            None
+                        };
+                        Ok(WorkResult::Done(note))
                     }
                     Work::Delete => {
                         industrialis_backend::instance_ops::delete_instance_with_progress(
@@ -1206,12 +1226,12 @@ impl LauncherRoot {
                             delete_cancel,
                         )
                         .await?;
-                        Ok(WorkResult::Done)
+                        Ok(WorkResult::Done(None))
                     }
                     Work::Copy { name, destination } => {
                         copy_instance_with_progress(&paths, &target, &destination, &name, emit)
                             .await?;
-                        Ok(WorkResult::Done)
+                        Ok(WorkResult::Done(None))
                     }
                     Work::Preview { version, java, .. } => {
                         preview_update(&paths, &target, &version, Some(&java), emit)
@@ -1377,9 +1397,18 @@ impl LauncherRoot {
                                         }
                                         _ => None,
                                     };
+                                    let finish_note = match &result {
+                                        Ok(WorkResult::Done(note)) => note.clone(),
+                                        _ => None,
+                                    };
                                     match result {
                                         Ok(_) => {
-                                            v.data.status = "Instance operation complete".into();
+                                            v.data.status = finish_note
+                                                .clone()
+                                                .unwrap_or_else(|| {
+                                                    "Instance operation complete".into()
+                                                });
+                                            v.status_after_refresh = finish_note;
                                             if matches!(work, Work::Delete) {
                                                 if v.selected_id.as_ref() == Some(&id) {
                                                     v.selected_id = None;

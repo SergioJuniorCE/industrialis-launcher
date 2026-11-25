@@ -53,8 +53,10 @@ use preferences::PreferencesUi;
 mod workspace;
 use workspace::WorkspaceUi;
 mod console;
+mod config_profile_ui;
 mod instance_actions;
 mod processes;
+use config_profile_ui::ConfigProfilesUi;
 use console::ConsoleUi;
 use processes::ProcessesUi;
 mod instance_settings;
@@ -92,6 +94,7 @@ pub struct NewInstanceDialog {
     group: FieldState,
     version: String,
     java_type: String,
+    profile: Option<String>,
     versions: Option<Vec<pack_catalog::VersionChoice>>,
     search: FieldState,
     filter: pack_catalog::ReleaseFilter,
@@ -128,6 +131,7 @@ pub struct LauncherRoot {
     settings_saved: LauncherSettingsData,
     refresh_generation: u64,
     profile_issues: Vec<String>,
+    status_after_refresh: Option<String>,
     pub tab: Tab,
     pub selected_id: Option<String>,
     log_scroll: UniformListScrollHandle,
@@ -155,6 +159,7 @@ pub struct LauncherRoot {
     groups_ui: library_groups::GroupsUi,
     icons_ui: library_icons::IconsUi,
     catalog_ui: pack_catalog::CatalogUi,
+    config_profiles_ui: ConfigProfilesUi,
     files_ui: minecraft_files::FilesUi,
     mods_ui: custom_mods::ModsUi,
     content_ui: content::ContentUi,
@@ -196,6 +201,7 @@ impl LauncherRoot {
             settings_saved,
             refresh_generation: 0,
             profile_issues: Vec::new(),
+            status_after_refresh: None,
             tab: Tab::Instances,
             selected_id: None,
             log_scroll: UniformListScrollHandle::new(),
@@ -222,6 +228,7 @@ impl LauncherRoot {
             groups_ui: Default::default(),
             icons_ui: Default::default(),
             catalog_ui: Default::default(),
+            config_profiles_ui: Default::default(),
             files_ui: Default::default(),
             mods_ui: Default::default(),
             content_ui: Default::default(),
@@ -332,10 +339,10 @@ impl LauncherRoot {
                     }
                 }
                 v.profile_issues = issues.clone();
-                v.data.status = if issues.is_empty() {
-                    "Refreshed".into()
-                } else {
-                    issues.join("\n")
+                v.data.status = match v.status_after_refresh.take() {
+                    Some(note) => note,
+                    None if issues.is_empty() => "Refreshed".into(),
+                    None => issues.join("\n"),
                 };
                 cx.notify();
             });
@@ -801,6 +808,7 @@ impl LauncherRoot {
             group: FieldState::new(&group),
             version: String::new(),
             java_type: "java17+".to_string(),
+            profile: None,
             versions: None,
             search: FieldState::empty(),
             filter: pack_catalog::ReleaseFilter::All,
@@ -811,11 +819,12 @@ impl LauncherRoot {
         }));
         self.focused_field = Some("new-name".to_string());
         cx.notify();
+        self.load_config_profiles(cx);
         self.load_new_catalog(cx);
     }
 
     fn submit_install(&mut self, cx: &mut Context<Self>) {
-        let (name, group, version, java_type) = match self.dialog.as_ref() {
+        let (name, group, version, java_type, profile) = match self.dialog.as_ref() {
             Some(Dialog::NewInstance(state))
                 if !state.installing
                     && !state.versions_loading
@@ -830,6 +839,7 @@ impl LauncherRoot {
                     state.group.text.clone(),
                     state.version.clone(),
                     state.java_type.clone(),
+                    state.profile.clone(),
                 )
             }
             _ => return,
@@ -853,7 +863,7 @@ impl LauncherRoot {
                 return;
             }
         };
-        self.begin_install(id, name, group, version, java_type, cx);
+        self.begin_install(id, name, group, version, java_type, profile, cx);
     }
 
     fn open_delete(&mut self, id: String, cx: &mut Context<Self>) {

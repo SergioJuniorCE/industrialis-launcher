@@ -203,6 +203,18 @@ impl LauncherRoot {
         self.instance_ui.editors.remove(id);
     }
 
+    /// Keeps the open editor and the instance list in step after a profile
+    /// apply, without a full refresh that would replace the status message.
+    pub(super) fn record_applied_profile(&mut self, id: &str, name: &str) {
+        let name = Some(name.to_string());
+        if let Some(editor) = self.instance_ui.editors.get_mut(id) {
+            editor.settings.config_profile = name.clone();
+        }
+        if let Some(info) = self.data.instances.iter_mut().find(|info| info.id == id) {
+            info.settings.config_profile = name;
+        }
+    }
+
     fn edit_setting(&mut self, id: &str, key: &str, value: Value, cx: &mut Context<Self>) {
         if self.instance_is_busy(id) {
             return;
@@ -455,7 +467,7 @@ impl LauncherRoot {
         let id = id.to_string();
         let key = key.to_string();
         let selector = format!("instance-toggle:{id}:{key}");
-        crate::ui::checkbox(&self.theme, label, checked)
+        crate::ui::checkbox_with_id(&self.theme, selector.clone(), label, checked)
             .debug_selector(move || selector.clone().into())
             .tab_stop(enabled)
             .when(!enabled, |el| el.opacity(0.5).cursor_default())
@@ -468,7 +480,7 @@ impl LauncherRoot {
             )
     }
 
-    fn settings_section(
+    pub(super) fn settings_section(
         &self,
         id: &str,
         title: &str,
@@ -695,6 +707,12 @@ impl LauncherRoot {
                 let name =
                     self.labeled_setting(id, "name", "Display name", "GTNH instance", enabled, cx);
                 panel = panel.child(self.settings_section(id, "Instance", None, name, cx));
+                panel = panel.child(self.config_profile_card(
+                    id,
+                    settings.config_profile.as_deref(),
+                    enabled,
+                    cx,
+                ));
                 let active = enabled && settings.override_window;
                 let mut body = div().flex().flex_col().gap_2().child(self.setting_toggle(
                     id,
