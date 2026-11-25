@@ -100,6 +100,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.gate.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: ${{ needs.gate.outputs.release_name }}
           prerelease: true
           make_latest: false
