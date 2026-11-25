@@ -17,9 +17,7 @@ function stubGh({ lastSha = "", fail = false }) {
   writeFileSync(calls, "");
   writeFileSync(
     path.join(bin, "gh"),
-    fail
-      ? `#!/bin/sh\necho "gh: HTTP 502" >&2\nexit 1\n`
-      : `#!/bin/sh\nprintf '%s\\n' "$*" >>"${calls.replaceAll("\\", "/")}"\nprintf '%s\\n' "${lastSha}"\n`,
+    fail ? `#!/bin/sh\necho "gh: HTTP 502" >&2\nexit 1\n` : `#!/bin/sh\nprintf '%s\\n' "$*" >>"${calls.replaceAll("\\", "/")}"\nprintf '%s\\n' "${lastSha}"\n`,
   );
   chmodSync(path.join(bin, "gh"), 0o755);
   return { bin, calls };
