@@ -5,13 +5,17 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gpui::{div, prelude::*, px, Context, Div, FontWeight, Window};
-use industrialis_backend::install::{preview_update, reinstall_instance, update_instance};
+use industrialis_backend::install::{
+    install_update_as_new_instance, preview_update, reinstall_instance, update_instance,
+    MaintainOutcome,
+};
 use industrialis_backend::instance_ops::copy_instance_with_progress;
 use industrialis_backend::pack_files::{
     fetch_gtnh_versions, EmitProgress, PackProgress, UpdateModPreview,
 };
 use industrialis_backend::paths::validate_instance_id;
 use industrialis_core::background_processes::{Operation, ProcessToken, Processes};
+use industrialis_core::pack_version::{pack_update_distance, PackUpdateDistance};
 
 use super::{Dialog, LauncherRoot};
 use crate::input::FieldState;
@@ -172,6 +176,20 @@ mod completion_sound_tests {
     }
 }
 
+#[cfg(test)]
+mod update_warning_tests {
+    use super::*;
+
+    #[test]
+    fn warns_only_when_an_update_changes_series_or_downgrades() {
+        assert!(update_distance_warning("2.9.0", "2.9.1").is_none());
+        assert!(update_distance_warning("2.8.4", "2.9.0").is_some());
+        assert!(update_distance_warning("2.7.4", "2.9.0").is_some());
+        assert!(update_distance_warning("2.9.2", "2.9.0").is_some());
+        assert!(update_distance_warning("", "2.9.0").is_none());
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct CopyDialog {
     pub id: String,
@@ -203,6 +221,9 @@ pub(super) struct MaintenanceDialog {
     preview: Option<UpdateModPreview>,
     keep: HashSet<String>,
     copy_before: bool,
+    /// Install the target version as a new instance instead of updating this
+    /// one in place. Keeps the current instance playable.
+    as_new: bool,
     error: Option<String>,
 }
 
@@ -229,13 +250,38 @@ enum Work {
         version: String,
         java: String,
         keep: Vec<String>,
+        as_new: bool,
         copy: Option<(String, String)>,
     },
+}
+
+/// Result of one maintenance or preview run, delivered to the UI thread.
+enum WorkResult {
+    Preview(UpdateModPreview),
+    Maintained(MaintainOutcome),
+    Done,
 }
 
 impl MaintenanceDialog {
     pub(super) fn is_analyzing(&self) -> bool {
         self.analyzing
+    }
+}
+
+/// GTNH recommends updating one release series at a time, and a world opened
+/// by a newer pack cannot go back to an older one.
+fn update_distance_warning(current: &str, target: &str) -> Option<&'static str> {
+    match pack_update_distance(current, target) {
+        PackUpdateDistance::NextSeries => Some(
+            "This is a different pack series. GTNH recommends installing a new series as its own instance; the current one stays playable, while a world opened in the new series cannot go back.",
+        ),
+        PackUpdateDistance::SkippedSeries => Some(
+            "GTNH recommends updating one version at a time. Install the release between these two first — a direct jump can break worlds.",
+        ),
+        PackUpdateDistance::Downgrade => Some(
+            "This target is older than the installed version. Worlds opened in a newer pack may not load, so back up before continuing.",
+        ),
+        PackUpdateDistance::SameSeries | PackUpdateDistance::Unknown => None,
     }
 }
 
@@ -353,6 +399,7 @@ impl LauncherRoot {
             preview: None,
             keep: HashSet::new(),
             copy_before: false,
+            as_new: false,
             error: None,
         }));
         self.focused_field = None;
@@ -432,7 +479,9 @@ impl LauncherRoot {
             );
             return;
         }
-        let copy = if d.copy_before {
+        // Copying the whole instance is a reinstall alternative; updates offer
+        // the cheaper new-instance install instead.
+        let copy = if d.copy_before && d.kind == MaintenanceKind::Reinstall {
             let name = self
                 .data
                 .selected_instance(Some(&d.id))
@@ -461,6 +510,7 @@ impl LauncherRoot {
                 version: d.version,
                 java: d.java,
                 keep: d.keep.into_iter().collect(),
+                as_new: d.kind == MaintenanceKind::Update && d.as_new,
                 copy,
             },
             cx,
@@ -833,36 +883,96 @@ impl LauncherRoot {
             }
         }
         if !d.loading && !d.analyzing {
-            let checked = d.copy_before;
-            body = body.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        checkbox(t, &format!("Copy instance before {title}"), checked)
-                            .debug_selector(|| "maintenance-copy-before".into())
-                            .cursor_pointer()
-                            .on_click(cx.listener(
-                                |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                                    if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
-                                        d.copy_before = !d.copy_before;
-                                        cx.notify();
-                                    }
-                                },
-                            )),
-                    )
-                    .child(
+            if d.kind == MaintenanceKind::Update {
+                if let Some(warning) = update_distance_warning(&d.current, &d.version) {
+                    body = body.child(
                         div()
-                            .text_xs()
-                            .text_color(t.muted_foreground())
-                            .child(if checked {
-                                "Runs on a new copy. The original stays intact."
-                            } else {
-                                "Saves, configs, and player data are preserved. A failed update restores the previous instance."
-                            }),
-                    ),
-            );
+                            .flex()
+                            .items_start()
+                            .gap_2()
+                            .debug_selector(|| "maintenance-update-warning".into())
+                            .child(
+                                div()
+                                    .pt(px(1.0))
+                                    .text_color(t.destructive())
+                                    .child(icon("info", 12.0)),
+                            )
+                            .child(div().text_xs().text_color(t.destructive()).child(warning)),
+                    );
+                }
+                let instance_name = self
+                    .data
+                    .selected_instance(Some(&d.id))
+                    .map(|i| i.settings.name.clone())
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or_else(|| d.current.clone());
+                let checked = d.as_new;
+                let helper = if checked {
+                    format!(
+                        "Builds {} in a new instance and copies saves, configs, custom mods, and settings. {instance_name} stays installed.",
+                        d.version
+                    )
+                } else {
+                    "Updates this instance in place. Worlds are backed up first, and a failed update restores the previous instance."
+                        .to_string()
+                };
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            checkbox(t, "Install as a new instance (keeps this one)", checked)
+                                .debug_selector(|| "maintenance-install-as-new".into())
+                                .cursor_pointer()
+                                .on_click(cx.listener(
+                                    |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                        if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
+                                            d.as_new = !d.as_new;
+                                            cx.notify();
+                                        }
+                                    },
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(t.muted_foreground())
+                                .child(helper),
+                        ),
+                );
+            } else {
+                let checked = d.copy_before;
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            checkbox(t, &format!("Copy instance before {title}"), checked)
+                                .debug_selector(|| "maintenance-copy-before".into())
+                                .cursor_pointer()
+                                .on_click(cx.listener(
+                                    |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                        if let Some(Dialog::Maintenance(d)) = &mut v.dialog {
+                                            d.copy_before = !d.copy_before;
+                                            cx.notify();
+                                        }
+                                    },
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(t.muted_foreground())
+                                .child(if checked {
+                                    "Runs on a new copy. The original stays intact."
+                                } else {
+                                    "Saves, configs, and player data are preserved. A failed reinstall restores the previous instance."
+                                }),
+                        ),
+                );
+            }
         }
         if let Some(error) = &d.error {
             body = body.child(
@@ -888,6 +998,8 @@ impl LauncherRoot {
             "Analyzing…"
         } else if d.kind == MaintenanceKind::Update && d.preview.is_none() {
             "Analyze update"
+        } else if d.kind == MaintenanceKind::Update && d.as_new {
+            "Install new instance"
         } else if d.kind == MaintenanceKind::Update {
             "Update pack"
         } else {
@@ -1041,7 +1153,7 @@ impl LauncherRoot {
             Begin(Operation, String, String),
             Progress(PackProgress),
             FinishOne(Operation, String, Option<String>),
-            Finished(Result<Option<UpdateModPreview>, String>),
+            Finished(Result<WorkResult, String>),
         }
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let emit_sender = sender.clone();
@@ -1084,7 +1196,7 @@ impl LauncherRoot {
                             emit,
                         )
                         .await?;
-                        Ok(None)
+                        Ok(WorkResult::Done)
                     }
                     Work::Delete => {
                         industrialis_backend::instance_ops::delete_instance_with_progress(
@@ -1094,23 +1206,24 @@ impl LauncherRoot {
                             delete_cancel,
                         )
                         .await?;
-                        Ok(None)
+                        Ok(WorkResult::Done)
                     }
                     Work::Copy { name, destination } => {
                         copy_instance_with_progress(&paths, &target, &destination, &name, emit)
                             .await?;
-                        Ok(None)
+                        Ok(WorkResult::Done)
                     }
                     Work::Preview { version, java, .. } => {
                         preview_update(&paths, &target, &version, Some(&java), emit)
                             .await
-                            .map(Some)
+                            .map(WorkResult::Preview)
                     }
                     Work::Maintain {
                         kind,
                         version,
                         java,
                         keep,
+                        as_new,
                         copy,
                     } => {
                         let target = if let Some((destination, name)) = copy {
@@ -1141,14 +1254,26 @@ impl LauncherRoot {
                         } else {
                             target
                         };
-                        if kind == MaintenanceKind::Update {
-                            update_instance(&paths, &target, &version, Some(&java), &keep, emit)
-                                .await?;
+                        let outcome = if kind == MaintenanceKind::Update {
+                            if as_new {
+                                install_update_as_new_instance(
+                                    &paths,
+                                    &target,
+                                    &version,
+                                    Some(&java),
+                                    &keep,
+                                    emit,
+                                )
+                                .await?
+                            } else {
+                                update_instance(&paths, &target, &version, Some(&java), &keep, emit)
+                                    .await?
+                            }
                         } else {
                             reinstall_instance(&paths, &target, &version, Some(&java), emit)
-                                .await?;
-                        }
-                        Ok(None)
+                                .await?
+                        };
+                        Ok(WorkResult::Maintained(outcome))
                     }
                 }
             }
@@ -1228,7 +1353,7 @@ impl LauncherRoot {
                                         if d.token == token {
                                             d.analyzing = false;
                                             match result {
-                                                Ok(Some(preview)) => {
+                                                Ok(WorkResult::Preview(preview)) => {
                                                     d.keep = preview
                                                         .custom_mods
                                                         .iter()
@@ -1246,6 +1371,12 @@ impl LauncherRoot {
                                     for target in &reserved {
                                         v.forget_instance_editor(target);
                                     }
+                                    let maintained = match &result {
+                                        Ok(WorkResult::Maintained(outcome)) => {
+                                            Some(outcome.clone())
+                                        }
+                                        _ => None,
+                                    };
                                     match result {
                                         Ok(_) => {
                                             v.data.status = "Instance operation complete".into();
@@ -1253,6 +1384,26 @@ impl LauncherRoot {
                                                 if v.selected_id.as_ref() == Some(&id) {
                                                     v.selected_id = None;
                                                 }
+                                            } else if let Some(outcome) = &maintained {
+                                                let installed = &outcome.instance_id;
+                                                if let Work::Maintain {
+                                                    version,
+                                                    as_new: true,
+                                                    ..
+                                                } = &work
+                                                {
+                                                    v.data.status = format!(
+                                                        "Installed GTNH {version} as a new instance"
+                                                    );
+                                                }
+                                                if let Some(backup) = &outcome.backup {
+                                                    v.data.status = format!(
+                                                        "{}; worlds backed up to {}",
+                                                        v.data.status,
+                                                        backup.display()
+                                                    );
+                                                }
+                                                v.select_instance(installed.clone(), cx);
                                             } else if let Some(target) = reserved.last() {
                                                 v.select_instance(target.clone(), cx);
                                             }
@@ -1279,5 +1430,97 @@ impl LauncherRoot {
             }
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod update_dialog_tests {
+    use super::*;
+    use crate::views::test_support::Fixture;
+
+    fn dialog(current: &str, target: &str, as_new: bool) -> MaintenanceDialog {
+        MaintenanceDialog {
+            token: 1,
+            id: "gtnh".into(),
+            kind: MaintenanceKind::Update,
+            current: current.into(),
+            version: target.into(),
+            java: "java17+".into(),
+            versions: vec![
+                VersionChoice {
+                    name: target.into(),
+                    date: "2026/01/15".into(),
+                    stable: true,
+                    java8: true,
+                    java17: true,
+                },
+                VersionChoice {
+                    name: current.into(),
+                    date: "2025/09/27".into(),
+                    stable: true,
+                    java8: true,
+                    java17: true,
+                },
+            ],
+            search: FieldState::empty(),
+            filter: Default::default(),
+            loading: false,
+            analyzing: false,
+            preview: None,
+            keep: HashSet::new(),
+            copy_before: false,
+            as_new,
+            error: None,
+        }
+    }
+
+    fn show(
+        cx: &mut gpui::TestAppContext,
+        window: gpui::WindowHandle<LauncherRoot>,
+        root: &gpui::Entity<LauncherRoot>,
+        state: MaintenanceDialog,
+    ) {
+        root.update(cx, |v, cx| {
+            v.dialog = Some(Dialog::Maintenance(state));
+            cx.notify();
+        });
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    }
+
+    #[gpui::test]
+    async fn the_new_instance_option_is_shown_and_toggles(cx: &mut gpui::TestAppContext) {
+        let fixture = Fixture::new(&["gtnh"]);
+        let (window, root) = fixture.open(cx, |_| {});
+        show(cx, window, &root, dialog("2.8.4", "2.9.0", false));
+        Fixture::click(cx, window, "maintenance-install-as-new");
+        assert!(root.read_with(cx, |v, _| matches!(
+            &v.dialog,
+            Some(Dialog::Maintenance(d)) if d.as_new
+        )));
+        Fixture::click(cx, window, "maintenance-install-as-new");
+        assert!(root.read_with(cx, |v, _| matches!(
+            &v.dialog,
+            Some(Dialog::Maintenance(d)) if !d.as_new
+        )));
+        fixture.cleanup();
+    }
+
+    #[gpui::test]
+    async fn the_series_warning_appears_only_when_the_series_changes(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let fixture = Fixture::new(&["gtnh"]);
+        let (window, root) = fixture.open(cx, |_| {});
+        for (target, expected) in [("2.9.0", true), ("2.8.5", false)] {
+            show(cx, window, &root, dialog("2.8.4", target, false));
+            let mut visual = gpui::VisualTestContext::from_window(window.into(), cx);
+            assert_eq!(
+                visual.debug_bounds("maintenance-update-warning").is_some(),
+                expected,
+                "unexpected warning state for {target}"
+            );
+        }
+        fixture.cleanup();
     }
 }

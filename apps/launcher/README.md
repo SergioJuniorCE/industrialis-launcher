@@ -208,19 +208,23 @@ minimizes because the pinned adapter does not implement hide. Physical native
 platform acceptance is recorded separately in the tracker.
 
 Copy reports bytes copied, preserves the source, and exclusively claims the
-destination. Update analysis lists pack changes and custom mods to keep. Update
-and reinstall offer an opt-in copy path, with the operation applied to that new
-copy. Target archives are staged outside the installed instance before replacing
-pack files. Player data, settings, icons, and selected persistent mods survive
-replacement; previous recovery data blocks destructive retries. The operation
-reservations are in-process, with pid checks for running games and exclusive
-mkdir for destination collisions; they are not a cross-process maintenance lock.
+destination. Update analysis lists pack changes and custom mods to keep. An
+update either installs the target into a new instance, copying saves, configs,
+custom mods, and settings while the source stays intact, or updates in place
+after backing up `.minecraft/saves` outside the instance. The dialog warns when
+a target changes pack series, skips a series, or downgrades. Reinstall offers an
+opt-in full-instance copy, with the operation applied to that new copy. Target
+archives are staged outside the installed instance before replacing pack files.
+Player data, settings, icons, and selected persistent mods survive replacement;
+previous recovery data blocks destructive retries. The operation reservations are
+in-process, with pid checks for running games and exclusive mkdir for destination
+collisions; they are not a cross-process maintenance lock.
 
 Processes now show background operation history for install, copy, import, update,
 reinstall, and delete, with active-first ordering, transfer progress, operation
 logs, completion/failure states, dismissal, and a toolbar popup. Active installs
-and copies have progress placeholders in the instance grid. Copy-before-update
-records the copy and subsequent update as separate operations. Preview analysis
+and copies have progress placeholders in the instance grid. Copy-before-reinstall
+records the copy and subsequent reinstall as separate operations. Preview analysis
 stays in its dialog. Delete reports incremental progress and supports cancellation;
 it keeps discovery/group metadata for a partially deleted instance, so deletion
 can be retried. Cancellation does not restore already removed files.

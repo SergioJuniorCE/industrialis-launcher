@@ -357,7 +357,7 @@ async fn run_command(command: Command, paths: LauncherPaths) -> Result<(), anyho
             java_type,
             keep_mod,
         } => {
-            install::update_instance(
+            let outcome = install::update_instance(
                 &paths,
                 &id,
                 &pack_version,
@@ -367,13 +367,16 @@ async fn run_command(command: Command, paths: LauncherPaths) -> Result<(), anyho
             )
             .await?;
             println!("updated {id} to {pack_version}");
+            if let Some(backup) = outcome.backup {
+                println!("worlds backed up to {}", backup.display());
+            }
         }
         Command::Reinstall {
             id,
             pack_version,
             java_type,
         } => {
-            install::reinstall_instance(
+            let outcome = install::reinstall_instance(
                 &paths,
                 &id,
                 &pack_version,
@@ -382,6 +385,9 @@ async fn run_command(command: Command, paths: LauncherPaths) -> Result<(), anyho
             )
             .await?;
             println!("reinstalled {id} @ {pack_version}");
+            if let Some(backup) = outcome.backup {
+                println!("worlds backed up to {}", backup.display());
+            }
         }
         Command::DisableMod { id, identity } => {
             industrialis_backend::custom_mods::set_enabled(

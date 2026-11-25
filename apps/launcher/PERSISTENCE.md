@@ -34,6 +34,26 @@ settings record is adopted on the next startup or instance operation.
 `mod_toggles::tests::*` cover the update, reinstall, launch-prep and recovery
 paths.
 
+## Pack updates
+
+Pack updates and clean reinstalls stage the target pack outside the instance,
+move the current instance into a rollback copy, install the fresh pack, restore
+player data, and only then delete the rollback. Any failure or interrupted run
+restores the previous instance on the next startup. A committed update cannot be
+undone, so before the swap the launcher copies `.minecraft/saves` to
+`<data dir>/update-backups/<instance>/<UTC timestamp>-<target version>/` with a
+`manifest.json` recording both pack versions. The two newest backups per
+instance are kept, and deleting an instance removes its backups. Restoring a
+world means copying the backup's `saves` folder back into `.minecraft/saves`.
+
+The update dialog can instead **Install as a new instance (keeps this one)**:
+the target pack is installed into a new instance, the source's saves, configs,
+custom mods, disabled-mod state, group, and launch settings are copied into it,
+and the source instance is never modified. The dialog also warns when a target
+is a different pack series than the installed version, skips a series, or
+downgrades: GTNH recommends updating one release series at a time, and worlds
+opened by a newer pack cannot return to an older one.
+
 Launcher opens its existing `industrialis-launcher` directory and files in place.
 Users must not copy their data, import a profile, or sign in again.
 Windows uses `%APPDATA%/industrialis-launcher`, macOS uses
