@@ -69,7 +69,7 @@ fn channel_switch_notice(
     let target = channel.name();
     if same_version {
         format!(
-            "{} {version} has the same version number as this build. Downloading it replaces this install with the released {target} build.",
+            "{} {version} has the same version number as this build. Downloading it replaces this install with the {target} build.",
             capitalized(channel)
         )
     } else if is_downgrade {
@@ -947,7 +947,7 @@ mod tests {
     fn channel_switch_copy_names_the_same_version_and_downgrade_cases() {
         assert_eq!(
             channel_switch_notice(UpdateChannel::Stable, "0.5.0", true, false, "0.5.0"),
-            "Stable 0.5.0 has the same version number as this build. Downloading it replaces this install with the released stable build."
+            "Stable 0.5.0 has the same version number as this build. Downloading it replaces this install with the stable build."
         );
         assert_eq!(
             channel_switch_notice(UpdateChannel::Stable, "0.4.9", false, true, "0.5.0"),
