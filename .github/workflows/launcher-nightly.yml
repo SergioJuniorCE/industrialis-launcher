@@ -1,0 +1,62 @@
+name: Nightly launcher build
+
+on:
+  schedule:
+    # 09:00 UTC = 02:00 America/Hermosillo (UTC-7, no DST).
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Build even when nothing landed since the last successful nightly"
+        type: boolean
+        default: false
+      version:
+        description: "Override the stamped major.minor.patch (default: apps/launcher/package.json)"
+        required: false
+        default: ""
+
+concurrency:
+  group: launcher-nightly
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      should_build: ${{ steps.gate.outputs.should_build }}
+      version: ${{ steps.version.outputs.version }}
+      artifact_suffix: ${{ steps.version.outputs.artifact_suffix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the nightly gate
+        run: node --test scripts/nightly-gate.test.mjs
+      - name: Decide whether the nightly has anything to build
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GATE_HEAD_SHA: ${{ github.sha }}
+          GATE_FORCE: ${{ inputs.force }}
+        run: sh scripts/nightly-gate.sh
+      - name: Name this nightly
+        id: version
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version }}
+        run: |
+          version="${VERSION_OVERRIDE:-$(node -p "require('./apps/launcher/package.json').version")}"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "artifact_suffix=-nightly-$(date -u +%Y%m%d)-$(git rev-parse --short=7 HEAD)" >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.should_build == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/launcher-build.yml
+    with:
+      version: ${{ needs.gate.outputs.version }}
+      channel: preview
+      artifact_suffix: ${{ needs.gate.outputs.artifact_suffix }}
