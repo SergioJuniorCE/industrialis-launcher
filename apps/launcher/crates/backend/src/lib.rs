@@ -43,6 +43,7 @@ pub mod content;
 mod content_archive;
 pub mod modernity;
 pub mod modrinth;
+pub mod recommended;
 
 pub mod credentials;
 
