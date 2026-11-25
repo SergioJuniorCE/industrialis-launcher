@@ -2,6 +2,7 @@ name: Build and release native launcher
 
 on:
   push:
+    branches: [ci-release-dryrun]
     tags:
       - "launcher-v*"
       - "launcher-preview-v*"
