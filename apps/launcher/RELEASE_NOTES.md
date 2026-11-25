@@ -1,19 +1,23 @@
 <!-- industrialis-launcher-release-v1 -->
 
-# Industrialis Launcher 0.5.0
+# Industrialis Launcher 0.6.0
 
-This release adds a built-in Modrinth mod browser, mod enable/disable toggles that survive updates, and configurable keyboard shortcuts for the first nine library slots. It also stops repeated sign-ins from tripping authentication rate limits. It builds on the 0.4.4 native stable release without changing launcher data or user settings.
+This release adds world backups for in-place pack updates, a Recommended add-ons tab for GT New Horizons, and reusable config profiles.
 
-## Features
+## Pack updates and world backups
 
-- A new **Browse mods** tab in an instance's Add-ons searches Modrinth for mods compatible with that instance's game version and loader. A two-pane view shows project details, links and available versions, and each install resolves required dependencies, validates conflicts and verifies downloads before applying the set atomically with rollback.
-- Pack mods can now be enabled or disabled from the Mods tab. Disabled mods are renamed to `.disabled` on disk and remain disabled across pack updates, reinstalls and launches.
-- Preferences → Shortcuts binds configurable keys to the first nine library slots. Shortcut hints appear on instance cards, and shortcuts can be changed, cleared or reset; they work while the launcher is focused and are ignored in dialogs.
+- In-place pack updates back up your worlds before replacing the instance. The launcher keeps the two most recent update backups per instance and shows the backup path in the operation log.
+- Select **Install as a new instance** in the update dialog to keep playing the original instance on its current pack version. The new instance carries over your saves, configs, selected custom mods, and launch settings.
+- The update dialog warns when you change pack series and explains the recommended upgrade path.
 
-## Fixes
+## Recommended add-ons
 
-- Launching a game reuses an existing game token when at least one hour of validity remains. This avoids a fresh sign-in on every launch and the HTTP 429 rate limits that came with it.
-- The **Launcher releases** button now opens the releases page directly. The previous search-filtered URL showed no releases.
+- Open **Add-ons → Recommended** to browse GTNotLeisure, GTNHRates, and Bandit. The tab shows which add-ons are available for your pack series and installs verified releases with any required companion libraries.
+
+## Config profiles
+
+- Create and edit reusable sets of config overrides in **Settings → Config profiles**. Choose a profile when creating an instance or apply one from an existing instance’s settings while the game is closed.
+- The included **GTNH quiet defaults** profile adjusts pollution, underground dirt and gravel generation, cave generation, and chunk claiming. The launcher reports any config files or keys it skipped.
 
 ## Downloads
 
