@@ -1,9 +1,9 @@
 use super::LauncherRoot;
 use crate::{
     state::format_bytes,
-    ui::{btn, card, ButtonVariant},
+    ui::{btn, card, section_title, tint, ButtonVariant},
 };
-use gpui::{div, prelude::*, Context, Div, PathPromptOptions};
+use gpui::{div, prelude::*, px, Context, Div, PathPromptOptions};
 use industrialis_backend::{
     content::{self, ContentEntry, ContentKind},
     modernity::{self, ReleaseAsset, ReleaseCatalog},
@@ -29,6 +29,7 @@ pub(super) struct ContentUi {
 #[derive(Default)]
 struct RecommendedState {
     plans: Vec<Result<Plan, String>>,
+    selected: usize,
     installed: Vec<String>,
     loading: bool,
     loaded: bool,
@@ -266,152 +267,327 @@ impl LauncherRoot {
         let plans = state.plans.clone();
         let installed = state.installed.clone();
         let error = state.error.clone();
+        let selected = state.selected.min(plans.len().saturating_sub(1));
         let refresh = id.to_string();
-        let mut body = div()
-            .id("recommended-add-ons")
+        let theme = &self.theme;
+        let mut list = div()
+            .id("recommended-list")
             .flex_1()
+            .min_w_0()
             .min_h_0()
             .overflow_y_scroll()
             .flex()
-            .flex_col()
-            .gap_2()
-            .p_3()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_sm().child("Recommended add-ons"))
-                    .child(div().flex_1())
-                    .child(
-                        btn(&self.theme, "Refresh", ButtonVariant::Ghost)
-                            .debug_selector(|| "recommended-refresh".into())
-                            .tab_stop(!loading)
-                            .when(loading, |b| b.opacity(0.5))
-                            .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                                v.reload_recommended(refresh.clone(), cx)
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(self.theme.muted_foreground())
-                    .child("Community add-ons this pack does not ship. Each installs its own GitHub release and the libraries it needs, kept in the persistent overlay."),
-            );
-        if let Some(error) = error {
-            body = body.child(div().text_color(self.theme.destructive()).child(error));
-        }
+            .flex_col();
         if loading && plans.is_empty() {
-            body = body.child(
+            list = list.child(
                 div()
-                    .text_color(self.theme.muted_foreground())
+                    .p_4()
+                    .text_color(theme.muted_foreground())
                     .child("Loading releases…"),
             );
         }
-        let mut cards = div().flex().flex_col().gap_2();
-        for (addon, plan) in recommended::CATALOG.iter().zip(plans.iter()) {
-            let Ok(plan) = plan else {
-                cards = cards.child(
-                    card(&self.theme)
-                        .debug_selector(move || format!("recommended-card:{}", addon.name))
-                        .flex_shrink_0()
-                        .p_3()
-                        .child(addon.name)
-                        .child(
-                            div()
-                                .text_color(self.theme.destructive())
-                                .child(plan.as_ref().err().cloned().unwrap_or_default()),
-                        ),
-                );
-                continue;
-            };
-            let all_installed = plan
-                .assets
-                .iter()
-                .all(|asset| installed.contains(&asset.name.to_lowercase()));
-            let primary = plan.mod_asset();
-            let primary_installed = installed.contains(&primary.name.to_lowercase());
-            let other_version = !primary_installed
-                && installed
-                    .iter()
-                    .any(|name| recommended::same_project(name, &primary.name));
-            let disabled = all_installed || other_version || busy;
-            let label = if all_installed {
-                "Installed"
-            } else if other_version {
-                "Other version installed"
-            } else if busy {
-                "Installing…"
-            } else {
-                "Install"
-            };
-            let page = plan.page.clone();
-            let selector = addon.name.to_string();
+        for (index, (addon, plan)) in recommended::CATALOG.iter().zip(plans.iter()).enumerate() {
+            let chosen = index == selected;
+            let offered = plan.is_ok();
             let target = id.to_string();
-            let install_plan = plan.clone();
-            cards = cards.child(
-                card(&self.theme)
-                    .id(format!("recommended:{}", addon.name))
-                    .debug_selector(move || format!("recommended-card:{}", addon.name))
-                    .flex_shrink_0()
+            let selector = addon.name.to_string();
+            let monogram = addon
+                .name
+                .chars()
+                .next()
+                .unwrap_or('?')
+                .to_uppercase()
+                .to_string();
+            let description = if offered {
+                addon.description.to_string()
+            } else {
+                "Not offered for this instance".to_string()
+            };
+            list = list.child(
+                div()
+                    .id(format!("recommended-row:{}", addon.name))
+                    .debug_selector(move || format!("recommended-row:{selector}"))
                     .flex()
-                    .flex_col()
-                    .gap_1()
-                    .p_3()
+                    .items_center()
+                    .gap_3()
+                    .px_4()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(tint(theme.border(), 0.45))
+                    .when(chosen, |row| row.bg(tint(theme.primary(), 0.16)))
+                    .when(!offered, |row| row.opacity(0.72))
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        v.content_ui
+                            .recommended
+                            .entry(target.clone())
+                            .or_default()
+                            .selected = index;
+                        cx.notify();
+                    }))
                     .child(
                         div()
+                            .size(px(36.0))
+                            .flex_shrink_0()
+                            .rounded(px(9.0))
+                            .bg(tint(theme.primary(), 0.24))
                             .flex()
                             .items_center()
-                            .gap_2()
-                            .child(div().child(addon.name))
-                            .child(div().flex_1())
-                            .child(
-                                btn(&self.theme, "Releases", ButtonVariant::Ghost)
-                                    .on_click(move |_: &gpui::ClickEvent, _, cx| {
-                                        cx.open_url(&page)
-                                    }),
-                            ),
+                            .justify_center()
+                            .child(div().text_color(theme.primary()).child(monogram)),
                     )
                     .child(
                         div()
-                            .text_color(self.theme.muted_foreground())
-                            .child(addon.description),
-                    )
-                    .when(!plan.companions().is_empty(), |d| {
-                        d.child(
-                            div()
-                                .text_xs()
-                                .text_color(self.theme.muted_foreground())
-                                .child(format!(
-                                    "Also installs {}",
-                                    plan.companions()
-                                        .iter()
-                                        .map(|asset| {
-                                            asset.repo.rsplit('/').next().unwrap_or(asset.repo)
-                                        })
-                                        .collect::<Vec<_>>()
-                                        .join(", ")
-                                )),
-                        )
-                    })
-                    .child(
-                        btn(&self.theme, label, ButtonVariant::Secondary)
-                            .debug_selector(move || format!("recommended-install:{selector}"))
-                            .tab_stop(!disabled)
-                            .when(disabled, |b| b.opacity(0.5))
-                            .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                                if !disabled {
-                                    v.install_recommended(target.clone(), install_plan.clone(), cx);
-                                }
-                            })),
+                            .flex_1()
+                            .min_w_0()
+                            .child(div().child(addon.name))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground())
+                                    .child(description),
+                            ),
                     ),
+            );
+        }
+        let mut detail = div()
+            .w(px(420.0))
+            .flex_shrink_0()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .border_l_1()
+            .border_color(theme.border());
+        let mut install: Option<(String, Plan)> = None;
+        let mut install_label = String::new();
+        let mut install_disabled = true;
+        let mut status = error.clone().unwrap_or_default();
+        let mut status_danger = error.is_some();
+        if let (Some(addon), Some(plan)) = (recommended::CATALOG.get(selected), plans.get(selected)) {
+            match plan {
+                Ok(plan) => {
+                    let primary = plan.mod_asset();
+                    let primary_installed = installed.contains(&primary.name.to_lowercase());
+                    let all_installed = plan
+                        .assets
+                        .iter()
+                        .all(|asset| installed.contains(&asset.name.to_lowercase()));
+                    let other_version = !primary_installed
+                        && installed
+                            .iter()
+                            .any(|name| recommended::same_project(name, &primary.name));
+                    install_disabled = all_installed || other_version || busy;
+                    install_label = if all_installed {
+                        "Installed".into()
+                    } else if other_version {
+                        "Other version installed".into()
+                    } else if busy {
+                        "Installing…".into()
+                    } else {
+                        "Install".into()
+                    };
+                    if !status_danger {
+                        status = if other_version {
+                            "Another version is already installed in this instance.".into()
+                        } else if all_installed {
+                            "Installed in this instance. Restart the game to load it.".into()
+                        } else {
+                            format!("Pinned for GTNH {} · {}", plan.series, primary.release)
+                        };
+                    }
+                    let companions: Vec<String> = plan
+                        .companions()
+                        .iter()
+                        .map(|asset| asset.name.clone())
+                        .collect();
+                    let mut assets = div().flex().flex_col().gap_1();
+                    for asset in &plan.assets {
+                        assets = assets.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground())
+                                        .child(asset.name.clone()),
+                                )
+                                .child(div().flex_1())
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground())
+                                        .child(format_bytes(asset.size)),
+                                ),
+                        );
+                    }
+                    let page = plan.page.clone();
+                    detail = detail
+                        .child(
+                            div()
+                                .px_4()
+                                .py_3()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .border_b_1()
+                                .border_color(theme.border())
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(div().text_lg().child(addon.name))
+                                        .child(div().flex_1())
+                                        .child(
+                                            btn(theme, "Releases", ButtonVariant::Ghost).on_click(
+                                                move |_: &gpui::ClickEvent, _, cx| {
+                                                    cx.open_url(&page)
+                                                },
+                                            ),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground())
+                                        .child(addon.repo),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("recommended-detail")
+                                .flex_1()
+                                .min_h_0()
+                                .overflow_y_scroll()
+                                .p_4()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(section_title(theme, "About"))
+                                .child(addon.description)
+                                .when(!companions.is_empty(), |body| {
+                                    body.child(section_title(theme, "Also installs"))
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground())
+                                                .child(companions.join(", ")),
+                                        )
+                                })
+                                .child(section_title(theme, "Release files"))
+                                .child(assets),
+                        );
+                    install = Some((id.to_string(), plan.clone()));
+                }
+                Err(reason) => {
+                    status = reason.clone();
+                    status_danger = true;
+                    let page = format!("https://github.com/{}/releases", addon.repo);
+                    detail = detail
+                        .child(
+                            div()
+                                .px_4()
+                                .py_3()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .border_b_1()
+                                .border_color(theme.border())
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(div().text_lg().child(addon.name))
+                                        .child(div().flex_1())
+                                        .child(
+                                            btn(theme, "Releases", ButtonVariant::Ghost).on_click(
+                                                move |_: &gpui::ClickEvent, _, cx| {
+                                                    cx.open_url(&page)
+                                                },
+                                            ),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground())
+                                        .child(addon.repo),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .p_4()
+                                .child(div().text_color(theme.destructive()).child(reason.clone())),
+                        );
+                }
+            }
+        } else {
+            detail = detail.child(
+                div()
+                    .flex_1()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(theme.muted_foreground())
+                    .child(if loading {
+                        "Loading releases…"
+                    } else {
+                        "No recommended add-ons for this instance."
+                    }),
+            );
+        }
+        let mut bar = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_4()
+            .py_2()
+            .border_t_1()
+            .border_color(theme.border())
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_xs()
+                    .text_color(if status_danger {
+                        theme.destructive()
+                    } else {
+                        theme.muted_foreground()
+                    })
+                    .child(status),
+            )
+            .child(
+                btn(theme, "Refresh", ButtonVariant::Ghost)
+                    .debug_selector(|| "recommended-refresh".into())
+                    .tab_stop(!loading)
+                    .when(loading, |b| b.opacity(0.5))
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        v.reload_recommended(refresh.clone(), cx)
+                    })),
+            );
+        if let Some((target, plan)) = install {
+            let name = plan.addon.name.to_string();
+            bar = bar.child(
+                btn(theme, &install_label, ButtonVariant::Secondary)
+                    .debug_selector(move || format!("recommended-install:{name}"))
+                    .tab_stop(!install_disabled)
+                    .when(install_disabled, |b| b.opacity(0.5))
+                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                        if !install_disabled {
+                            v.install_recommended(target.clone(), plan.clone(), cx);
+                        }
+                    })),
             );
         }
         div()
             .flex_1()
             .min_h_0()
-            .child(body.child(cards).size_full())
+            .flex()
+            .flex_col()
+            .child(div().flex_1().min_h_0().flex().child(list).child(detail))
+            .child(bar)
     }
 
     fn reload_resources(&mut self, id: String, cx: &mut Context<Self>) {
@@ -886,7 +1062,9 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn recommended_tab_renders_cards_and_install_buttons(cx: &mut TestAppContext) {
+    async fn recommended_tab_switches_the_detail_pane_and_installs_the_selection(
+        cx: &mut TestAppContext,
+    ) {
         let fixture = Fixture::new(&["pack"]);
         let (window, _root) =
             fixture.open_sized(cx, gpui::size(gpui::px(1600.), gpui::px(1100.)), |v| {
@@ -909,20 +1087,36 @@ mod tests {
             });
         cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
             .unwrap();
-        let mut visual = gpui::VisualTestContext::from_window(window.into(), cx);
-        for selector in [
-            "recommended-card:GTNotLeisure",
-            "recommended-card:GTNHRates",
-            "recommended-card:Bandit",
-            "recommended-install:GTNotLeisure",
-            "recommended-install:GTNHRates",
-        ] {
-            assert!(
-                visual.debug_bounds(selector).is_some(),
-                "{selector} did not render"
-            );
+        {
+            let mut visual = gpui::VisualTestContext::from_window(window.into(), cx);
+            for selector in [
+                "recommended-row:GTNotLeisure",
+                "recommended-row:GTNHRates",
+                "recommended-row:Bandit",
+            ] {
+                assert!(
+                    visual.debug_bounds(selector).is_some(),
+                    "{selector} did not render"
+                );
+            }
+            assert!(visual.debug_bounds("recommended-install:GTNotLeisure").is_some());
+            assert!(visual.debug_bounds("recommended-install:GTNHRates").is_none());
         }
-        assert!(visual.debug_bounds("recommended-install:Bandit").is_none());
+        Fixture::click(cx, window, "recommended-row:GTNHRates");
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        {
+            let mut visual = gpui::VisualTestContext::from_window(window.into(), cx);
+            assert!(visual.debug_bounds("recommended-install:GTNHRates").is_some());
+            assert!(visual.debug_bounds("recommended-install:GTNotLeisure").is_none());
+        }
+        Fixture::click(cx, window, "recommended-row:Bandit");
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        {
+            let mut visual = gpui::VisualTestContext::from_window(window.into(), cx);
+            assert!(visual.debug_bounds("recommended-install:GTNHRates").is_none());
+        }
         fixture.cleanup();
     }
 }
