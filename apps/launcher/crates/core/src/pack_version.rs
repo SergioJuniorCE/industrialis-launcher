@@ -127,6 +127,62 @@ pub fn get_latest_pack_version(
     keys.into_iter().next().cloned()
 }
 
+/// How far a target pack version moves from the installed one. Callers use
+/// this to warn before an in-place update, since the pack only supports
+/// stepping one release series at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackUpdateDistance {
+    /// Both versions belong to the same release series (2.9.0 → 2.9.1).
+    SameSeries,
+    /// One series forward (2.8.4 → 2.9.0).
+    NextSeries,
+    /// More than one series forward (2.7.x → 2.9.0).
+    SkippedSeries,
+    /// The target is older than the installed version.
+    Downgrade,
+    /// A version could not be parsed; no warning is derived.
+    Unknown,
+}
+
+/// Parse the leading `major.minor[.patch]` of a pack version, ignoring any
+/// pre-release suffix such as `-RC-2` or `-beta-1`. Missing patch is 0.
+pub fn pack_version_numbers(version: &str) -> Option<(u64, u64, u64)> {
+    let core = version.trim().split(['-', '+']).next()?.trim();
+    let mut parts = core.split('.');
+    let major = parts.next()?.parse::<u64>().ok()?;
+    let minor = parts.next()?.parse::<u64>().ok()?;
+    let patch = parts
+        .next()
+        .map(str::parse::<u64>)
+        .transpose()
+        .ok()?
+        .unwrap_or(0);
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((major, minor, patch))
+}
+
+pub fn pack_update_distance(current: &str, target: &str) -> PackUpdateDistance {
+    let (
+        Some((current_major, current_minor, current_patch)),
+        Some((target_major, target_minor, target_patch)),
+    ) = (pack_version_numbers(current), pack_version_numbers(target))
+    else {
+        return PackUpdateDistance::Unknown;
+    };
+    if (target_major, target_minor, target_patch) < (current_major, current_minor, current_patch) {
+        return PackUpdateDistance::Downgrade;
+    }
+    if target_major == current_major && target_minor == current_minor {
+        return PackUpdateDistance::SameSeries;
+    }
+    if target_major == current_major && target_minor == current_minor + 1 {
+        return PackUpdateDistance::NextSeries;
+    }
+    PackUpdateDistance::SkippedSeries
+}
+
 pub fn get_pack_version_info(
     current_version: &str,
     versions: Option<&HashMap<String, PackVersionMeta>>,
@@ -236,5 +292,28 @@ mod tests {
             get_latest_pack_version(Some(&versions)).as_deref(),
             Some("2.8.10")
         );
+    }
+
+    #[test]
+    fn parses_series_and_prerelease_suffixes() {
+        assert_eq!(pack_version_numbers("2.8.4"), Some((2, 8, 4)));
+        assert_eq!(pack_version_numbers("2.9.0-RC-2"), Some((2, 9, 0)));
+        assert_eq!(pack_version_numbers("2.9"), Some((2, 9, 0)));
+        assert_eq!(pack_version_numbers("nightly"), None);
+        assert_eq!(pack_version_numbers(""), None);
+    }
+
+    #[test]
+    fn measures_how_far_an_update_moves() {
+        use PackUpdateDistance::*;
+        assert_eq!(pack_update_distance("2.9.0", "2.9.1"), SameSeries);
+        assert_eq!(pack_update_distance("2.9.0-RC-2", "2.9.0"), SameSeries);
+        assert_eq!(pack_update_distance("2.8.4", "2.9.0"), NextSeries);
+        assert_eq!(pack_update_distance("2.7.4", "2.9.0"), SkippedSeries);
+        assert_eq!(pack_update_distance("2.9.0", "3.0.0"), SkippedSeries);
+        assert_eq!(pack_update_distance("2.9.2", "2.9.0"), Downgrade);
+        assert_eq!(pack_update_distance("2.9.0", "2.8.4"), Downgrade);
+        assert_eq!(pack_update_distance("", "2.9.0"), Unknown);
+        assert_eq!(pack_update_distance("2.9.0", "nightly"), Unknown);
     }
 }

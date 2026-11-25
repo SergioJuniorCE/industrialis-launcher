@@ -51,6 +51,9 @@ pub async fn delete_instance_with_progress(paths:&LauncherPaths,raw_id:&str,emit
         if cancel.load(std::sync::atomic::Ordering::Acquire){anyhow::bail!(DELETE_CANCELLED);}
         // Commit boundary: finish metadata/group cleanup even if Cancel arrives.
         remove_if_exists(&instance).await?;
+        // Pre-update world backups belong to the deleted instance; cleanup is
+        // best effort so a locked backup cannot fail a completed deletion.
+        let _ = remove_if_exists(&crate::install::update_backups_dir(&paths, &id)).await;
         let known=known_instance_ids(&paths).await?;
         remove_instance_from_groups(&paths,&id,&known).await?;
         ctx.progress("done",1.0,|_|{});Ok::<_,anyhow::Error>(())

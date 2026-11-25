@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use industrialis_core::instance_settings::InstanceSettings;
 
-use crate::fs_utils::{dir_size, exists, remove_if_exists, write_json};
+use crate::fs_utils::{copy_tree_with_progress, dir_size, exists, remove_if_exists, write_json};
 use crate::groups::set_instance_group;
-use crate::icons::install_default_instance_icon;
+use crate::icons::{install_default_instance_icon, resolve_icon_path};
 use crate::instances::{known_instance_ids, load_instances};
 use crate::launch::is_already_running;
 use crate::migration::{
@@ -27,9 +27,9 @@ use crate::pack_files::{
 };
 use crate::pack_prep::{
     apply_persistent_custom_mods_excluding, apply_persistent_minecraft, flatten_nested_pack,
-    persistent_custom_mods_dir, prepare_instance_configs,
+    minecraft_game_dir, persistent_custom_mods_dir, prepare_instance_configs,
 };
-use crate::paths::{validate_instance_id, LauncherPaths};
+use crate::paths::{sanitize_name, validate_instance_id, LauncherPaths};
 use crate::settings::{load_instance_settings, save_instance_settings};
 
 /// Mirrors `saveAndRefreshSize`.
@@ -93,6 +93,162 @@ fn progress_ctx(emit: crate::pack_files::EmitProgress, operation: &str, id: &str
 }
 
 const MAINTENANCE_ROLLBACK_DIR: &str = "maintenance-rollback";
+
+/// What a pack update or reinstall actually changed on disk.
+#[derive(Debug, Clone)]
+pub struct MaintainOutcome {
+    /// The installed instance. A new-instance update reports the new id.
+    pub instance_id: String,
+    /// Pre-update world backup, when worlds existed and one was written.
+    pub backup: Option<PathBuf>,
+}
+
+const UPDATE_BACKUPS_DIR: &str = "update-backups";
+const UPDATE_BACKUP_KEEP: usize = 2;
+
+/// Directory holding pre-update world backups for one instance. Backups live
+/// outside the instance so the update swap cannot move or delete them.
+pub fn update_backups_dir(paths: &LauncherPaths, id: &str) -> PathBuf {
+    paths.base().join(UPDATE_BACKUPS_DIR).join(id)
+}
+
+/// Formats `seconds` since the Unix epoch as `YYYY-MM-DD_HHMM` in UTC.
+fn utc_stamp(seconds: u64) -> String {
+    let days = (seconds / 86_400) as i64;
+    let rem = seconds % 86_400;
+    let (year, month, day) = civil_from_days(days);
+    format!(
+        "{year:04}-{month:02}-{day:02}_{:02}{:02}",
+        rem / 3600,
+        (rem % 3600) / 60
+    )
+}
+
+/// Howard Hinnant's `civil_from_days`: days since 1970-01-01 → (y, m, d).
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+    (if month <= 2 { y + 1 } else { y }, month, day)
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Copy `.minecraft/saves` aside before an in-place update replaces the
+/// instance. The pack cannot be rolled back once an update commits, and a
+/// newer pack version can upgrade or damage a world, so the copy is the only
+/// way back to the pre-update world state.
+async fn backup_worlds_before_update(
+    paths: &LauncherPaths,
+    id: &str,
+    from_version: &str,
+    to_version: &str,
+    ctx: &ProgressCtx,
+    stage: &str,
+) -> Result<Option<PathBuf>, anyhow::Error> {
+    let instance = paths.instance_dir(id)?;
+    let saves = minecraft_game_dir(&instance).join("saves");
+    if !exists(&saves).await {
+        return Ok(None);
+    }
+    let mut entries = tokio::fs::read_dir(&saves)
+        .await
+        .context("Could not read the instance's saves directory")?;
+    if entries.next_entry().await?.is_none() {
+        return Ok(None);
+    }
+    ctx.progress(stage, 0.01, |p| {
+        p.log_line = Some("Backing up worlds before the update…".to_string())
+    });
+    let root = update_backups_dir(paths, id);
+    tokio::fs::create_dir_all(&root).await?;
+    let stamp = utc_stamp(now_secs());
+    let base = format!("{stamp}-{}", sanitize_name(to_version));
+    let mut name = base.clone();
+    let mut counter = 1;
+    while tokio::fs::try_exists(root.join(&name))
+        .await
+        .unwrap_or(false)
+    {
+        counter += 1;
+        name = format!("{base}-{counter}");
+    }
+    let partial = root.join(format!(".{name}.partial"));
+    remove_if_exists(&partial).await?;
+    let destination = root.join(&name);
+    let result = async {
+        let stage_line = stage.to_string();
+        let progress_ctx = ctx.clone();
+        copy_tree_with_progress(&saves, &partial.join("saves"), move |copied, total| {
+            progress_ctx.progress(&stage_line, 0.01, |p| {
+                p.downloaded_mb = Some(copied as f64 / 1_048_576.0);
+                p.total_mb = Some(total as f64 / 1_048_576.0);
+            });
+        })
+        .await?;
+        write_json(
+            &partial.join("manifest.json"),
+            &serde_json::json!({
+                "format": 1,
+                "instance": id,
+                "from_version": from_version,
+                "to_version": to_version,
+                "created": utc_stamp(now_secs()),
+            }),
+        )
+        .await?;
+        tokio::fs::rename(&partial, &destination).await?;
+        Ok::<(), anyhow::Error>(())
+    }
+    .await;
+    if let Err(error) = result {
+        let _ = remove_if_exists(&partial).await;
+        return Err(error.context("Could not back up worlds before the update"));
+    }
+    prune_update_backups(&root).await;
+    ctx.progress(stage, 0.015, |p| {
+        p.log_line = Some(format!("Worlds backed up to {}", destination.display()))
+    });
+    Ok(Some(destination))
+}
+
+/// Keep the newest [`UPDATE_BACKUP_KEEP`] backups. Only complete backup
+/// directories carrying a manifest are removed, so this never touches an
+/// interrupted copy or an unrelated folder.
+async fn prune_update_backups(root: &Path) {
+    let Ok(mut entries) = tokio::fs::read_dir(root).await else {
+        return;
+    };
+    let mut complete = Vec::new();
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        if !tokio::fs::try_exists(entry.path().join("manifest.json"))
+            .await
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        complete.push((name, entry.path()));
+    }
+    complete.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, stale) in complete.into_iter().skip(UPDATE_BACKUP_KEEP) {
+        let _ = remove_if_exists(&stale).await;
+    }
+}
 
 fn rollback_root(paths: &LauncherPaths) -> PathBuf {
     paths.base().join(MAINTENANCE_ROLLBACK_DIR)
@@ -372,7 +528,7 @@ pub async fn update_instance(
     java_type: Option<&str>,
     keep_mod_identities: &[String],
     emit: crate::pack_files::EmitProgress,
-) -> Result<(), anyhow::Error> {
+) -> Result<MaintainOutcome, anyhow::Error> {
     let id = validate_instance_id(raw_id)?;
     let _lease = crate::instance_guard::reserve_instances(paths, &[&id])?;
     recover_interrupted_update(paths, &id).await?;
@@ -384,7 +540,7 @@ pub async fn update_instance(
     let settings = load_instance_settings(paths, &id).await?;
     let java_type = java_type.unwrap_or(&settings.pack_java_type).to_string();
     let keep: HashSet<String> = keep_mod_identities.iter().cloned().collect();
-    reinstall_core(
+    let backup = reinstall_core(
         paths,
         &id,
         pack_version,
@@ -393,7 +549,11 @@ pub async fn update_instance(
         "update-pack",
         emit,
     )
-    .await
+    .await?;
+    Ok(MaintainOutcome {
+        instance_id: id,
+        backup,
+    })
 }
 
 /// Mirrors `reinstallInstance`.
@@ -403,7 +563,7 @@ pub async fn reinstall_instance(
     pack_version: &str,
     java_type: Option<&str>,
     emit: crate::pack_files::EmitProgress,
-) -> Result<(), anyhow::Error> {
+) -> Result<MaintainOutcome, anyhow::Error> {
     let id = validate_instance_id(raw_id)?;
     let _lease = crate::instance_guard::reserve_instances(paths, &[&id])?;
     recover_interrupted_update(paths, &id).await?;
@@ -414,7 +574,7 @@ pub async fn reinstall_instance(
     crate::minecraft_files::stop_instance_watches(paths, &id).await?;
     let settings = load_instance_settings(paths, &id).await?;
     let java_type = java_type.unwrap_or(&settings.pack_java_type).to_string();
-    reinstall_core(
+    let backup = reinstall_core(
         paths,
         &id,
         pack_version,
@@ -423,7 +583,11 @@ pub async fn reinstall_instance(
         "reinstall",
         emit,
     )
-    .await
+    .await?;
+    Ok(MaintainOutcome {
+        instance_id: id,
+        backup,
+    })
 }
 
 async fn reinstall_core(
@@ -434,7 +598,7 @@ async fn reinstall_core(
     keep_mods: Option<&HashSet<String>>,
     operation: &str,
     emit: crate::pack_files::EmitProgress,
-) -> Result<(), anyhow::Error> {
+) -> Result<Option<PathBuf>, anyhow::Error> {
     let known = known_instance_ids(paths).await?;
     if !known.contains(id) {
         anyhow::bail!("instance not found");
@@ -487,7 +651,7 @@ async fn apply_reinstall_staging(
     operation: &str,
     ctx: &ProgressCtx,
     staging: &Path,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<PathBuf>> {
     let instance = paths.instance_dir(id)?;
     let preserve = instance.join(PRESERVE_DIR_NAME);
     // Validate before touching the installed instance.
@@ -504,8 +668,8 @@ async fn apply_reinstall_staging(
     }
     recover_interrupted_update(paths, id).await?;
     let previous_settings = load_instance_settings(paths, id).await?;
-    let previous_pack =
-        if operation == "update-pack" && !previous_settings.pack_version.is_empty() {
+    let previous_pack = if operation == "update-pack" && !previous_settings.pack_version.is_empty()
+    {
             find_cached_pack(paths, &previous_settings.pack_version, java_type).await
         } else {
             None
@@ -516,6 +680,17 @@ async fn apply_reinstall_staging(
     } else {
         "reinstalling"
     };
+    // A committed update cannot be rolled back, so keep a copy of the worlds
+    // outside the instance before the swap replaces them.
+    let backup = backup_worlds_before_update(
+        paths,
+        id,
+        &previous_settings.pack_version,
+        pack_version,
+        ctx,
+        stage,
+    )
+    .await?;
     // The old instance becomes the rollback copy. Nothing is deleted until the
     // new instance has been installed, restored, and saved.
     ctx.progress(stage, 0.02, |p| {
@@ -618,7 +793,7 @@ async fn apply_reinstall_staging(
                 "Clean reinstall complete"
             };
             ctx.progress("done", 1.0, |p| p.log_line = Some(done_line.to_string()));
-            Ok(())
+            Ok(backup)
         }
         Err(error) => match rollback.restore().await {
             Ok(()) => Err(error),
@@ -627,6 +802,231 @@ async fn apply_reinstall_staging(
             ))),
         },
     }
+}
+
+/// Install a pack version into a brand-new instance while carrying the source
+/// instance's saves, settings, and add-ons into it. The source instance is
+/// only read, so a pack series change leaves the previous version playable.
+pub async fn install_update_as_new_instance(
+    paths: &LauncherPaths,
+    raw_id: &str,
+    pack_version: &str,
+    java_type: Option<&str>,
+    keep_mod_identities: &[String],
+    emit: crate::pack_files::EmitProgress,
+) -> Result<MaintainOutcome, anyhow::Error> {
+    let source_id = validate_instance_id(raw_id)?;
+    recover_interrupted_update(paths, &source_id).await?;
+    crate::mod_toggles::recover_interrupted_disables(paths, &source_id).await?;
+    if is_already_running(paths, &source_id).await? {
+        anyhow::bail!("cannot install a new instance while the source instance is running");
+    }
+    let known = known_instance_ids(paths).await?;
+    if !known.contains(&source_id) {
+        anyhow::bail!("instance not found");
+    }
+    let source_settings = load_instance_settings(paths, &source_id).await?;
+    let java_type = java_type
+        .unwrap_or(&source_settings.pack_java_type)
+        .to_string();
+    let (new_id, new_name) =
+        unused_update_instance(paths, &source_settings, &source_id, pack_version, &known).await?;
+    let _lease = crate::instance_guard::reserve_instances(paths, &[&source_id, &new_id])?;
+    tokio::fs::create_dir_all(paths.instances_dir()).await?;
+    let instance = paths.instance_dir(&new_id)?;
+    tokio::fs::create_dir(&instance)
+        .await
+        .map_err(|e| anyhow::anyhow!("Cannot create the new instance directory: {e}"))?;
+    // Progress belongs to the source instance: that is the operation the UI
+    // started and the only id it knows before this call returns.
+    let ctx = progress_ctx(emit, "update-pack", &source_id);
+    let staging_parent = paths.base().join("maintenance-staging").join(&new_id);
+    let result = async {
+        tokio::fs::create_dir_all(&staging_parent).await?;
+        let staging = download_and_extract_to_staging(
+            paths,
+            &ctx,
+            pack_version,
+            &java_type,
+            &staging_parent,
+            "update-pack",
+        )
+        .await?;
+        let applied = apply_new_instance_staging(
+            paths,
+            &source_id,
+            &new_id,
+            &new_name,
+            pack_version,
+            &java_type,
+            keep_mod_identities,
+            &ctx,
+            &staging,
+        )
+        .await;
+        if applied.is_ok() {
+            // Cleanup is best effort: a locked staging file must not undo a
+            // fully installed instance.
+            let _ = remove_if_exists(&staging_parent).await;
+        }
+        applied
+    }
+    .await;
+    if let Err(error) = result {
+        let _ = remove_if_exists(&instance).await;
+        let _ = remove_if_exists(&staging_parent).await;
+        return Err(error);
+    }
+    Ok(MaintainOutcome {
+        instance_id: new_id,
+        backup: None,
+    })
+}
+
+/// Derive a display name and unused instance id for the new-version instance:
+/// `GTNH 2.8.4` becomes `GTNH 2.9.0` when the name already carries the old
+/// version, otherwise the new version is appended.
+async fn unused_update_instance(
+    paths: &LauncherPaths,
+    source_settings: &InstanceSettings,
+    source_id: &str,
+    pack_version: &str,
+    known: &HashSet<String>,
+) -> Result<(String, String), anyhow::Error> {
+    let trimmed = source_settings.name.trim();
+    let source_name = if trimmed.is_empty() {
+        source_id
+    } else {
+        trimmed
+    };
+    let current = source_settings.pack_version.trim();
+    let new_name = if !current.is_empty() && source_name.contains(current) {
+        source_name.replace(current, pack_version)
+    } else {
+        format!("{source_name} {pack_version}")
+    };
+    let base = validate_instance_id(&new_name)?;
+    for n in 0..10_000 {
+        let candidate = if n == 0 {
+            base.clone()
+        } else {
+            format!("{base}-{n}")
+        };
+        if candidate != source_id
+            && !known.contains(&candidate)
+            && !tokio::fs::try_exists(paths.instance_dir(&candidate)?).await?
+        {
+            return Ok((candidate, new_name));
+        }
+    }
+    anyhow::bail!("Could not find an available instance name for {pack_version}")
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn apply_new_instance_staging(
+    paths: &LauncherPaths,
+    source_id: &str,
+    new_id: &str,
+    new_name: &str,
+    pack_version: &str,
+    java_type: &str,
+    keep_mod_identities: &[String],
+    ctx: &ProgressCtx,
+    staging: &Path,
+) -> anyhow::Result<()> {
+    let source = paths.instance_dir(source_id)?;
+    let instance = paths.instance_dir(new_id)?;
+    // Validate before creating anything that would need cleanup.
+    let pack: serde_json::Value =
+        serde_json::from_slice(&tokio::fs::read(staging.join("mmc-pack.json")).await?)?;
+    if !pack.is_object() {
+        anyhow::bail!("Target pack manifest is invalid");
+    }
+    let source_settings = load_instance_settings(paths, source_id).await?;
+    let previous_pack = if !source_settings.pack_version.is_empty() {
+        find_cached_pack(
+            paths,
+            &source_settings.pack_version,
+            &source_settings.pack_java_type,
+        )
+        .await
+    } else {
+        None
+    };
+    let disabled = disabled_identities(&source_settings.disabled_mods);
+    let keep: HashSet<String> = keep_mod_identities.iter().cloned().collect();
+
+    ctx.progress("updating", 0.10, |p| {
+        p.log_line = Some("Copying fresh pack files into the new instance…".to_string())
+    });
+    install_staging_contents(staging, &instance).await?;
+    flatten_nested_pack(&instance).await?;
+    prepare_instance_configs(&instance, true).await?;
+
+    ctx.progress("updating", 0.55, |p| {
+        p.log_line = Some("Copying saves, configs, and launcher data…".to_string())
+    });
+    restore_player_data_from_instance(&instance, &source).await?;
+    let restored = restore_modified_configs(&instance, &source, previous_pack.as_deref()).await?;
+    ctx.progress("updating", 0.70, |p| {
+        p.log_line = Some(if previous_pack.is_some() {
+            format!("Restored {restored} modified config/script file(s)")
+        } else {
+            format!("Restored {restored} config/script file(s); the previous pack was not cached")
+        })
+    });
+
+    let removed = remove_custom_mods_except(&persistent_custom_mods_dir(&instance), &keep).await?;
+    if removed > 0 {
+        ctx.progress("updating", 0.78, |p| {
+            p.log_line = Some(format!(
+                "Removed {removed} custom mod(s) not selected to keep"
+            ))
+        });
+    }
+    apply_persistent_custom_mods_excluding(&instance, &disabled).await?;
+    apply_persistent_minecraft(&instance).await?;
+    let disabled_count = apply_disabled_mods(&instance, &source_settings.disabled_mods).await?;
+    ctx.progress("updating", 0.86, |p| {
+        p.log_line = Some(if disabled_count > 0 {
+            format!("Kept {disabled_count} mod(s) disabled")
+        } else {
+            "Launcher overlays applied".to_string()
+        })
+    });
+
+    let mut settings = load_instance_settings(paths, new_id).await?;
+    settings.name = new_name.to_string();
+    settings.pack_version = pack_version.to_string();
+    settings.pack_java_type = java_type.to_string();
+    settings.imported = false;
+    settings.imported_gtnh = false;
+    if resolve_icon_path(&instance, settings.custom_icon.as_deref())
+        .await
+        .is_none()
+    {
+        settings.custom_icon = Some(install_default_instance_icon(&instance).await?);
+    }
+    ctx.progress("updating", 0.94, |p| {
+        p.log_line = Some("Saving the new instance's settings…".to_string())
+    });
+    save_and_refresh_size(paths, new_id, &mut settings).await?;
+
+    // Inheriting the source group is a convenience; a failure here must not
+    // discard an otherwise complete instance.
+    let known = known_instance_ids(paths).await?;
+    if known.contains(new_id) && known.contains(source_id) {
+        let group = crate::groups::get_instance_group(paths, source_id, &known)
+            .await
+            .unwrap_or_default();
+        if !group.is_empty() {
+            let _ = set_instance_group(paths, new_id, &group, &known).await;
+        }
+    }
+    ctx.progress("updating", 0.99, |p| {
+        p.log_line = Some("New instance ready".to_string())
+    });
+    Ok(())
 }
 
 /// Convenience for UIs/CLIs: current instances with refreshed sizes.
@@ -1285,6 +1685,199 @@ mod tests {
             .join("maintenance-rollback")
             .join("gtnh")
             .exists());
+        std::fs::remove_dir_all(paths.base()).unwrap();
+    }
+
+    #[test]
+    fn formats_utc_backup_stamps() {
+        assert_eq!(utc_stamp(0), "1970-01-01_0000");
+        assert_eq!(utc_stamp(1_767_225_600), "2026-01-01_0000");
+        assert_eq!(utc_stamp(1_767_229_380), "2026-01-01_0103");
+    }
+
+    #[tokio::test]
+    async fn backs_up_worlds_before_an_update_and_keeps_the_newest_two() {
+        let paths = temp_paths("update-backup");
+        let world = paths
+            .instance_dir("gtnh")
+            .unwrap()
+            .join(".minecraft/saves/world");
+        tokio::fs::create_dir_all(&world).await.unwrap();
+        tokio::fs::write(world.join("level.dat"), "world")
+            .await
+            .unwrap();
+        let ctx = progress_ctx(std::sync::Arc::new(|_| {}), "update-pack", "gtnh");
+        let first = backup_worlds_before_update(&paths, "gtnh", "2.8.4", "2.9.0", &ctx, "updating")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            tokio::fs::read_to_string(first.join("saves/world/level.dat"))
+                .await
+                .unwrap(),
+            "world"
+        );
+        let manifest = crate::fs_utils::read_json_value(&first.join("manifest.json"))
+            .await
+            .unwrap();
+        assert_eq!(manifest["from_version"], "2.8.4");
+        assert_eq!(manifest["to_version"], "2.9.0");
+        // A second backup in the same minute gets a suffix instead of replacing.
+        let second =
+            backup_worlds_before_update(&paths, "gtnh", "2.8.4", "2.9.0", &ctx, "updating")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_ne!(first, second);
+        assert!(first.exists());
+        let third = backup_worlds_before_update(&paths, "gtnh", "2.9.0", "2.9.1", &ctx, "updating")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!first.exists());
+        assert!(second.exists());
+        assert!(third.exists());
+        std::fs::remove_dir_all(paths.base()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn names_a_new_version_instance_after_the_source() {
+        let paths = temp_paths("update-name");
+        let known = HashSet::new();
+        let settings = InstanceSettings {
+            name: "GTNH 2.8.4".into(),
+            pack_version: "2.8.4".into(),
+            ..InstanceSettings::default()
+        };
+        let (id, name) = unused_update_instance(&paths, &settings, "gtnh", "2.9.0", &known)
+            .await
+            .unwrap();
+        assert_eq!(name, "GTNH 2.9.0");
+        assert_eq!(id, "GTNH_2.9.0");
+        // A taken name gets a numeric suffix instead of colliding.
+        std::fs::create_dir_all(paths.instance_dir(&id).unwrap()).unwrap();
+        let (next, _) = unused_update_instance(&paths, &settings, "gtnh", "2.9.0", &known)
+            .await
+            .unwrap();
+        assert_eq!(next, "GTNH_2.9.0-1");
+        std::fs::remove_dir_all(paths.base()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn installs_an_update_as_a_new_instance_and_leaves_the_source_intact() {
+        let paths = temp_paths("update-new-instance");
+        let source = paths.instance_dir("gtnh").unwrap();
+        tokio::fs::create_dir_all(source.join(".minecraft/saves/world"))
+            .await
+            .unwrap();
+        tokio::fs::write(source.join(".minecraft/saves/world/level.dat"), "world")
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(source.join(".minecraft/config"))
+            .await
+            .unwrap();
+        tokio::fs::write(source.join(".minecraft/config/custom.cfg"), "user value")
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(source.join("persistent-minecraft/mods"))
+            .await
+            .unwrap();
+        tokio::fs::write(source.join("persistent-minecraft/mods/extra.jar"), "mod")
+            .await
+            .unwrap();
+        tokio::fs::write(source.join("mmc-pack.json"), "{}")
+            .await
+            .unwrap();
+        let settings = InstanceSettings {
+            name: "GTNH 2.8.4".into(),
+            pack_version: "2.8.4".into(),
+            pack_java_type: "java17+".into(),
+            disabled_mods: vec![industrialis_core::instance_settings::DisabledMod {
+                identity: "pack".into(),
+                filename: "pack.jar".into(),
+            }],
+            ..InstanceSettings::default()
+        };
+        save_instance_settings(&paths, "gtnh", &settings)
+            .await
+            .unwrap();
+
+        let staging = paths.base().join("staging-new");
+        tokio::fs::create_dir_all(staging.join(".minecraft/mods"))
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(staging.join(".minecraft/config"))
+            .await
+            .unwrap();
+        tokio::fs::write(staging.join("mmc-pack.json"), "{}")
+            .await
+            .unwrap();
+        tokio::fs::write(staging.join(".minecraft/mods/pack.jar"), "pack")
+            .await
+            .unwrap();
+        tokio::fs::write(staging.join(".minecraft/config/pack.cfg"), "pack default")
+            .await
+            .unwrap();
+
+        let new_id = "GTNH_2.9.0";
+        tokio::fs::create_dir_all(paths.instance_dir(new_id).unwrap())
+            .await
+            .unwrap();
+        let ctx = progress_ctx(std::sync::Arc::new(|_| {}), "update-pack", "gtnh");
+        apply_new_instance_staging(
+            &paths,
+            "gtnh",
+            new_id,
+            "GTNH 2.9.0",
+            "2.9.0",
+            "java17+",
+            &[],
+            &ctx,
+            &staging,
+        )
+        .await
+        .unwrap();
+
+        // The source instance keeps its pack, world, and custom mod.
+        assert_eq!(
+            tokio::fs::read_to_string(source.join(".minecraft/saves/world/level.dat"))
+                .await
+                .unwrap(),
+            "world"
+        );
+        assert!(source.join("persistent-minecraft/mods/extra.jar").exists());
+        assert_eq!(
+            load_instance_settings(&paths, "gtnh")
+                .await
+                .unwrap()
+                .pack_version,
+            "2.8.4"
+        );
+
+        let installed = paths.instance_dir(new_id).unwrap();
+        assert_eq!(
+            tokio::fs::read_to_string(installed.join(".minecraft/saves/world/level.dat"))
+                .await
+                .unwrap(),
+            "world"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(installed.join(".minecraft/config/custom.cfg"))
+                .await
+                .unwrap(),
+            "user value"
+        );
+        assert!(!installed.join(".minecraft/mods/pack.jar").exists());
+        assert!(installed.join(".minecraft/mods/pack.jar.disabled").exists());
+        // Custom mods not selected to keep are dropped from the new instance.
+        assert!(!installed
+            .join("persistent-minecraft/mods/extra.jar")
+            .exists());
+        assert!(!installed.join(".minecraft/mods/extra.jar").exists());
+        let saved = load_instance_settings(&paths, new_id).await.unwrap();
+        assert_eq!(saved.name, "GTNH 2.9.0");
+        assert_eq!(saved.pack_version, "2.9.0");
+        assert!(!saved.imported);
         std::fs::remove_dir_all(paths.base()).unwrap();
     }
 }
