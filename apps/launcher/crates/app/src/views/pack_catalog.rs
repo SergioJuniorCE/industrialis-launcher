@@ -283,6 +283,73 @@ mod tests {
         fixture.cleanup();
     }
     #[gpui::test]
+    async fn new_instance_dialog_lists_and_selects_a_config_profile(cx: &mut TestAppContext) {
+        let fixture = Fixture::new(&["pack"]);
+        std::fs::write(
+            fixture.paths.config_profiles_path(),
+            serde_json::json!({
+                "version": 1,
+                "profiles": [{
+                    "name": "Quiet",
+                    "overrides": [{
+                        "file": "config/GregTech/Pollution.cfg",
+                        "key": "Activate Pollution",
+                        "value": "false"
+                    }]
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let (window, root) = fixture.open(cx, |root| {
+            root.dialog = Some(Dialog::NewInstance(NewInstanceDialog {
+                name: FieldState::new("Synthetic"),
+                group: FieldState::empty(),
+                search: FieldState::empty(),
+                filter: ReleaseFilter::All,
+                token: 1,
+                version: "release-1".into(),
+                java_type: "java17+".into(),
+                profile: None,
+                versions: Some(vec![VersionChoice {
+                    name: "release-1".into(),
+                    stable: true,
+                    date: "2026/01/01".into(),
+                    java8: false,
+                    java17: true,
+                }]),
+                versions_loading: false,
+                installing: false,
+                error: None,
+            }));
+        });
+        root.update(cx, |v, cx| v.load_config_profiles(cx));
+        fixture
+            .until(cx, &root, |v| !v.config_profiles_ui.profiles.is_empty())
+            .await;
+        let mut attempts = 0;
+        loop {
+            cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
+            let found = {
+                let mut visual = VisualTestContext::from_window(window.into(), cx);
+                visual.debug_bounds("install-profile:Quiet").is_some()
+            };
+            if found {
+                break;
+            }
+            attempts += 1;
+            assert!(attempts < 20, "profile picker did not paint");
+            cx.run_until_parked();
+        }
+        Fixture::click(cx, window, "install-profile:Quiet");
+        let selected = root.read_with(cx, |v, _| {
+            matches!(&v.dialog, Some(Dialog::NewInstance(dialog)) if dialog.profile.as_deref() == Some("Quiet"))
+        });
+        assert!(selected);
+        fixture.cleanup();
+    }
+    #[gpui::test]
     fn searches_the_full_catalog_and_blocks_unavailable_java_variants(cx: &mut TestAppContext) {
         let rt = Arc::new(tokio::runtime::Runtime::new().unwrap());
         let choices: Vec<_> = (1..=12)
@@ -317,6 +384,7 @@ mod tests {
                 token: 1,
                 version: "release-1".into(),
                 java_type: "java17+".into(),
+                profile: None,
                 versions: Some(choices),
                 versions_loading: false,
                 installing: false,
@@ -668,6 +736,57 @@ impl LauncherRoot {
                             ))
                     }),
             ))
+            .child(section_title(t, "Config profile (optional)"));
+        let none_selected = state.profile.is_none();
+        let mut profile_row = div().flex().flex_wrap().gap_1().child(
+            btn(
+                t,
+                "None",
+                if none_selected {
+                    ButtonVariant::Primary
+                } else {
+                    ButtonVariant::Outline
+                },
+            )
+            .text_xs()
+            .debug_selector(|| "install-profile:none".into())
+            .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                if let Some(Dialog::NewInstance(dialog)) = &mut v.dialog {
+                    dialog.profile = None;
+                }
+                cx.notify();
+            })),
+        );
+        for profile in &self.config_profiles_ui.profiles {
+            let name = profile.name.clone();
+            let selected = state.profile.as_deref() == Some(name.as_str());
+            let selector = format!("install-profile:{name}");
+            profile_row = profile_row.child(
+                btn(
+                    t,
+                    &name,
+                    if selected {
+                        ButtonVariant::Primary
+                    } else {
+                        ButtonVariant::Outline
+                    },
+                )
+                .text_xs()
+                .debug_selector(move || selector.clone().into())
+                .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                    if let Some(Dialog::NewInstance(dialog)) = &mut v.dialog {
+                        dialog.profile = Some(name.clone());
+                    }
+                    cx.notify();
+                })),
+            );
+        }
+        body = body.child(profile_row).child(
+            div()
+                .text_xs()
+                .text_color(t.muted_foreground())
+                .child("Applies the profile's config values after the pack finishes installing."),
+        )
             .child(section_title(t, "Group (optional)"))
             .child(self.field("new-group", "Ungrouped", cx));
         if let Some(error) = &state.error {

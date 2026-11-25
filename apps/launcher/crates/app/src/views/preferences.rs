@@ -16,6 +16,7 @@ pub(super) enum Section {
     Appearance,
     Shortcuts,
     Backups,
+    ConfigProfiles,
     About,
 }
 
@@ -302,6 +303,7 @@ impl LauncherRoot {
                         (Section::Appearance, "Appearance", "sliders-horizontal"),
                         (Section::Shortcuts, "Shortcuts", "keyboard"),
                         (Section::Backups, "Backups", "copy"),
+                        (Section::ConfigProfiles, "Config profiles", "sliders-horizontal"),
                         (Section::About, "About", "info"),
                     ]
                     .into_iter()
@@ -427,6 +429,9 @@ impl LauncherRoot {
                             })),
                     )
                     .child(self.backup_preferences(cx));
+            }
+            Section::ConfigProfiles => {
+                content = content.child(self.config_profiles_section(cx));
             }
             Section::About => {
                 content = content
@@ -641,6 +646,87 @@ mod tests {
             .block_on(settings::load_launcher_settings(&fixture.paths))
             .unwrap();
         assert_eq!(saved.instance_shortcuts[0].as_deref(), Some("ctrl-shift-9"));
+        fixture.cleanup();
+    }
+
+    #[gpui::test]
+    async fn config_profile_editor_lists_the_seed_and_adds_a_draft(cx: &mut TestAppContext) {
+        let fixture = Fixture::new(&["pack"]);
+        let (window, root) = fixture.open(cx, |root| {
+            root.tab = super::super::Tab::Settings;
+            root.preferences_ui.section = Section::ConfigProfiles;
+            root.preferences_ui.installations = Some(Vec::new());
+        });
+        root.update(cx, |v, cx| v.load_config_profiles(cx));
+        fixture
+            .until(cx, &root, |v| !v.config_profiles_ui.profiles.is_empty())
+            .await;
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        {
+            let mut visual = VisualTestContext::from_window(window.into(), cx);
+            assert!(visual
+                .debug_bounds("profile:GTNH quiet defaults")
+                .is_some());
+        }
+        Fixture::click(cx, window, "profile-add");
+        root.read_with(cx, |v, _| {
+            assert!(v
+                .config_profiles_ui
+                .profiles
+                .iter()
+                .any(|profile| profile.name == "New profile"));
+            assert_eq!(
+                v.config_profiles_ui.selected,
+                v.config_profiles_ui.profiles.len() - 1
+            );
+        });
+        fixture.cleanup();
+    }
+
+    #[gpui::test]
+    async fn applying_a_profile_from_instance_settings_writes_config_and_records_it(
+        cx: &mut TestAppContext,
+    ) {
+        let fixture = Fixture::new(&["pack"]);
+        let minecraft = fixture.paths.instance_dir("pack").unwrap().join(".minecraft");
+        std::fs::create_dir_all(minecraft.join("config/GregTech")).unwrap();
+        std::fs::write(
+            minecraft.join("config/GregTech/Pollution.cfg"),
+            "pollution {\n    B:\"Activate Pollution\"=true\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.paths.config_profiles_path(),
+            serde_json::json!({
+                "version": 1,
+                "profiles": [{
+                    "name": "Quiet",
+                    "overrides": [{
+                        "file": "config/GregTech/Pollution.cfg",
+                        "key": "Activate Pollution",
+                        "value": "false"
+                    }]
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let (_window, root) = fixture.open(cx, |_| {});
+        root.update(cx, |v, cx| v.apply_config_profile("pack", "Quiet", cx));
+        fixture
+            .until(cx, &root, |v| {
+                v.data.status.contains("Applied config profile")
+            })
+            .await;
+        assert!(std::fs::read_to_string(minecraft.join("config/GregTech/Pollution.cfg"))
+            .unwrap()
+            .contains("B:\"Activate Pollution\"=false"));
+        fixture
+            .until(cx, &root, |v| {
+                v.data.instances[0].settings.config_profile.as_deref() == Some("Quiet")
+            })
+            .await;
         fixture.cleanup();
     }
 

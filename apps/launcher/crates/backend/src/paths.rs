@@ -66,6 +66,10 @@ impl LauncherPaths {
         self.instances_dir().join("instgroups.json")
     }
 
+    pub fn config_profiles_path(&self) -> PathBuf {
+        self.base.join("config-profiles.json")
+    }
+
     pub fn console_log_path(&self, id: &str) -> Result<PathBuf, anyhow::Error> {
         Ok(self.instance_dir(id)?.join("console.log"))
     }

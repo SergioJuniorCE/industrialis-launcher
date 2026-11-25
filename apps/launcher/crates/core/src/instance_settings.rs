@@ -77,6 +77,9 @@ pub struct InstanceSettings {
     pub disabled_mods: Vec<DisabledMod>,
     #[serde(default)]
     pub custom_icon: Option<String>,
+    /// Last config profile applied to this instance, for the settings view.
+    #[serde(default)]
+    pub config_profile: Option<String>,
     /// Maintained by the backend (`refreshSizes`); absent from the TS frontend
     /// shape but present in backend `types.ts` and on-disk documents.
     #[serde(default)]
@@ -132,6 +135,7 @@ impl Default for InstanceSettings {
             env_vars: HashMap::new(),
             disabled_mods: Vec::new(),
             custom_icon: None,
+            config_profile: None,
             cached_size_bytes: 0,
         }
     }
@@ -191,6 +195,7 @@ pub fn merge_instance_settings(disk: Option<InstanceSettings>) -> InstanceSettin
     merged.env_vars.extend(disk.env_vars);
     merged.disabled_mods = disk.disabled_mods;
     merged.custom_icon = disk.custom_icon;
+    merged.config_profile = disk.config_profile;
     merged.cached_size_bytes = disk.cached_size_bytes;
     merged
 }
@@ -355,6 +360,9 @@ impl PartialInstanceSettings {
         }
         if let Some(v) = get_str("custom_icon") {
             full.custom_icon = Some(v);
+        }
+        if let Some(v) = get_str("config_profile") {
+            full.config_profile = Some(v);
         }
         if let Some(v) = get_u64("cached_size_bytes") {
             full.cached_size_bytes = v;
