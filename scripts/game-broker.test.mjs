@@ -33,10 +33,22 @@ async function capture(t, request) {
 test("native broker survives its parent, captures both streams and runs the hook once", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "industrialis-native-parent-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  // Keep the fixture alive long enough for the Windows process-start check
-  // below; PowerShell startup on loaded CI runners can exceed 2.5 seconds.
-  const script =
-    "process.stdout.write('before\\n');setTimeout(()=>{process.stdout.write('after \\u00f1\\n');process.stderr.write('error\\n');process.exit(7)},10000);";
+  // Keep the game alive until the test verifies its identity and stops its parent.
+  const script = `
+    const { existsSync } = require('node:fs');
+    process.stdout.write('before\\n');
+    const deadline = Date.now() + 60000;
+    const timer = setInterval(() => {
+      if (!existsSync('finish-game')) {
+        if (Date.now() >= deadline) process.exit(1);
+        return;
+      }
+      clearInterval(timer);
+      process.stdout.write('after \\u00f1\\n');
+      process.stderr.write('error\\n');
+      process.exitCode = 7;
+    }, 25);
+  `;
   const parent = spawn(fixture, [directory, process.execPath, script], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   const parentExit = new Promise((resolve) => parent.once("exit", resolve));
   let output = "",
@@ -69,6 +81,7 @@ test("native broker survives its parent, captures both streams and runs the hook
   }
   parent.kill();
   await parentExit;
+  await writeFile(path.join(directory, "finish-game"), "");
   const receipt = await jsonUntil(path.join(captureDirectory, "exit.json"));
   assert.equal(receipt.pid, ready.pid);
   assert.equal(receipt.creation_id, ready.creation_id);
