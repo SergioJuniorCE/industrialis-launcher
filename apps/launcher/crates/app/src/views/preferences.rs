@@ -1,4 +1,5 @@
 //! SettingsTab's sidebar and ported Java, appearance and retention controls.
+use super::appearance_settings::setting_row;
 use super::LauncherRoot;
 use crate::{
     input::FieldState,
@@ -6,6 +7,7 @@ use crate::{
 };
 use gpui::{div, prelude::*, px, Context, Div, FontWeight, PathPromptOptions, Window};
 use industrialis_backend::java::JavaInfo;
+use industrialis_core::launcher_settings::UpdateChannel;
 #[cfg(test)]
 use industrialis_core::launcher_settings::ThemeMode;
 
@@ -17,6 +19,7 @@ pub(super) enum Section {
     Shortcuts,
     Backups,
     ConfigProfiles,
+    Updates,
     About,
 }
 
@@ -260,6 +263,127 @@ impl LauncherRoot {
         )
     }
 
+    fn updates_section(&mut self, cx: &mut Context<Self>) -> Div {
+        let t = self.theme.clone();
+        let build = super::updater::running_build();
+        let channel = super::updater::update_channel(&self.data.settings);
+        let mut options = vec![
+            (
+                UpdateChannel::Stable,
+                "Stable",
+                "Released builds that are tested and supported.",
+            ),
+            (
+                UpdateChannel::Nightly,
+                "Nightly",
+                "Unreleased master builds, published every night.",
+            ),
+        ];
+        if build.channel() == UpdateChannel::Preview || channel == UpdateChannel::Preview {
+            options.push((
+                UpdateChannel::Preview,
+                "Preview",
+                "The older preview channel used by maintainer builds.",
+            ));
+        }
+        let mut selector = div().flex().flex_wrap().gap_1();
+        for (value, label, _) in &options {
+            let value = *value;
+            let selected = value == channel;
+            selector = selector.child(
+                btn(
+                    &t,
+                    *label,
+                    if selected {
+                        ButtonVariant::Secondary
+                    } else {
+                        ButtonVariant::Outline
+                    },
+                )
+                .h(px(28.))
+                .text_xs()
+                .when(selected, |button| {
+                    button.border_1().border_color(t.primary())
+                })
+                .debug_selector({
+                    let selector = format!("update-channel:{}", value.name());
+                    move || selector.clone().into()
+                })
+                .on_click(cx.listener(move |v, _, _, cx| v.set_update_channel(value, cx))),
+            );
+        }
+        let described = options
+            .iter()
+            .find(|(value, _, _)| *value == channel)
+            .map(|(_, _, description)| *description)
+            .unwrap_or_default();
+        let channels = card(&t)
+            .flex()
+            .flex_col()
+            .child(setting_row(&t, "Channel", described, selector))
+            .child(
+                div()
+                    .px_3()
+                    .pb_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(div().text_xs().text_color(t.muted_foreground()).child(
+                        "Nightly builds are unreleased and may break or fail to start. Your instances, worlds, accounts and settings are kept. If a nightly will not start, install the stable release from Launcher releases below; nothing in your data directory changes.",
+                    ))
+                    .child(div().text_xs().text_color(t.muted_foreground()).child(
+                        "Switching back to Stable installs the newest stable build on the next check, even when its version number is the same as or older than this build.",
+                    ))
+                    .child(div().text_xs().text_color(t.muted_foreground()).child(
+                        "A channel change applies to the next update check and discards an update already offered on the old channel.",
+                    )),
+            );
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                card(&t)
+                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(format!("Industrialis Launcher v{}", build.version)),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(t.muted_foreground())
+                            .child(build.label()),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(t.muted_foreground())
+                            .child(format!("Update channel: {}", channel.name())),
+                    ),
+            )
+            .child(channels)
+            .child(
+                card(&t)
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Launcher updates"),
+                    )
+                    .child(self.launcher_update_controls(cx)),
+            )
+    }
+
     pub(super) fn settings_view(&mut self, cx: &mut Context<Self>) -> Div {
         if self.preferences_ui.installations.is_none() && !self.preferences_ui.scanning {
             self.scan_launcher_java(cx);
@@ -304,6 +428,7 @@ impl LauncherRoot {
                         (Section::Shortcuts, "Shortcuts", "keyboard"),
                         (Section::Backups, "Backups", "copy"),
                         (Section::ConfigProfiles, "Config profiles", "sliders-horizontal"),
+                        (Section::Updates, "Updates", "arrow-up-circle"),
                         (Section::About, "About", "info"),
                     ]
                     .into_iter()
@@ -433,6 +558,16 @@ impl LauncherRoot {
             Section::ConfigProfiles => {
                 content = content.child(self.config_profiles_section(cx));
             }
+            Section::Updates => {
+                content = content
+                    .child(
+                        div()
+                            .py(px(14.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("Updates"),
+                    )
+                    .child(self.updates_section(cx));
+            }
             Section::About => {
                 content = content
                     .child(
@@ -448,8 +583,17 @@ impl LauncherRoot {
                             .flex_col()
                             .gap_2()
                             .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(
-                                format!("Industrialis Launcher v{}", env!("CARGO_PKG_VERSION")),
+                                format!(
+                                    "Industrialis Launcher v{}",
+                                    super::updater::running_build().version
+                                ),
                             ))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(t.muted_foreground())
+                                    .child(super::updater::running_build().label()),
+                            )
                             .child(
                                 div()
                                     .text_sm()
@@ -493,20 +637,6 @@ impl LauncherRoot {
                                 )
                                     }),
                             ),
-                    )
-                    .child(
-                        card(&t)
-                            .p_3()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child("Launcher updates"),
-                            )
-                            .child(self.launcher_update_controls(cx)),
                     );
             }
         }

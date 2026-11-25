@@ -75,10 +75,28 @@ test("stable native release and optional previews use the correct update channel
   assert.match(manifest.scripts["dev:launcher"], /--filter @industrialis\/launcher dev$/);
   assert.match(lockfile, /^  apps\/launcher: \{\}$/m);
   assert.match(manifest.scripts["build:launcher:release"], /--channel stable/);
-  for (const asset of ["IndustrialisLauncherPreviewSetup-x64.exe", "IndustrialisLauncher-macos-arm64.dmg", "IndustrialisLauncher-linux-x64.tar.gz"]) {
+  for (const asset of [
+    "IndustrialisLauncherSetup.exe",
+    "IndustrialisLauncherNightlySetup-x64.exe",
+    "IndustrialisLauncherPreviewSetup-x64.exe",
+    "IndustrialisLauncher-macos-arm64.dmg",
+    "IndustrialisLauncher-linux-x64.tar.gz",
+  ]) {
     assert.ok(updater.includes(asset));
     assert.ok(packager.includes(asset));
   }
+});
+
+test("nightly builds publish a parseable prerelease that never becomes latest", async () => {
+  const workflow = await readFile(path.join(app, "../../.github/workflows/launcher-nightly.yml"), "utf8");
+  const updater = await readFile(path.join(app, "crates/backend/src/release_updater.rs"), "utf8");
+  assert.match(updater, /pub const NIGHTLY_TAG_PREFIX: &str = "launcher-nightly-v"/);
+  assert.ok(workflow.includes("tag=launcher-nightly-v${version}-${date}-${sha}"));
+  assert.ok(workflow.includes("channel: nightly"));
+  assert.ok(workflow.includes("build_tag: ${{ needs.gate.outputs.tag }}"));
+  assert.ok(workflow.includes("prerelease: true"));
+  assert.ok(workflow.includes("make_latest: false"));
+  assert.ok(workflow.includes("Prune old nightly releases"));
 });
 
 test("stable packaging cannot relabel a preview binary without compiling its update channel", () => {
@@ -89,6 +107,6 @@ test("stable packaging cannot relabel a preview binary without compiling its upd
   ]) {
     const result = spawnSync(process.execPath, [script, ...args], { encoding: "utf8", timeout: 10_000 });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /Stable packaging requires compiling|Channel must be preview or stable/);
+    assert.match(result.stderr, /Stable packaging requires compiling|Channel must be preview, nightly or stable/);
   }
 });

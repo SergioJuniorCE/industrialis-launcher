@@ -24,6 +24,26 @@ pub enum WindowMaterial {
     Mica,
 }
 
+/// Release channel the launcher follows when it checks for updates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateChannel {
+    #[default]
+    Stable,
+    Nightly,
+    Preview,
+}
+
+impl UpdateChannel {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Nightly => "nightly",
+            Self::Preview => "preview",
+        }
+    }
+}
+
 fn default_window_tint_opacity() -> u8 {
     60
 }
@@ -152,6 +172,9 @@ pub struct LauncherSettingsData {
     /// One-time first-run Prism import prompt was answered (either choice).
     #[serde(default)]
     pub prism_import_prompted: bool,
+    /// `None` follows the channel this build was compiled for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update_channel: Option<UpdateChannel>,
     /// Positional launch shortcuts; `None` leaves that slot unbound.
     #[serde(default = "default_launch_shortcuts")]
     pub instance_shortcuts: [Option<String>; LAUNCH_SLOT_COUNT],
@@ -197,6 +220,7 @@ impl Default for LauncherSettingsData {
             instance_grid_columns: default_grid_columns(),
             backup_retention_limit: default_backup_retention(),
             prism_import_prompted: false,
+            update_channel: None,
             instance_shortcuts: default_launch_shortcuts(),
             window: LauncherWindowSettings {
                 launch_maximized: false,
@@ -309,6 +333,10 @@ pub fn parse_launcher_settings_json(raw: &str) -> LauncherSettingsData {
         .get("prism_import_prompted")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    // Unknown values fall back to following the build's compiled channel.
+    settings.update_channel = obj
+        .get("update_channel")
+        .and_then(|value| serde_json::from_value(value.clone()).ok());
     // A present array replaces slots positionally; null, empty, or non-string
     // entries unbind that slot. A missing field keeps the defaults.
     if let Some(entries) = obj.get("instance_shortcuts").and_then(|v| v.as_array()) {
@@ -325,7 +353,11 @@ pub fn parse_launcher_settings_json(raw: &str) -> LauncherSettingsData {
         window_height: obj.get("window_height").and_then(|v| v.as_i64()),
     };
     settings.window = crate::launcher_window::normalize_launcher_window_settings(partial_window);
-    let known = serde_json::to_value(LauncherSettingsData::default()).unwrap();
+    let known = serde_json::to_value(LauncherSettingsData {
+        update_channel: Some(UpdateChannel::Stable),
+        ..Default::default()
+    })
+    .unwrap();
     settings.extra_fields = obj
         .iter()
         .filter(|(key, _)| known.get(*key).is_none())
@@ -399,6 +431,29 @@ mod tests {
             parse_launcher_settings_json(r#"{"instance_shortcuts":"ctrl-1"}"#).instance_shortcuts,
             defaults
         );
+    }
+
+    #[test]
+    fn update_channel_round_trips_and_defaults_to_following_the_build() {
+        let nightly = parse_launcher_settings_json(r#"{"update_channel":"nightly"}"#);
+        assert_eq!(nightly.update_channel, Some(UpdateChannel::Nightly));
+        assert!(!nightly.extra_fields.contains_key("update_channel"));
+        let saved = serde_json::to_string(&nightly).unwrap();
+        assert_eq!(parse_launcher_settings_json(&saved), nightly);
+        for (raw, expected) in [
+            ("{}", None),
+            (r#"{"update_channel":"stable"}"#, Some(UpdateChannel::Stable)),
+            (r#"{"update_channel":"preview"}"#, Some(UpdateChannel::Preview)),
+            (r#"{"update_channel":"beta"}"#, None),
+            (r#"{"update_channel":null}"#, None),
+        ] {
+            let parsed = parse_launcher_settings_json(raw);
+            assert_eq!(parsed.update_channel, expected, "{raw}");
+            assert!(!parsed.extra_fields.contains_key("update_channel"));
+        }
+        assert!(!serde_json::to_string(&LauncherSettingsData::default())
+            .unwrap()
+            .contains("update_channel"));
     }
 
     #[test]

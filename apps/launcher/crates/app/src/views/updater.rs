@@ -7,8 +7,9 @@ use gpui::{
     div, prelude::*, px, Context, Div, FocusHandle, FontWeight, KeyDownEvent, MouseButton, Window,
 };
 use industrialis_backend::release_updater::{
-    self, AvailableUpdate, DownloadProgress, Platform, ReleaseNote, UpdateCheck,
+    self, AvailableUpdate, DownloadProgress, Platform, ReleaseNote, RunningBuild, UpdateCheck,
 };
+use industrialis_core::launcher_settings::{LauncherSettingsData, UpdateChannel};
 
 use super::{Dialog, LauncherRoot};
 use crate::state::format_bytes;
@@ -20,10 +21,73 @@ enum State {
     Idle,
     Checking,
     Current,
+    NoReleases,
     Available,
     Downloading(DownloadProgress),
     Installing,
     Failed(String),
+}
+
+/// The distribution workflow compiles the release tag into packaged builds.
+pub(crate) fn running_build() -> RunningBuild {
+    RunningBuild::new(
+        env!("CARGO_PKG_VERSION"),
+        option_env!("INDUSTRIALIS_BUILD_TAG"),
+    )
+    .expect("compiled launcher version is valid semver")
+}
+
+pub(crate) fn update_channel(settings: &LauncherSettingsData) -> UpdateChannel {
+    settings
+        .update_channel
+        .unwrap_or_else(|| running_build().channel())
+}
+
+fn update_notice(update: &AvailableUpdate, build: &RunningBuild) -> String {
+    if !update.channel_switch {
+        return match &update.nightly {
+            Some(_) => format!("A newer nightly build is available: {}.", update.label()),
+            None => format!("Launcher v{} is available.", update.version),
+        };
+    }
+    channel_switch_notice(
+        update.channel,
+        &update.version,
+        update.same_version,
+        update.is_downgrade,
+        &build.version.to_string(),
+    )
+}
+
+fn channel_switch_notice(
+    channel: UpdateChannel,
+    version: &str,
+    same_version: bool,
+    is_downgrade: bool,
+    running: &str,
+) -> String {
+    let target = channel.name();
+    if same_version {
+        format!(
+            "{} {version} has the same version number as this build. Downloading it replaces this install with the released {target} build.",
+            capitalized(channel)
+        )
+    } else if is_downgrade {
+        format!(
+            "{} v{version} is older than this build (v{running}). Downloading it downgrades the launcher; instances and settings are kept.",
+            capitalized(channel)
+        )
+    } else {
+        format!("Downloading it installs the newest {target} build, v{version}.")
+    }
+}
+
+pub(crate) fn capitalized(channel: UpdateChannel) -> &'static str {
+    match channel {
+        UpdateChannel::Stable => "Stable",
+        UpdateChannel::Nightly => "Nightly",
+        UpdateChannel::Preview => "Preview",
+    }
 }
 
 pub(crate) struct UpdaterUi {
@@ -36,6 +100,8 @@ pub(crate) struct UpdaterUi {
     changelog_loading: bool,
     changelog_error: Option<String>,
     changelog_focus: Option<FocusHandle>,
+    /// Invalidates results from a check started before a channel change.
+    attempt: u64,
 }
 
 impl UpdaterUi {
@@ -54,6 +120,7 @@ impl UpdaterUi {
             changelog_loading: false,
             changelog_error: None,
             changelog_focus: None,
+            attempt: 0,
         }
     }
 
@@ -65,16 +132,22 @@ impl UpdaterUi {
         self.available.is_some() || matches!(self.state, State::Failed(_))
     }
 
-    fn status(&self) -> String {
+    fn status(&self, build: &RunningBuild, channel: UpdateChannel) -> String {
         match &self.state {
             State::Disabled => "Launcher updates are disabled in development builds.".into(),
-            State::Idle => "Launcher update channel".into(),
-            State::Checking => "Checking for launcher updates…".into(),
-            State::Current => "You're using the latest published version.".into(),
-            State::Available => format!(
-                "Launcher v{} is available.",
-                self.available.as_ref().unwrap().version
-            ),
+            State::Idle => format!("Following {} builds.", channel.name()),
+            State::Checking => format!("Checking the {} channel for updates…", channel.name()),
+            State::Current => match channel {
+                UpdateChannel::Nightly => "You're using the newest published nightly build.".into(),
+                _ => "You're using the latest published version.".into(),
+            },
+            State::NoReleases => match channel {
+                UpdateChannel::Nightly => {
+                    "No nightly build has been published yet. This build stays as it is.".into()
+                }
+                _ => "No releases have been published on this channel yet.".into(),
+            },
+            State::Available => update_notice(self.available.as_ref().unwrap(), build),
             State::Downloading(p) => format!(
                 "Downloading update: {} / {}",
                 format_bytes(p.downloaded),
@@ -102,32 +175,42 @@ impl LauncherRoot {
         {
             return;
         }
+        self.launcher_update.attempt = self.launcher_update.attempt.wrapping_add(1);
+        let attempt = self.launcher_update.attempt;
+        let channel = update_channel(&self.data.settings);
+        let build = running_build();
         self.launcher_update.state = State::Checking;
+        // A result from an earlier channel must never stay installable.
+        self.launcher_update.available = None;
         cx.notify();
         let rt = self.data.rt.clone();
         cx.spawn(async move |view, cx| {
             let result = rt
-                .spawn(async {
+                .spawn(async move {
                     let installation = std::env::current_exe().ok().and_then(|exe| {
                         release_updater::installation_directory(&exe, Platform::current())
                     });
                     (
-                        release_updater::check_for_update(
-                            env!("CARGO_PKG_VERSION"),
-                            Platform::current(),
-                        )
-                        .await,
+                        release_updater::check_for_update(&build, channel, Platform::current())
+                            .await,
                         installation,
                     )
                 })
                 .await;
             let _ = view.update(cx, |v, cx| {
+                if v.launcher_update.attempt != attempt {
+                    return;
+                }
                 match result {
                     Ok((Ok(check), installation)) => {
                         v.launcher_update.installation = installation;
                         match check {
                             UpdateCheck::Current => {
                                 v.launcher_update.state = State::Current;
+                                v.launcher_update.available = None;
+                            }
+                            UpdateCheck::NoReleases => {
+                                v.launcher_update.state = State::NoReleases;
                                 v.launcher_update.available = None;
                             }
                             UpdateCheck::Available(update) => {
@@ -145,6 +228,31 @@ impl LauncherRoot {
             });
         })
         .detach();
+    }
+
+    /// The choice applies to the next check; a pending result from the old
+    /// channel is dropped so it can never be installed by mistake.
+    pub(super) fn set_update_channel(&mut self, channel: UpdateChannel, cx: &mut Context<Self>) {
+        if update_channel(&self.data.settings) == channel {
+            return;
+        }
+        if self.launcher_update.in_progress() {
+            self.data.status =
+                "Finish the launcher update download before changing channels.".into();
+            cx.notify();
+            return;
+        }
+        self.data.settings.update_channel = Some(channel);
+        self.launcher_update.attempt = self.launcher_update.attempt.wrapping_add(1);
+        self.launcher_update.available = None;
+        self.launcher_update.changelog = None;
+        self.launcher_update.state = if self.launcher_update.enabled {
+            State::Idle
+        } else {
+            State::Disabled
+        };
+        self.persist_launcher_preferences(cx);
+        cx.notify();
     }
 
     pub(super) fn open_launcher_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -172,14 +280,21 @@ impl LauncherRoot {
             State::Idle => ("Check for updates".to_string(), "refresh-cw"),
             State::Checking => ("Checking for updates…".to_string(), "loader-circle"),
             State::Current => ("Launcher up to date".to_string(), "check"),
+            State::NoReleases => (
+                match update_channel(&self.data.settings) {
+                    UpdateChannel::Nightly => "No nightly published yet".to_string(),
+                    _ => "No releases published yet".to_string(),
+                },
+                "info",
+            ),
             State::Available => (
                 format!(
-                    "Update available · v{}",
+                    "Update available · {}",
                     self.launcher_update
                         .available
                         .as_ref()
-                        .map(|update| update.version.as_str())
-                        .unwrap_or("")
+                        .map(|update| update.summary())
+                        .unwrap_or_default()
                 ),
                 "arrow-up-circle",
             ),
@@ -248,8 +363,9 @@ impl LauncherRoot {
         self.launcher_update.changelog_error = None;
         cx.notify();
         let rt = self.data.rt.clone();
+        let channel = update_channel(&self.data.settings);
         cx.spawn(async move |view, cx| {
-            let result = rt.spawn(release_updater::recent_releases(20)).await;
+            let result = rt.spawn(release_updater::recent_releases(channel, 20)).await;
             let _ = view.update(cx, |v, cx| {
                 v.launcher_update.changelog_loading = false;
                 match result {
@@ -385,11 +501,13 @@ impl LauncherRoot {
     }
 
     pub(super) fn launcher_update_controls(&self, cx: &mut Context<Self>) -> Div {
+        let build = running_build();
+        let channel = update_channel(&self.data.settings);
         let mut controls = div()
             .flex()
             .flex_col()
             .gap_2()
-            .child(self.launcher_update.status());
+            .child(self.launcher_update.status(&build, channel));
         let mut actions = div().flex().gap_2();
         if self.launcher_update.enabled {
             actions = actions.child(
@@ -404,7 +522,7 @@ impl LauncherRoot {
         actions = actions.child(
             btn(&self.theme, "Changelog", ButtonVariant::Outline)
                 .id("launcher-changelog")
-                .debug_selector(|| "about-changelog".into())
+                .debug_selector(|| "updates-changelog".into())
                 .on_click(cx.listener(|v, _: &gpui::ClickEvent, window, cx| {
                     v.open_changelog(window, cx)
                 })),
@@ -429,11 +547,17 @@ impl LauncherRoot {
     }
 
     pub(super) fn launcher_update_dialog(&self, cx: &mut Context<Self>) -> Div {
+        let build = running_build();
+        let channel = update_channel(&self.data.settings);
         let mut body = div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(format!("Installed version: {}", env!("CARGO_PKG_VERSION")))
+            .child(format!(
+                "Installed version: v{} · {}",
+                build.version,
+                build.label()
+            ))
             .child(
                 div()
                     .text_color(if matches!(self.launcher_update.state, State::Failed(_)) {
@@ -441,9 +565,19 @@ impl LauncherRoot {
                     } else {
                         self.theme.foreground()
                     })
-                    .child(self.launcher_update.status()),
+                    .child(self.launcher_update.status(&build, channel)),
             );
         if let Some(update) = &self.launcher_update.available {
+            if update.channel == UpdateChannel::Nightly {
+                body = body.child(
+                    div()
+                        .text_sm()
+                        .text_color(self.theme.muted_foreground())
+                        .child(
+                            "Nightly builds are unreleased and may break. Switch back to Stable in Settings, Updates at any time.",
+                        ),
+                );
+            }
             if !update.notes.is_empty() {
                 body = body.child(
                     div()
@@ -546,7 +680,7 @@ impl LauncherRoot {
                 div()
                     .text_sm()
                     .text_color(t.muted_foreground())
-                    .child(format!("Installed version: {}", env!("CARGO_PKG_VERSION"))),
+                    .child(format!("Installed version: v{} · {}", running_build().version, running_build().label())),
             );
         if self.launcher_update.changelog_loading {
             body = body.child(
@@ -577,7 +711,7 @@ impl LauncherRoot {
                         .gap_3()
                         .max_h(px(420.0))
                         .overflow_y_scroll()
-                        .children(releases.iter().map(|release| {
+                        .children(releases.iter().enumerate().map(|(index, release)| {
                             div()
                                 .flex()
                                 .flex_col()
@@ -592,14 +726,11 @@ impl LauncherRoot {
                                                 .flex_1()
                                                 .text_sm()
                                                 .font_weight(FontWeight::SEMIBOLD)
-                                                .child(format!("v{}", release.version)),
+                                                .child(release.label.clone()),
                                         )
                                         .child(
                                             btn(t, "Release", ButtonVariant::Ghost)
-                                                .id(format!(
-                                                    "changelog-release:{}",
-                                                    release.version
-                                                ))
+                                                .id(format!("changelog-release:{index}"))
                                                 .text_xs()
                                                 .px_1()
                                                 .h(px(20.0))
@@ -779,7 +910,7 @@ mod tests {
             v.launcher_update = UpdaterUi::new(true);
             v.launcher_update.state = State::Current;
             v.launcher_update.changelog = Some(vec![ReleaseNote {
-                version: "0.4.2".into(),
+                label: "v0.4.2".into(),
                 notes: "Release notes".into(),
                 release_url: "https://example.test/launcher-v0.4.2".into(),
             }]);
@@ -810,5 +941,54 @@ mod tests {
         assert!(visual.debug_bounds("changelog-list").is_some());
         visual.simulate_keystrokes("escape");
         visual.update(|_, cx| assert!(root.read(cx).dialog.is_none()));
+    }
+
+    #[test]
+    fn channel_switch_copy_names_the_same_version_and_downgrade_cases() {
+        assert_eq!(
+            channel_switch_notice(UpdateChannel::Stable, "0.5.0", true, false, "0.5.0"),
+            "Stable 0.5.0 has the same version number as this build. Downloading it replaces this install with the released stable build."
+        );
+        assert_eq!(
+            channel_switch_notice(UpdateChannel::Stable, "0.4.9", false, true, "0.5.0"),
+            "Stable v0.4.9 is older than this build (v0.5.0). Downloading it downgrades the launcher; instances and settings are kept."
+        );
+        assert_eq!(
+            channel_switch_notice(UpdateChannel::Nightly, "0.6.0", false, false, "0.5.0"),
+            "Downloading it installs the newest nightly build, v0.6.0."
+        );
+    }
+
+    #[test]
+    fn stored_channel_wins_over_the_build_default() {
+        let mut settings = LauncherSettingsData::default();
+        assert_eq!(update_channel(&settings), running_build().channel());
+        settings.update_channel = Some(UpdateChannel::Nightly);
+        assert_eq!(update_channel(&settings), UpdateChannel::Nightly);
+    }
+
+    #[gpui::test]
+    async fn changing_the_update_channel_persists_and_resets_the_offer(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::views::test_support::Fixture;
+        let fixture = Fixture::new(&[]);
+        let (window, root) = fixture.open(cx, |root| {
+            root.tab = super::super::Tab::Settings;
+            root.launcher_update = UpdaterUi::new(true);
+        });
+        Fixture::click(cx, window, "launcher-preference:Updates");
+        Fixture::click(cx, window, "update-channel:nightly");
+        assert_eq!(
+            root.read_with(cx, |v, _| v.data.settings.update_channel),
+            Some(UpdateChannel::Nightly)
+        );
+        assert!(root.read_with(cx, |v, _| matches!(v.launcher_update.state, State::Idle)));
+        Fixture::click(cx, window, "update-channel:stable");
+        assert_eq!(
+            root.read_with(cx, |v, _| v.data.settings.update_channel),
+            Some(UpdateChannel::Stable)
+        );
+        fixture.cleanup();
     }
 }

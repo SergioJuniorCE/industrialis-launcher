@@ -14,6 +14,10 @@ on:
         description: "Override the stamped major.minor.patch (default: apps/launcher/package.json)"
         required: false
         default: ""
+      dry_run:
+        description: "Build and name the nightly without publishing a GitHub release"
+        type: boolean
+        default: false
 
 concurrency:
   group: launcher-nightly
@@ -30,6 +34,8 @@ jobs:
       should_build: ${{ steps.gate.outputs.should_build }}
       version: ${{ steps.version.outputs.version }}
       artifact_suffix: ${{ steps.version.outputs.artifact_suffix }}
+      tag: ${{ steps.version.outputs.tag }}
+      release_name: ${{ steps.version.outputs.release_name }}
     steps:
       - uses: actions/checkout@v4
       - name: Test the nightly gate
@@ -47,8 +53,12 @@ jobs:
           VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
           version="${VERSION_OVERRIDE:-$(node -p "require('./apps/launcher/package.json').version")}"
+          date="$(date -u +%Y%m%d)"
+          sha="$(git rev-parse --short=7 HEAD)"
           echo "version=$version" >>"$GITHUB_OUTPUT"
-          echo "artifact_suffix=-nightly-$(date -u +%Y%m%d)-$(git rev-parse --short=7 HEAD)" >>"$GITHUB_OUTPUT"
+          echo "artifact_suffix=-nightly-${date}-${sha}" >>"$GITHUB_OUTPUT"
+          echo "tag=launcher-nightly-v${version}-${date}-${sha}" >>"$GITHUB_OUTPUT"
+          echo "release_name=Nightly ${version} · $(date -u +%Y-%m-%d) · ${sha}" >>"$GITHUB_OUTPUT"
 
   build:
     needs: gate
@@ -58,5 +68,57 @@ jobs:
     uses: ./.github/workflows/launcher-build.yml
     with:
       version: ${{ needs.gate.outputs.version }}
-      channel: preview
+      channel: nightly
       artifact_suffix: ${{ needs.gate.outputs.artifact_suffix }}
+      build_tag: ${{ needs.gate.outputs.tag }}
+
+  release:
+    needs:
+      - gate
+      - build
+    if: needs.gate.outputs.should_build == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry_run != true)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the nightly artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: launcher-windows-x64${{ needs.gate.outputs.artifact_suffix }}
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: launcher-linux-x64${{ needs.gate.outputs.artifact_suffix }}
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: launcher-macos-arm64${{ needs.gate.outputs.artifact_suffix }}
+          path: release-assets
+      - name: Publish the nightly prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.gate.outputs.tag }}
+          name: ${{ needs.gate.outputs.release_name }}
+          prerelease: true
+          make_latest: false
+          generate_release_notes: true
+          body: |
+            Unreleased nightly build of the Industrialis Launcher. It may break.
+
+            Switch back to stable in Settings, Updates at any time. Nightly builds
+            are replaced nightly; only the newest 30 releases are kept.
+          files: release-assets/*
+      - name: Prune old nightly releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The launcher pages the whole release list (10 requests of 100) and
+          # fails past that bound, so keep only the 30 newest nightlies.
+          gh release list --limit 200 --json tagName \
+            | jq -r '.[] | select(.tagName | startswith("launcher-nightly-v")) | .tagName' \
+            | tail -n +31 \
+            | while read -r tag; do
+                gh release delete "$tag" --cleanup-tag --yes
+              done

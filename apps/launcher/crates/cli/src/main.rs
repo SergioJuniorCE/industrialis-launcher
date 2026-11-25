@@ -121,6 +121,9 @@ enum Command {
     CheckLauncherUpdate {
         #[arg(long)]
         current_version: String,
+        /// stable (default), nightly, or preview
+        #[arg(long)]
+        channel: Option<String>,
     },
     /// Refresh cached instance sizes.
     RefreshSizes { ids: Vec<String> },
@@ -416,16 +419,43 @@ async fn run_command(command: Command, paths: LauncherPaths) -> Result<(), anyho
                     .await?;
             print_json(&serde_json::to_value(&sizes)?);
         }
-        Command::CheckLauncherUpdate { current_version } => {
-            use industrialis_backend::release_updater::{check_for_update, Platform, UpdateCheck};
-            let state = match check_for_update(&current_version, Platform::current()).await? {
-                UpdateCheck::Current => {
-                    serde_json::json!({"status": "up-to-date", "current_version": current_version})
-                }
-                UpdateCheck::Available(update) => {
-                    serde_json::json!({"status": "available", "current_version": current_version,
-                    "version": update.version, "release_url": update.release_url, "windows_installer": update.has_windows_installer()})
-                }
+        Command::CheckLauncherUpdate {
+            current_version,
+            channel,
+        } => {
+            use industrialis_backend::release_updater::{
+                check_for_update, Platform, RunningBuild, UpdateCheck,
+            };
+            use industrialis_core::launcher_settings::UpdateChannel;
+            let build = RunningBuild::new(&current_version, None)?;
+            let channel = match channel.as_deref() {
+                None => build.channel(),
+                Some("stable") => UpdateChannel::Stable,
+                Some("nightly") => UpdateChannel::Nightly,
+                Some("preview") => UpdateChannel::Preview,
+                Some(other) => anyhow::bail!("Unknown channel {other}"),
+            };
+            let state = match check_for_update(&build, channel, Platform::current()).await? {
+                UpdateCheck::Current => serde_json::json!({
+                    "status": "up-to-date",
+                    "current_version": current_version,
+                    "channel": channel.name()
+                }),
+                UpdateCheck::NoReleases => serde_json::json!({
+                    "status": "no-releases",
+                    "current_version": current_version,
+                    "channel": channel.name()
+                }),
+                UpdateCheck::Available(update) => serde_json::json!({
+                    "status": "available",
+                    "current_version": current_version,
+                    "channel": update.channel.name(),
+                    "channel_switch": update.channel_switch,
+                    "is_downgrade": update.is_downgrade,
+                    "version": update.version,
+                    "release_url": update.release_url,
+                    "windows_installer": update.has_windows_installer()
+                }),
             };
             print_json(&state);
         }
