@@ -436,6 +436,10 @@ impl LauncherRoot {
                         btn(&t, "", ButtonVariant::Ghost)
                             .id(format!("launcher-preference:{label}"))
                             .aria_label(label)
+                            .debug_selector({
+                                let selector = format!("launcher-preference:{label}");
+                                move || selector.clone().into()
+                            })
                             .h(px(36.0))
                             .w_full()
                             .justify_start()

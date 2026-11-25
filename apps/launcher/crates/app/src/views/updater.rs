@@ -975,6 +975,8 @@ mod tests {
         let fixture = Fixture::new(&[]);
         let (window, root) = fixture.open(cx, |root| {
             root.tab = super::super::Tab::Settings;
+            // Independent of the channel this test binary was compiled for.
+            root.data.settings.update_channel = Some(UpdateChannel::Stable);
             root.launcher_update = UpdaterUi::new(true);
         });
         Fixture::click(cx, window, "launcher-preference:Updates");
@@ -989,6 +991,5 @@ mod tests {
             root.read_with(cx, |v, _| v.data.settings.update_channel),
             Some(UpdateChannel::Stable)
         );
-        fixture.cleanup();
     }
 }
