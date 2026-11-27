@@ -1,9 +1,7 @@
 //! Background process list and virtualized operation logs.
 
 use super::{LauncherRoot, Tab};
-use crate::ui::{
-    badge, btn, empty_state, icon, progress_bar, spinner, tint, BadgeKind, ButtonVariant,
-};
+use crate::ui::{btn, empty_state, icon, mix, progress_bar, spinner, tint, ButtonVariant};
 use gpui::{
     div, prelude::*, px, uniform_list, Context, Div, FontWeight, MouseButton, MouseDownEvent,
     UniformListScrollHandle, Window,
@@ -78,66 +76,91 @@ impl LauncherRoot {
             })
             .unwrap_or_else(|| stage_label(&p.stage))
             .to_string();
+        let row_hover = tint(t.accent(), 0.45);
         let mut card = div()
+            .relative()
             .flex()
             .flex_col()
             .border_b_1()
-            .border_color(t.border())
+            .border_color(tint(t.border(), 0.6))
             .bg(if selected {
                 tint(t.primary(), 0.1)
             } else {
                 gpui::rgba(0x00000000)
             })
+            .when(selected, |el| {
+                el.child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .bottom_0()
+                        .w(px(3.0))
+                        .bg(t.primary()),
+                )
+            })
             .child(
-                crate::ui::button_base("").id(format!("process-row:{key}")).aria_label(p.name.clone()).h_auto().items_stretch().rounded_none()
+                crate::ui::button_base(t, "")
+                    .id(format!("process-row:{key}"))
+                    .aria_label(p.name.clone())
+                    .h_auto()
+                    .items_stretch()
+                    .rounded_none()
                     .flex()
                     .flex_col()
-                    .gap_1()
-                    .p_2()
+                    .gap(px(6.0))
+                    .px_4()
+                    .py_3()
                     .cursor_pointer()
+                    .hover(move |s| s.bg(row_hover))
                     .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                            v.select_process(select.clone(), cx)
-                        }),
-                    )
+                        v.select_process(select.clone(), cx)
+                    }))
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_2()
                             .when(p.status == Status::Running, |el| {
-                                el.child(spinner(
-                                    format!("process-spinner:{key}"),
-                                    "loader-circle",
-                                    14.0,
-                                ))
+                                el.child(
+                                    div()
+                                        .text_color(t.primary())
+                                        .child(spinner(
+                                            format!("process-spinner:{key}"),
+                                            "loader-circle",
+                                            14.0,
+                                        )),
+                                )
                             })
                             .child(
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .text_xs()
+                                    .text_size(px(13.0))
                                     .font_weight(FontWeight::MEDIUM)
+                                    .text_color(t.foreground())
+                                    .text_ellipsis()
                                     .child(p.name.clone()),
                             )
                             .child(
-                                badge(t, &line_count_label(p.logs.len()), BadgeKind::Normal)
-                                    .h(px(20.0))
-                                    .py_0()
-                                    .text_size(px(10.0)),
+                                div()
+                                    .text_size(px(12.0))
+                                    .text_color(t.muted_foreground())
+                                    .child(line_count_label(p.logs.len())),
                             ),
                     )
                     .child(
                         div()
                             .w_full()
-                            .text_size(px(11.0))
+                            .text_size(px(12.0))
                             .text_color(t.muted_foreground())
                             .text_ellipsis()
                             .child(description),
                     )
                     .when(p.status == Status::Running, |el| {
-                        el.child(progress_bar(t, p.pct)).child(
+                        el.child(progress_bar(t, p.pct).h(px(5.0))).child(
                             div()
-                                .text_xs()
+                                .text_size(px(12.0))
                                 .text_color(t.muted_foreground())
                                 .child(p.progress_text()),
                         )
@@ -202,18 +225,51 @@ impl LauncherRoot {
             .selected
             .as_deref()
             .and_then(|key| self.processes_ui.history.get(key));
+        if items.is_empty() {
+            return div().flex().flex_1().min_h_0().items_center().justify_center().child(
+                empty_state(
+                    t,
+                    "No processes yet. Installs, updates, copies and deletions show their progress here.",
+                ),
+            );
+        }
         let summary = if running > 0 {
-            format!("{running} running · {} total", items.len())
-        } else if !items.is_empty() {
-            format!("{} recent", items.len())
+            format!("{running} running, {} total", items.len())
         } else {
-            "No active or recent processes".into()
+            format!("{} recent", items.len())
         };
-        let sidebar = div().w(px(280.0)).max_w(gpui::relative(0.32)).flex_shrink_0().min_h_0().flex().flex_col().border_r_1().border_color(t.border())
-            .child(div().px_3().py_2().border_b_1().border_color(t.border()).child(div().text_xs().font_weight(FontWeight::SEMIBOLD).child("Background processes"))
-                .child(div().text_size(px(11.0)).text_color(t.muted_foreground()).child(summary)))
-            .child(div().id("process-history").flex_1().min_h_0().overflow_y_scroll().children(items.iter().map(|(key,p)| self.process_card((*key).into(),p,cx)))
-                .when(items.is_empty(), |el| el.child(div().p_3().text_xs().text_color(t.muted_foreground()).child("Install a pack, update a pack, or delete an instance to see progress here."))));
+        let sidebar = div()
+            .w(px(300.0))
+            .max_w(gpui::relative(0.34))
+            .flex_shrink_0()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .bg(t.window_surface(mix(t.card(), t.background(), 0.35)))
+            .border_r_1()
+            .border_color(tint(t.border(), 0.85))
+            .child(
+                div()
+                    .px_4()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(tint(t.border(), 0.8))
+                    .text_size(px(12.0))
+                    .text_color(t.muted_foreground())
+                    .child(summary),
+            )
+            .child(
+                div()
+                    .id("process-history")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .children(
+                        items
+                            .iter()
+                            .map(|(key, p)| self.process_card((*key).into(), p, cx)),
+                    ),
+            );
         let detail = if let Some(p) = selected {
             let instance = p.id.clone();
             let detail_spinner = format!(
@@ -227,65 +283,91 @@ impl LauncherRoot {
                     .gap_2()
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(px(12.0))
                             .text_color(t.muted_foreground())
                             .child(label),
                     )
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
+                            .text_color(t.foreground())
                             .child(value),
                     )
             };
+            let status_text = if p.status == Status::Done {
+                "Complete"
+            } else if p.status == Status::Failed {
+                "Failed"
+            } else if p.status == Status::Cancelled {
+                "Cancelled"
+            } else {
+                stage_label(&p.stage)
+            }
+            .to_string();
             let mut header = div()
-                .px_3()
-                .py_2()
+                .px_5()
+                .py_4()
                 .flex()
                 .flex_col()
-                .gap(px(6.0))
+                .gap_3()
+                .bg(t.window_surface(mix(t.card(), t.background(), 0.65)))
                 .border_b_1()
-                .border_color(t.border())
+                .border_color(tint(t.border(), 0.85))
                 .child(
                     div()
                         .flex()
-                        .gap_2()
+                        .gap_3()
                         .items_center()
                         .when(p.status == Status::Running, |el| {
-                            el.child(spinner(detail_spinner.clone(), "loader-circle", 16.0))
+                            el.child(
+                                div()
+                                    .text_color(t.primary())
+                                    .child(spinner(detail_spinner.clone(), "loader-circle", 18.0)),
+                            )
                         })
-                        .child(div().font_weight(FontWeight::MEDIUM).child(p.name.clone()))
-                        .child(badge(
-                            t,
-                            if p.status == Status::Done {
-                                "Complete"
-                            } else if p.status == Status::Failed {
-                                "Failed"
-                            } else if p.status == Status::Cancelled {
-                                "Cancelled"
-                            } else {
-                                stage_label(&p.stage)
-                            },
-                            if p.status == Status::Failed {
-                                BadgeKind::Danger
-                            } else {
-                                BadgeKind::Normal
-                            },
-                        )),
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_size(px(18.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(t.foreground())
+                                .text_ellipsis()
+                                .child(p.name.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(if p.status == Status::Failed {
+                                    t.destructive()
+                                } else if p.status == Status::Running {
+                                    t.primary()
+                                } else {
+                                    t.muted_foreground()
+                                })
+                                .child(status_text),
+                        ),
                 )
                 .child(
                     div()
                         .flex()
                         .flex_wrap()
-                        .gap_4()
+                        .gap_5()
                         .child(meta("Operation", p.operation.label().to_string()))
                         .child(meta("Elapsed", elapsed_label(p.elapsed())))
                         .child(meta("Instance", p.id.clone())),
                 );
             if p.status == Status::Running {
                 header = header
-                    .child(progress_bar(t, p.pct))
-                    .child(div().text_xs().child(p.progress_text()));
+                    .child(progress_bar(t, p.pct).h(px(6.0)))
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(t.muted_foreground())
+                            .child(p.progress_text()),
+                    );
             } else if p.status == Status::Done
                 && matches!(
                     p.operation,
@@ -295,13 +377,17 @@ impl LauncherRoot {
                 && self.data.selected_instance(Some(&p.id)).is_some()
             {
                 header = header.child(
-                    btn(t, "View instance", ButtonVariant::Primary)
-                        .text_xs()
-                        .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                                v.tab = Tab::Instances;
-                                v.select_instance(instance.clone(), cx);
-                            }),
-                        ),
+                    div().flex().child(
+                        btn(t, "View instance", ButtonVariant::Primary)
+                            .h(px(32.0))
+                            .text_size(px(13.0))
+                            .on_click(cx.listener(
+                                move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                    v.tab = Tab::Instances;
+                                    v.select_instance(instance.clone(), cx);
+                                },
+                            )),
+                    ),
                 );
             }
             let lines = p.logs.clone();
@@ -321,34 +407,34 @@ impl LauncherRoot {
                         .flex()
                         .items_center()
                         .justify_between()
-                        .px_3()
-                        .py_1()
+                        .px_5()
+                        .py_2()
                         .border_b_1()
-                        .border_color(tint(t.border(), 0.5))
+                        .border_color(tint(t.border(), 0.65))
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap_2()
+                                .gap_3()
                                 .child(
                                     div()
-                                        .text_xs()
+                                        .text_size(px(13.0))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .child("Log"),
                                 )
                                 .child(
                                     div()
-                                        .text_xs()
+                                        .text_size(px(12.0))
                                         .text_color(t.muted_foreground())
                                         .child(line_count_label(line_count)),
                                 ),
                         )
                         .child(
-                            btn(t, "Copy log", ButtonVariant::Ghost)
+                            btn(t, "Copy log", ButtonVariant::Outline)
                                 .debug_selector(|| "process-copy-log".into())
-                                .h(px(24.0))
-                                .px(px(8.0))
-                                .text_xs()
+                                .h(px(28.0))
+                                .px(px(10.0))
+                                .text_size(px(12.0))
                                 .on_click(move |_, _, cx| {
                                     cx.write_to_clipboard(
                                         gpui::ClipboardItem::new_string(copy_text.clone()),
@@ -372,15 +458,15 @@ impl LauncherRoot {
                                     div()
                                         .flex()
                                         .items_center()
-                                        .gap_2()
-                                        .px_3()
-                                        .h(px(20.0))
+                                        .gap_3()
+                                        .px_5()
+                                        .h(px(22.0))
                                         .whitespace_nowrap()
-                                        .text_size(px(11.0))
-                                        .font_family("Consolas")
+                                        .text_size(px(12.0))
+                                        .font_family(crate::input::code_font_family())
                                         .child(
                                             div()
-                                                .w(px(68.0))
+                                                .w(px(74.0))
                                                 .flex_shrink_0()
                                                 .text_right()
                                                 .text_color(tint(normal_color, 0.55))
@@ -405,7 +491,7 @@ impl LauncherRoot {
                     .track_scroll(&self.processes_ui.scroll)
                     .flex_1()
                     .min_h_0()
-                    .bg(gpui::rgba(0x00000066)),
+                    .bg(t.code_background()),
                 )
         } else {
             div()
@@ -413,14 +499,7 @@ impl LauncherRoot {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(empty_state(
-                    t,
-                    if items.is_empty() {
-                        "Process logs will appear here."
-                    } else {
-                        "Select a process to view its full log."
-                    },
-                ))
+                .child(empty_state(t, "Select a process to view its full log."))
         };
         div().flex().flex_1().min_h_0().child(sidebar).child(detail)
     }
@@ -447,14 +526,14 @@ impl LauncherRoot {
                 div()
                     .absolute()
                     .right(px(212.0))
-                    .top(px(40.0))
-                    .w(px(288.0))
-                    .p_1()
+                    .top(px(50.0))
+                    .w(px(304.0))
+                    .p_2()
                     .max_h(gpui::relative(0.7))
                     .bg(t.popover())
                     .border_1()
                     .border_color(t.border())
-                    .rounded_md()
+                    .rounded(px(10.0))
                     .shadow_lg()
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
@@ -466,14 +545,15 @@ impl LauncherRoot {
                             .py_1()
                             .child(
                                 div()
-                                    .text_xs()
+                                    .text_size(px(12.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(t.muted_foreground())
                                     .child(summary),
                             )
                             .child(
                                 btn(t, "View all", ButtonVariant::Ghost)
-                                    .h(px(24.0))
-                                    .text_xs()
+                                    .h(px(26.0))
+                                    .text_size(px(12.0))
                                     .on_click(cx.listener(|v, _: &gpui::ClickEvent, _: &mut Window, cx| {
                                             v.processes_ui.dropdown = false;
                                             v.tab = Tab::Processes;

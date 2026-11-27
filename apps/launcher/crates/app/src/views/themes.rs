@@ -533,7 +533,7 @@ impl LauncherRoot {
                     .flex_col()
                     .gap_2()
                     .child(
-                        button_base("")
+                        button_base(&self.theme, "")
                             .id(selector.clone())
                             .debug_selector(move || selector.clone().into())
                             .aria_label(preset.name.clone())

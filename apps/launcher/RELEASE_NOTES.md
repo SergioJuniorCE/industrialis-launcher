@@ -1,28 +1,12 @@
 <!-- industrialis-launcher-release-v1 -->
 
-# Industrialis Launcher 0.6.0
+# Industrialis Launcher 0.7.0
 
-This release adds selectable launcher update channels, world backups for in-place pack updates, a Recommended add-ons tab for GT New Horizons, and reusable config profiles.
+This release refreshes the native launcher with a graphite-and-amber Industrialis theme, clearer navigation, and more compact instance details.
 
-## Launcher update channels
-
-- Choose **Stable**, **Nightly**, or **Preview** in **Settings → Updates**. Stable is the default for this release. Nightly offers builds from recent changes and may contain regressions.
-- When you switch channels, the next update check offers the newest build in the selected channel, even if its version number matches or is older than your current build. The Updates page shows which build you're running.
-
-## Pack updates and world backups
-
-- In-place pack updates back up your worlds before replacing the instance. The launcher keeps the two most recent update backups per instance and shows the backup path in the operation log.
-- Select **Install as a new instance** in the update dialog to keep playing the original instance on its current pack version. The new instance carries over your saves, configs, selected custom mods, and launch settings.
-- The update dialog warns when you change pack series and explains the recommended upgrade path.
-
-## Recommended add-ons
-
-- Open **Add-ons → Recommended** to browse GTNotLeisure, GTNHRates, and Bandit. The tab shows which add-ons are available for your pack series and installs verified releases with any required companion libraries.
-
-## Config profiles
-
-- Create and edit reusable sets of config overrides in **Settings → Config profiles**. Choose a profile when creating an instance or apply one from an existing instance’s settings while the game is closed.
-- The included **GTNH quiet defaults** profile adjusts pollution, underground dirt and gravel generation, cave generation, and chunk claiming. The launcher reports any config files or keys it skipped.
+- Instance cards center the pack icon and overlay update and progress badges. Hover for the right-click hint, or press Shift+F10 on a focused card for the same menu.
+- The Info tab groups pack version, play time, Java, memory, and other instance details in a two-column layout.
+- Accounts, Settings, Add-ons, and Processes use updated layouts and controls.
 
 ## Downloads
 

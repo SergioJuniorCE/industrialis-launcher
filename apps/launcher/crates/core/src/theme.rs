@@ -154,19 +154,29 @@ pub fn builtin_presets() -> Vec<ThemePreset> {
         ThemePreset {
             id: "industrialis".into(),
             name: "Industrialis".into(),
-            description: "Charcoal base with bronze highlights.".into(),
+            description: "Graphite steel with a single safety-amber accent.".into(),
             builtin: true,
             background_effect: BackgroundEffect::Grid,
             dark: tokens!(monochrome_dark();
-                primary: "#e0b638", primary_foreground: "#0a0a0a",
-                secondary: "#241d10", muted: "#18140d", muted_foreground: "#c9c1ad",
-                accent: "#332713", accent_foreground: "#fff1c7",
-                border: "#3b321f", input: "#4a3b1d", ring: "#e0b638", radius: "0.5rem"),
+                background: "#0a0b0d", foreground: "#eceef1",
+                card: "#111316", card_foreground: "#eceef1",
+                popover: "#16181c", popover_foreground: "#eceef1",
+                primary: "#f5a524", primary_foreground: "#0f0f10",
+                secondary: "#1a1d21", secondary_foreground: "#eceef1",
+                muted: "#0e1012", muted_foreground: "#8b919a",
+                accent: "#1f2328", accent_foreground: "#f4f5f7",
+                destructive: "#e5484d", destructive_foreground: "#fff5f5",
+                border: "#22262b", input: "#30353c", ring: "#f5a524", radius: "0.375rem"),
             light: tokens!(monochrome_light();
-                primary: "#9b6f00", primary_foreground: "#fafafa",
-                secondary: "#efe5c7", muted: "#f1ead8", muted_foreground: "#5f533b",
-                accent: "#decb91", accent_foreground: "#1a1510",
-                border: "#d7c78c", input: "#cdbb7f", ring: "#9b6f00", radius: "0.5rem"),
+                background: "#f5f6f7", foreground: "#0f1114",
+                card: "#ffffff", card_foreground: "#0f1114",
+                popover: "#ffffff", popover_foreground: "#0f1114",
+                primary: "#b45f06", primary_foreground: "#ffffff",
+                secondary: "#eceef1", secondary_foreground: "#0f1114",
+                muted: "#eff1f3", muted_foreground: "#565d66",
+                accent: "#e4e7eb", accent_foreground: "#0f1114",
+                destructive: "#c9332b", destructive_foreground: "#ffffff",
+                border: "#dde0e4", input: "#a9b0b8", ring: "#b45f06", radius: "0.375rem"),
         },
         ThemePreset {
             id: "midnight".into(),
@@ -327,11 +337,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn industrialis_uses_bronze_primary() {
+    fn industrialis_uses_copper_primary() {
         let preset = resolve_preset_or_default("industrialis");
-        assert_eq!(preset.dark.primary, "#e0b638");
-        assert_eq!(preset.dark.accent, "#332713");
-        assert_eq!(preset.dark.ring, "#e0b638");
+        assert_eq!(preset.dark.background, "#0a0b0d");
+        assert_eq!(preset.dark.primary, "#f5a524");
+        assert_eq!(preset.dark.accent, "#1f2328");
+        assert_eq!(preset.dark.ring, "#f5a524");
         assert_eq!(preset.background_effect, BackgroundEffect::Grid);
     }
 

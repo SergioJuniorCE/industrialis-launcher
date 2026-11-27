@@ -200,11 +200,11 @@ impl ActiveTheme {
 }
 
 pub fn editor_background(dark: bool) -> Rgba {
-    gpui::rgb(if dark { 0x16191f } else { 0xf8fafc })
+    gpui::rgb(if dark { 0x0b0f13 } else { 0xf8fafc })
 }
 
 pub fn editor_active_background(dark: bool) -> Rgba {
-    gpui::rgb(if dark { 0x23272e } else { 0xe8edf4 })
+    gpui::rgb(if dark { 0x161d24 } else { 0xe8edf2 })
 }
 
 pub fn contrast_ratio(a: Rgba, b: Rgba) -> f32 {
@@ -397,10 +397,12 @@ mod tests {
     }
 
     #[test]
-    fn industrialis_dark_matches_web() {
+    fn industrialis_dark_uses_foundry_tokens() {
         let theme = ActiveTheme::from_settings("dark", "industrialis", &[]);
-        assert_eq!(theme.tokens.primary, "#e0b638");
-        assert_eq!(theme.tokens.background, "#0a0a0a");
+        assert_eq!(theme.tokens.primary, "#f5a524");
+        assert_eq!(theme.tokens.background, "#0a0b0d");
+        assert!(contrast_ratio(theme.foreground(), theme.background()) >= 12.0);
+        assert!(contrast_ratio(theme.muted_foreground(), theme.card()) >= 4.5);
     }
 
     #[test]

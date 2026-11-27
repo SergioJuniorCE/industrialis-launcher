@@ -33,6 +33,7 @@ mod file_explorer;
 mod file_actions;
 mod explorer_search;
 mod java_chooser;
+mod instance_tile;
 mod library_drag;
 mod library_groups;
 mod library_icons;
@@ -964,9 +965,9 @@ impl LauncherRoot {
 
     fn log_line_div(entry: &LogLine) -> gpui::Div {
         div()
-            .text_size(px(11.0))
-            .line_height(px(18.0))
-            .h(px(18.0))
+            .text_size(px(12.0))
+            .line_height(px(20.0))
+            .h(px(20.0))
             .whitespace_nowrap()
             .text_color(Self::log_line_color(entry))
             .child(entry.line.clone())

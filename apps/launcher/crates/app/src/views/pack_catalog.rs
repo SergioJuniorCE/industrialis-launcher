@@ -835,6 +835,7 @@ impl LauncherRoot {
             );
         self.dialog_frame_with_width(520.0, "New instance", body, footer, cx)
     }
+    #[allow(dead_code)]
     pub(super) fn pack_status_view(
         &self,
         id: &str,

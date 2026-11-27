@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use gpui::{
     canvas, div, point, prelude::*, px, relative, Animation, AnimationExt, App, Bounds, Div,
-    ElementId, FontWeight, Hsla, IntoElement, PathBuilder, Pixels, RenderOnce, Rgba, SpringAnimation,
-    SpringConfig, Svg, Transformation, Window,
+    ElementId, FontWeight, Hsla, IntoElement, PathBuilder, Pixels, RenderOnce, Rgba,
+    SpringAnimation, SpringConfig, Svg, Transformation, Window,
 };
 
 use crate::theme::{readable_color, ActiveTheme};
@@ -33,26 +33,43 @@ pub fn dialog_shell_with_width(
         .flex()
         .items_center()
         .justify_center()
-        .bg(gpui::rgba(0x00000099))
+        .bg(gpui::rgba(0x000000b3))
         .child(
             div()
                 .w(px(width))
-                .rounded(theme.radius())
+                .rounded(theme.radius() * (10.0 / 6.0))
                 .bg(theme.popover())
                 .border_1()
                 .border_color(theme.border())
-                .p_4()
+                .shadow_lg()
+                .overflow_hidden()
                 .flex()
                 .flex_col()
-                .gap_3()
                 .child(
                     div()
+                        .px_5()
+                        .py_4()
+                        .border_b_1()
+                        .border_color(tint(theme.border(), 0.72))
                         .text_base()
+                        .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.foreground())
                         .child(title.to_string()),
                 )
-                .child(body)
-                .child(div().flex().flex_row().justify_end().gap_2().child(footer)),
+                .child(div().px_5().py_4().child(body))
+                .child(
+                    div()
+                        .px_5()
+                        .py_3()
+                        .border_t_1()
+                        .border_color(tint(theme.border(), 0.65))
+                        .bg(tint(theme.muted(), 0.5))
+                        .flex()
+                        .flex_row()
+                        .justify_end()
+                        .gap_2()
+                        .child(footer),
+                ),
         )
 }
 
@@ -109,11 +126,7 @@ impl Icon {
 
 /// Rotates a loader glyph while an operation is active. The id must stay
 /// stable while the operation runs and be unique for each visible spinner.
-pub fn spinner(
-    id: impl Into<ElementId>,
-    name: &'static str,
-    size: f32,
-) -> impl IntoElement {
+pub fn spinner(id: impl Into<ElementId>, name: &'static str, size: f32) -> impl IntoElement {
     icon(name, size).with_animation(
         id,
         Animation::new(Duration::from_millis(900)).repeat(),
@@ -294,11 +307,7 @@ pub fn checkbox(theme: &ActiveTheme, label: &str, checked: bool) -> gpui::Statef
     let location = std::panic::Location::caller();
     checkbox_with_id(
         theme,
-        format!(
-            "checkbox:{}:{}:{label}",
-            location.file(),
-            location.line()
-        ),
+        format!("checkbox:{}:{}:{label}", location.file(), location.line()),
         label,
         checked,
     )
@@ -328,7 +337,7 @@ pub fn checkbox_with_id(
         .flex()
         .items_center()
         .gap_2()
-        .text_xs()
+        .text_size(px(13.0))
         .cursor_pointer()
         .child(
             div()
@@ -336,7 +345,11 @@ pub fn checkbox_with_id(
                 .flex_shrink_0()
                 .rounded(px(4.0))
                 .border_1()
-                .border_color(theme.primary())
+                .border_color(if checked {
+                    theme.primary()
+                } else {
+                    theme.control_border(theme.card())
+                })
                 .bg(if checked {
                     theme.primary()
                 } else {
@@ -351,34 +364,44 @@ pub fn checkbox_with_id(
         .when(!label.is_empty(), |el| el.child(label.to_string()))
 }
 
-/// Match the accepted navigation colors: selected background, muted inactive.
+/// Architectural underline tab for workspace and inspector sub-navigation.
 #[track_caller]
 pub fn tab_btn(theme: &ActiveTheme, label: &str, selected: bool) -> gpui::Stateful<Div> {
-    button_base(label)
+    let accent = theme.primary();
+    let hover_bg = tint(theme.accent(), 0.6);
+    let active_fg = theme.foreground();
+    button_base(theme, label)
         .role(gpui::accesskit::Role::Tab)
         .aria_selected(selected)
-        .h(px(28.0))
-        .px(px(10.0))
-        .text_xs()
-        .bg(if selected {
-            theme.background()
+        .relative()
+        .h(px(36.0))
+        .px(px(12.0))
+        .rounded(px(0.0))
+        .text_size(px(13.0))
+        .font_weight(if selected {
+            FontWeight::SEMIBOLD
         } else {
-            theme.muted()
+            FontWeight::MEDIUM
         })
+        .bg(gpui::rgba(0x00000000))
         .text_color(if selected {
-            theme.foreground()
+            active_fg
         } else {
             theme.muted_foreground()
         })
-        .hover(|style| {
-            if selected {
-                style.bg(theme.background())
-            } else {
-                style
-                    .bg(theme.accent())
-                    .text_color(theme.accent_foreground())
-            }
+        .when(selected, |el| {
+            el.child(
+                div()
+                    .absolute()
+                    .left(px(8.0))
+                    .right(px(8.0))
+                    .bottom_0()
+                    .h(px(2.0))
+                    .rounded_full()
+                    .bg(accent),
+            )
         })
+        .hover(move |style| style.bg(hover_bg).text_color(active_fg))
 }
 
 /// The button baseline. Filled and outlined variants share the same height,
@@ -389,22 +412,22 @@ pub fn btn(theme: &ActiveTheme, label: &str, variant: ButtonVariant) -> gpui::St
         ButtonVariant::Primary => (
             theme.primary(),
             theme.primary_foreground(),
-            tint(theme.primary(), 0.95),
+            mix(theme.primary(), theme.primary_foreground(), 0.88),
         ),
         ButtonVariant::Secondary => (
             theme.secondary(),
             theme.secondary_foreground(),
-            tint(theme.primary(), 0.18),
+            theme.accent(),
         ),
         ButtonVariant::Ghost => (
             gpui::rgba(0x00000000),
             theme.foreground(),
-            tint(theme.primary(), 0.14),
+            tint(theme.accent(), 0.72),
         ),
         ButtonVariant::Danger => (
             theme.destructive(),
             theme.destructive_foreground(),
-            tint(theme.destructive(), 0.9),
+            mix(theme.destructive(), theme.destructive_foreground(), 0.88),
         ),
         ButtonVariant::Outline => (
             theme.card(),
@@ -414,7 +437,7 @@ pub fn btn(theme: &ActiveTheme, label: &str, variant: ButtonVariant) -> gpui::St
         ButtonVariant::MenuItem => (
             gpui::rgba(0x00000000),
             theme.foreground(),
-            tint(theme.primary(), 0.14),
+            tint(theme.accent(), 0.75),
         ),
         ButtonVariant::Row => (
             gpui::rgba(0x00000000),
@@ -427,36 +450,28 @@ pub fn btn(theme: &ActiveTheme, label: &str, variant: ButtonVariant) -> gpui::St
         ButtonVariant::Ghost | ButtonVariant::MenuItem | ButtonVariant::Row
     );
     let border = match variant {
-        ButtonVariant::Primary => {
-            readable_color(theme.primary_foreground(), bg, 3.0)
-        }
-        ButtonVariant::Secondary => {
-            readable_color(theme.secondary_foreground(), bg, 3.0)
-        }
-        ButtonVariant::Danger => {
-            readable_color(theme.destructive_foreground(), bg, 3.0)
-        }
+        ButtonVariant::Primary => tint(theme.primary(), 0.9),
+        ButtonVariant::Secondary => theme.control_border(bg),
+        ButtonVariant::Danger => tint(theme.destructive(), 0.9),
         ButtonVariant::Outline => theme.control_border(bg),
         ButtonVariant::Ghost | ButtonVariant::MenuItem | ButtonVariant::Row => {
             gpui::rgba(0x00000000)
         }
     };
     let hover_border = match variant {
-        ButtonVariant::Primary => {
-            readable_color(theme.primary_foreground(), hover, 3.0)
-        }
-        ButtonVariant::Secondary => {
-            readable_color(theme.secondary_foreground(), hover, 3.0)
-        }
-        ButtonVariant::Danger => {
-            readable_color(theme.destructive_foreground(), hover, 3.0)
-        }
+        ButtonVariant::Primary => tint(hover, 0.95),
+        ButtonVariant::Secondary => theme.control_border(hover),
+        ButtonVariant::Danger => tint(hover, 0.95),
         ButtonVariant::Outline => theme.control_border(hover),
         ButtonVariant::Ghost | ButtonVariant::MenuItem | ButtonVariant::Row => {
             gpui::rgba(0x00000000)
         }
     };
-    let button = button_base(label).bg(bg).text_color(fg);
+    let focus_border = readable_color(theme.ring(), bg, 3.0);
+    let button = button_base(theme, label)
+        .bg(bg)
+        .text_color(fg)
+        .focus_visible(move |style| style.border_2().border_color(focus_border));
     let button = if bordered {
         button.border_1().border_color(border)
     } else {
@@ -480,7 +495,7 @@ pub fn btn(theme: &ActiveTheme, label: &str, variant: ButtonVariant) -> gpui::St
 // The framework permits one hover refinement per element, so tabs and buttons each
 // attach their own hover style to this shared, non-interactive base.
 #[track_caller]
-pub(crate) fn button_base(label: &str) -> gpui::Stateful<Div> {
+pub(crate) fn button_base(theme: &ActiveTheme, label: &str) -> gpui::Stateful<Div> {
     let location = std::panic::Location::caller();
     div()
         .id(format!(
@@ -494,8 +509,8 @@ pub(crate) fn button_base(label: &str) -> gpui::Stateful<Div> {
         })
         .focusable()
         .tab_stop(true)
-        .focus_visible(|style| style.border_2().border_color(gpui::rgb(0x60a5fa)))
-        .px_3()
+        .focus_visible(|style| style.border_2().border_color(theme.ring()))
+        .px(px(13.0))
         .h(px(32.0))
         .flex()
         .items_center()
@@ -504,7 +519,7 @@ pub(crate) fn button_base(label: &str) -> gpui::Stateful<Div> {
         .rounded(px(6.0))
         .cursor_pointer()
         .font_weight(FontWeight::MEDIUM)
-        .text_sm()
+        .text_size(px(13.0))
         .when(!label.is_empty(), |element| {
             element.child(label.to_string())
         })
@@ -568,7 +583,7 @@ pub fn progress_bar(theme: &ActiveTheme, pct: f64) -> Div {
 /// A persistent boundary for grouped content, including rows with several actions.
 pub fn card(theme: &ActiveTheme) -> Div {
     div()
-        .rounded(theme.radius())
+        .rounded(theme.radius() * (8.0 / 6.0))
         .bg(theme.card())
         .text_color(theme.card_foreground())
         .border_1()
@@ -584,7 +599,7 @@ pub fn list_item(theme: &ActiveTheme, label: &str, selected: bool) -> gpui::Stat
     } else {
         theme.card()
     };
-    button_base(label)
+    button_base(theme, label)
         .flex_shrink_0()
         .bg(surface)
         .text_color(readable_color(
@@ -623,16 +638,16 @@ pub fn list_item(theme: &ActiveTheme, label: &str, selected: bool) -> gpui::Stat
 /// only carries its selection and hover state, so long lists stay quiet.
 #[track_caller]
 pub fn select_row(theme: &ActiveTheme, selected: bool) -> gpui::Stateful<Div> {
-    button_base("")
+    button_base(theme, "")
         .w_full()
         .min_w_0()
         .flex_shrink_0()
         .justify_between()
-        .h(px(34.0))
+        .h(px(36.0))
         .px(px(12.0))
         .rounded(px(0.0))
         .bg(if selected {
-            tint(theme.primary(), 0.12)
+            tint(theme.primary(), 0.14)
         } else {
             gpui::rgba(0x00000000)
         })
@@ -640,9 +655,9 @@ pub fn select_row(theme: &ActiveTheme, selected: bool) -> gpui::Stateful<Div> {
         .hover(move |style| {
             style
                 .bg(if selected {
-                    tint(theme.primary(), 0.16)
+                    tint(theme.primary(), 0.18)
                 } else {
-                    tint(theme.accent(), 0.3)
+                    tint(theme.accent(), 0.45)
                 })
                 .text_color(theme.foreground())
         })
@@ -654,53 +669,60 @@ pub fn segmented_control(theme: &ActiveTheme) -> Div {
         .flex()
         .items_center()
         .gap(px(2.0))
-        .p(px(2.0))
-        .rounded(px(8.0))
-        .bg(tint(theme.muted(), 0.45))
+        .p(px(3.0))
+        .rounded(px(7.0))
+        .bg(theme.muted())
         .border_1()
-        .border_color(tint(theme.border(), 0.4))
+        .border_color(theme.border())
 }
 
-/// One choice inside a [`segmented_control`]. No border of its own.
+/// One choice inside a [`segmented_control`]. Tactile active elevation.
 #[track_caller]
 pub fn segment(theme: &ActiveTheme, label: &str, selected: bool) -> gpui::Stateful<Div> {
-    button_base(label)
+    let active_bg = theme.card();
+    let active_border = tint(theme.border(), 0.95);
+    let hover_bg = if selected {
+        active_bg
+    } else {
+        tint(theme.accent(), 0.55)
+    };
+    let fg = theme.foreground();
+    button_base(theme, label)
         .h(px(28.0))
         .px(px(12.0))
-        .rounded(px(6.0))
-        .text_xs()
+        .rounded(px(5.0))
+        .text_size(px(12.0))
+        .font_weight(if selected {
+            FontWeight::SEMIBOLD
+        } else {
+            FontWeight::MEDIUM
+        })
+        .when(selected, |el| el.border_1().border_color(active_border))
         .bg(if selected {
-            tint(theme.primary(), 0.14)
+            active_bg
         } else {
             gpui::rgba(0x00000000)
         })
         .text_color(if selected {
-            theme.foreground()
+            fg
         } else {
             theme.muted_foreground()
         })
-        .hover(move |style| {
-            style
-                .bg(if selected {
-                    tint(theme.primary(), 0.18)
-                } else {
-                    tint(theme.accent(), 0.3)
-                })
-                .text_color(theme.foreground())
-        })
+        .hover(move |style| style.bg(hover_bg).text_color(fg))
 }
 
 pub fn section_title(theme: &ActiveTheme, text: &str) -> Div {
     div()
-        .text_sm()
-        .text_color(theme.muted_foreground())
+        .text_size(px(13.0))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(theme.foreground())
         .child(text.to_string())
 }
 
 pub fn empty_state(theme: &ActiveTheme, text: &str) -> Div {
     div()
         .p_8()
-        .text_sm()
+        .text_size(px(13.0))
         .text_color(theme.muted_foreground())
         .child(text.to_string())
 }

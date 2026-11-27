@@ -2,7 +2,7 @@ use super::LauncherRoot;
 use crate::{
     input::{FieldState, NativeField, NativeFieldEvent},
     state::format_bytes,
-    ui::{btn, card, list_item, ButtonVariant},
+    ui::{btn, card, list_item, section_title, ButtonVariant},
 };
 use gpui::{div, prelude::*, Context, Div};
 use industrialis_backend::{
@@ -415,7 +415,23 @@ impl LauncherRoot {
             .status
             .as_ref()
             .is_some_and(|s| s.configured);
-        let mut panel=card(&t).p_3().flex().flex_col().gap_3().child("Google Drive").child(div().text_xs().text_color(t.muted_foreground()).child(if connected{"Connected. Existing backups and queued uploads are available."}else{"Connect Drive to upload local backups automatically."})).child(field)
+        let mut panel = card(&t)
+            .p_4()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(section_title(&t, "Google Drive"))
+            .child(
+                div()
+                    .text_size(gpui::px(12.0))
+                    .text_color(t.muted_foreground())
+                    .child(if connected {
+                        "Connected. Existing backups and queued uploads are available."
+                    } else {
+                        "Connect Drive to upload local backups automatically."
+                    }),
+            )
+            .child(field)
             .child(div().flex().flex_wrap().gap_2().child(self.backup_button("Save client ID",|v,cx|v.backup_action(Action::Configure(v.backups_ui.client.text.clone()),cx),cx))
                 .when(configured&&!connected,|row|row.child(self.backup_button("Connect Google Drive",|v,cx|v.backup_action(Action::Connect,cx),cx)))
                 .when(connected,|row|row.child(self.backup_button("Disconnect",|v,cx|v.backup_action(Action::Disconnect,cx),cx)))
@@ -451,7 +467,7 @@ impl LauncherRoot {
                 format_bytes(progress.total)
             ));
         }
-        panel = panel.child("Instance backup health");
+        panel = panel.child(div().mt_2().child(section_title(&t, "Instance backup health")));
         for instance in self.data.instances.clone() {
             let id = instance.id.clone();
             let name = if instance.settings.name.is_empty() {
@@ -584,11 +600,12 @@ impl LauncherRoot {
         if let Some(error) = error.or_else(|| self.backups_ui.error.clone()) {
             panel = panel.child(div().text_xs().text_color(t.destructive()).child(error));
         }
-        panel = panel.child("Local backups");
+        panel = panel.child(section_title(&t, "Local backups"));
         if local.is_empty() {
             panel = panel.child(
                 div()
-                    .text_xs()
+                    .text_size(gpui::px(12.0))
+                    .text_color(t.muted_foreground())
                     .child("No local backups yet. In-game backup archives appear here."),
             );
         }
@@ -624,9 +641,14 @@ impl LauncherRoot {
                     )),
             );
         }
-        panel = panel.child("Cloud snapshots");
+        panel = panel.child(div().mt_1().child(section_title(&t, "Cloud snapshots")));
         if cloud.is_empty() {
-            panel = panel.child(div().text_xs().child("No cloud snapshots available."));
+            panel = panel.child(
+                div()
+                    .text_size(gpui::px(12.0))
+                    .text_color(t.muted_foreground())
+                    .child("No cloud snapshots available."),
+            );
         }
         for snapshot in cloud {
             let summary = snapshot.summary;

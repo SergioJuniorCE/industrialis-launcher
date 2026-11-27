@@ -2,7 +2,7 @@
 use super::LauncherRoot;
 use crate::{
     theme::{parse_hex, ActiveTheme},
-    ui::{btn, button_base, card, icon, mix, ButtonVariant},
+    ui::{btn, button_base, card, icon, mix, segment, segmented_control, ButtonVariant},
 };
 use gpui::{div, prelude::*, px, relative, Context, Div, FontWeight};
 use industrialis_core::{
@@ -12,9 +12,9 @@ use industrialis_core::{
 
 pub(super) fn heading(text: &str, theme: &ActiveTheme) -> Div {
     div()
-        .text_xs()
-        .text_color(theme.muted_foreground())
-        .font_weight(FontWeight::MEDIUM)
+        .text_size(px(13.0))
+        .text_color(theme.foreground())
+        .font_weight(FontWeight::SEMIBOLD)
         .child(text.to_owned())
 }
 
@@ -58,9 +58,9 @@ pub(super) fn setting_row(
 /// built-in, imported, or edited palette.
 fn launcher_preview(theme: &ActiveTheme) -> Div {
     div()
-        .h(px(104.))
+        .h(px(110.))
         .w_full()
-        .rounded(px(6.))
+        .rounded(px(8.))
         .border_1()
         .border_color(theme.border())
         .bg(theme.background())
@@ -69,22 +69,24 @@ fn launcher_preview(theme: &ActiveTheme) -> Div {
         .flex_col()
         .child(
             div()
-                .h(px(16.))
+                .h(px(18.))
                 .bg(theme.card())
                 .border_b_1()
                 .border_color(theme.border())
                 .flex()
                 .items_center()
                 .px_2()
-                .gap_1()
+                .gap_2()
+                .child(div().size(px(8.)).rounded_sm().bg(theme.primary()))
                 .child(
                     div()
                         .w(px(28.))
                         .h(px(4.))
                         .rounded_full()
-                        .bg(theme.muted_foreground()),
+                        .bg(theme.foreground()),
                 )
-                .child(div().w(px(14.)).h(px(6.)).rounded_sm().bg(theme.primary())),
+                .child(div().flex_1())
+                .child(div().w(px(20.)).h(px(7.)).rounded_sm().bg(theme.primary())),
         )
         .child(
             div()
@@ -93,35 +95,84 @@ fn launcher_preview(theme: &ActiveTheme) -> Div {
                 .min_h_0()
                 .child(
                     div()
-                        .w(relative(0.25))
+                        .flex_1()
                         .p_2()
-                        .border_r_1()
-                        .border_color(theme.border())
                         .flex()
-                        .flex_col()
-                        .gap_1()
-                        .children(
-                            [0, 1, 2].map(|_| div().h(px(5.)).rounded_full().bg(theme.muted())),
-                        ),
+                        .gap_2()
+                        .children([true, false].map(|selected| {
+                            div()
+                                .w(px(36.))
+                                .h(px(44.))
+                                .rounded(px(4.))
+                                .border_1()
+                                .border_color(if selected {
+                                    theme.primary()
+                                } else {
+                                    theme.border()
+                                })
+                                .bg(theme.card())
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .justify_center()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .size(px(14.))
+                                        .rounded(px(3.))
+                                        .bg(if selected {
+                                            theme.primary()
+                                        } else {
+                                            theme.secondary()
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .w(px(20.))
+                                        .h(px(3.))
+                                        .rounded_full()
+                                        .bg(theme.muted_foreground()),
+                                )
+                        })),
                 )
                 .child(
                     div()
+                        .w(relative(0.42))
                         .p_2()
-                        .flex_1()
+                        .border_l_1()
+                        .border_color(theme.border())
+                        .bg(mix(theme.card(), theme.background(), 0.45))
                         .flex()
                         .flex_col()
                         .justify_between()
-                        .child(div().flex().gap_1().children([0, 1].map(|_| {
+                        .child(
                             div()
-                                .w(px(23.))
-                                .h(px(25.))
-                                .rounded_sm()
-                                .border_1()
-                                .border_color(theme.border())
-                                .bg(theme.card())
-                                .child(div().size(px(8.)).m_1().rounded_sm().bg(theme.primary()))
-                        })))
-                        .child(div().h(px(7.)).rounded_sm().bg(theme.primary())),
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .w(px(36.))
+                                        .h(px(5.))
+                                        .rounded_full()
+                                        .bg(theme.foreground()),
+                                )
+                                .child(
+                                    div()
+                                        .w(px(48.))
+                                        .h(px(4.))
+                                        .rounded_full()
+                                        .bg(theme.muted()),
+                                )
+                                .child(
+                                    div()
+                                        .w(px(40.))
+                                        .h(px(4.))
+                                        .rounded_full()
+                                        .bg(theme.muted()),
+                                ),
+                        )
+                        .child(div().h(px(10.)).rounded(px(3.)).bg(theme.primary())),
                 ),
         )
 }
@@ -187,7 +238,7 @@ impl LauncherRoot {
                     let mut preferences = self.data.settings.clone();
                     preferences.theme_mode = mode;
                     let preview = ActiveTheme::from_preferences(&preferences);
-                    button_base("")
+                    button_base(&t, "")
                         .id(format!("appearance-mode:{label}"))
                         .debug_selector(move || format!("appearance-mode:{label}").into())
                         .aria_label(format!("{label} color scheme"))
@@ -242,7 +293,7 @@ impl LauncherRoot {
                     .child(self.vsx_theme_button(cx)),
             );
 
-        let material_controls = div().flex().flex_wrap().gap_1().children(
+        let material_controls = segmented_control(&t).children(
             [
                 (WindowMaterial::Opaque, "Opaque"),
                 (WindowMaterial::Frosted, "Frosted glass"),
@@ -250,22 +301,9 @@ impl LauncherRoot {
             ]
             .into_iter()
             .map(|(material, label)| {
-                btn(
-                    &t,
-                    label,
-                    if self.data.settings.window_material == material {
-                        ButtonVariant::Secondary
-                    } else {
-                        ButtonVariant::Outline
-                    },
-                )
-                .h(px(28.))
-                .text_xs()
-                .when(self.data.settings.window_material == material, |button| {
-                    button.border_1().border_color(t.primary())
-                })
-                .debug_selector(move || format!("appearance-material:{label}").into())
-                .on_click(cx.listener(move |v, _, _, cx| v.set_window_material(material, cx)))
+                segment(&t, label, self.data.settings.window_material == material)
+                    .debug_selector(move || format!("appearance-material:{label}").into())
+                    .on_click(cx.listener(move |v, _, _, cx| v.set_window_material(material, cx)))
             }),
         );
         let mut interface = card(&t).flex().flex_col().child(setting_row(
@@ -378,8 +416,8 @@ impl LauncherRoot {
             .gap_3()
             .child(
                 div()
-                    .py_2()
-                    .text_base()
+                    .pt_1()
+                    .text_size(px(18.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Appearance"),
             )

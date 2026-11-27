@@ -1,13 +1,16 @@
 //! InstanceWorkspace, library tiles, header, Info panel and bottom action bar.
-use super::{instance_actions::MaintenanceKind, DetailTab, LauncherRoot};
+use super::{
+    instance_actions::MaintenanceKind,
+    instance_tile::{is_context_menu_key, TILE_HEIGHT, TILE_WIDTH},
+    DetailTab, LauncherRoot,
+};
 use crate::state::format_bytes;
 use crate::ui::{
-    badge, btn, icon, icon_btn, mix, progress_bar, progress_ring, spinner, tab_btn, tint, BadgeKind,
-    ButtonVariant,
+    btn, card, icon, icon_btn, mix, progress_bar, spinner, tab_btn, tint, ButtonVariant,
 };
 use gpui::{
-    div, img, prelude::*, px, relative, Animation, AnimationExt, Context, Div, FontWeight,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, Window,
+    div, prelude::*, px, Context, Div, FontWeight, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Point, Window,
 };
 use industrialis_backend::{instances::InstanceInfo, paths::LauncherPaths};
 use industrialis_core::{
@@ -105,11 +108,11 @@ pub(super) fn display_name(info: &InstanceInfo) -> String {
         info.settings.name.clone()
     }
 }
-fn imported_frozen(info: &InstanceInfo) -> bool {
+pub(super) fn imported_frozen(info: &InstanceInfo) -> bool {
     info.settings.imported
         && (info.settings.pack_version.is_empty() || !info.settings.imported_gtnh)
 }
-fn pack_version(info: &InstanceInfo) -> &str {
+pub(super) fn pack_version(info: &InstanceInfo) -> &str {
     if info.settings.pack_version.is_empty() {
         if info.settings.imported {
             "Imported"
@@ -355,7 +358,7 @@ impl LauncherRoot {
                 .max(0.)))
             .top(px(f32::from(position.y)
                 .min(f32::from(window.viewport_size().height) - height)
-                .max(44.)))
+                .max(52.)))
             .w(px(208.))
             .p_1()
             .rounded_md()
@@ -399,338 +402,6 @@ impl LauncherRoot {
             }
         })
         .detach();
-    }
-
-    fn instance_avatar(&self, info: &InstanceInfo, size: f32) -> Div {
-        let t = &self.theme;
-        div()
-            .size(px(size))
-            .rounded(px(if size >= 56.0 { 12.0 } else { 8.0 }))
-            .overflow_hidden()
-            .bg(t.secondary())
-            .border_1()
-            .border_color(tint(t.primary(), 0.18))
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_size(px(if size >= 56.0 { 16.0 } else { 14.0 }))
-            .font_weight(FontWeight::SEMIBOLD)
-            .child(if let Some(path) = &info.icon_path {
-                img(PathBuf::from(path))
-                    .size(px(size))
-                    .object_fit(gpui::ObjectFit::Cover)
-                    .into_any_element()
-            } else {
-                div()
-                    .child(
-                        display_name(info)
-                            .chars()
-                            .next()
-                            .unwrap_or('?')
-                            .to_uppercase()
-                            .to_string(),
-                    )
-                    .into_any_element()
-            })
-    }
-
-    pub(super) fn instance_card(
-        &self,
-        info: &InstanceInfo,
-        slot_hint: Option<&str>,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
-        let t = &self.theme;
-        let selected = self.selected_id.as_deref() == Some(&info.id);
-        let id = info.id.clone();
-        let menu_id = id.clone();
-        let right_id = id.clone();
-        let running = self.data.running.get(&id).is_some_and(|(_, alive)| *alive);
-        let starting = self.data.launching.contains(&id);
-        let active_entry = self
-            .processes_ui
-            .history
-            .sorted()
-            .into_iter()
-            .find(|(_, p)| {
-                p.id == id && p.status == Status::Running && p.operation != Operation::Copy
-            });
-        let (active_key, active) = match active_entry {
-            Some((key, p)) => (Some(key.to_string()), Some(p)),
-            None => (None, None),
-        };
-        let update = self.pack_status(pack_version(info));
-        let update_available = !imported_frozen(info)
-            && update.status
-                == industrialis_core::pack_version::PackUpdateStatus::UpdateAvailable;
-        let caption = if starting {
-            vec!["Launching…".to_string()]
-        } else if let Some(p) = active {
-            vec![p.operation.label().to_string(), p.progress_text()]
-        } else {
-            vec![pack_version(info).to_string(), format_bytes(info.size_bytes)]
-        };
-        let drag_owner = cx.entity().downgrade();
-        let dragged = super::library_groups::DraggedInstance {
-            id: info.id.clone(),
-            name: display_name(info),
-            theme: t.clone(),
-        };
-        let keyboard_id = info.id.clone();
-        let selector = format!("instance-tile:{}", info.id);
-        let mut tile = div()
-            .id(selector.clone())
-            .role(gpui::accesskit::Role::ListBoxOption)
-            .aria_label(display_name(info))
-            .aria_selected(selected)
-            .focusable()
-            .tab_stop(true)
-            .focus_visible(|style| style.border_2().border_color(t.primary()))
-            .on_key_down(cx.listener(move |v, event: &gpui::KeyDownEvent, _, cx| {
-                if matches!(event.keystroke.key.as_str(), "enter" | "space")
-                    && !event.keystroke.modifiers.modified()
-                {
-                    v.select_instance(keyboard_id.clone(), cx);
-                    if event.keystroke.key == "enter" && !v.instance_is_busy(&keyboard_id) {
-                        v.play(keyboard_id.clone(), cx);
-                    }
-                    cx.stop_propagation();
-                }
-            }))
-            .debug_selector(move || selector.clone().into())
-            .when(
-                !self.instance_is_busy(&info.id) && !self.groups_ui.busy,
-                |tile| {
-                    tile.on_drag(dragged, move |drag, _, window, cx| {
-                        if let Some(root) = drag_owner.upgrade() {
-                            root.update(cx, |v, cx| v.begin_library_drag(drag, window, cx));
-                        }
-                        cx.new(|_| drag.clone())
-                    })
-                },
-            )
-            .relative()
-            .group("instance-tile")
-            .child(self.workspace_ui.drag.measure_tile(info.id.clone()))
-            .w(px(144.0))
-            .h(px(117.0))
-            .overflow_hidden()
-            .flex_shrink_0()
-            .p(px(10.0))
-            .rounded(px(6.0))
-            .border_1()
-            .border_color(if selected {
-                tint(t.primary(), 0.65)
-            } else {
-                t.border()
-            })
-            .bg(t.card())
-            .flex()
-            .flex_col()
-            .items_center()
-            .gap_2()
-            .cursor_pointer()
-            .when(selected, |el| {
-                el.bg(tint(t.primary(), 0.13)).child(
-                    div()
-                        .absolute()
-                        .left_0()
-                        .top_0()
-                        .bottom_0()
-                        .w(px(3.0))
-                        .bg(tint(t.primary(), 0.86)),
-                )
-            })
-            .when(!selected, |el| el.hover(|s| s.bg(tint(t.accent(), 0.7))))
-            .child(self.instance_avatar(info, 56.0))
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(t.card_foreground())
-                            .text_center()
-                            .w_full()
-                            .text_ellipsis()
-                            .child(display_name(info)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .gap_1()
-                            .w_full()
-                            .text_size(px(10.0))
-                            .text_color(t.muted_foreground())
-                            .children(caption.into_iter().map(|part| {
-                                div().min_w_0().text_ellipsis().child(part)
-                            })),
-                    ),
-            )
-            .child(
-                icon_btn(t, "ellipsis", ButtonVariant::Ghost)
-                    .id(format!("instance-menu:{}", info.id))
-                    .aria_label(format!("Instance actions: {}", display_name(info)))
-                    .absolute()
-                    .top(px(6.0))
-                    .right(px(6.0))
-                    .size(px(28.0))
-                    .bg(tint(t.background(), 0.86))
-                    .text_color(t.muted_foreground())
-                    .on_click(cx.listener(move |v, e: &gpui::ClickEvent, _, cx| {
-                        cx.stop_propagation();
-                        v.workspace_ui.menu =
-                            Some((MenuTarget::Instance(menu_id.clone()), e.position()));
-                        cx.notify();
-                    })),
-            )
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(move |v, e: &MouseDownEvent, _, cx| {
-                    cx.stop_propagation();
-                    v.workspace_ui.menu =
-                        Some((MenuTarget::Instance(right_id.clone()), e.position));
-                    cx.notify();
-                }),
-            )
-            .on_click(cx.listener(move |v, e: &gpui::ClickEvent, _, cx| {
-                v.select_instance(id.clone(), cx);
-                if e.click_count() == 2 && !v.instance_is_busy(&id) {
-                    v.play(id.clone(), cx);
-                }
-            }));
-        if let Some(hint) = slot_hint.filter(|_| active.is_none()) {
-            let chip = format!("launch-slot:{}", info.id);
-            tile = tile.child(
-                div()
-                    .debug_selector(move || chip.clone().into())
-                    .absolute()
-                    .top(px(7.0))
-                    .left(px(8.0))
-                    .text_size(px(9.0))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(t.muted_foreground())
-                    .child(hint.to_string()),
-            );
-        }
-        let status_badge = if let Some(p) = active {
-            let process_key = active_key.clone().unwrap_or_default();
-            let selector = format!("instance-progress:{}", info.id);
-            let ring_key = format!("instance-progress-ring:{}", info.id);
-            let spinner_key = format!("instance-progress-spinner:{}", info.id);
-            let glyph = match p.operation {
-                Operation::Update | Operation::Install => "download",
-                Operation::Reinstall => "refresh-cw",
-                Operation::Delete => "trash-2",
-                Operation::Copy => "copy",
-                Operation::Import => "archive",
-            };
-            let label = format!(
-                "{} {:.0}% — open process",
-                p.operation.label(),
-                p.pct * 100.0
-            );
-            Some(
-                btn(t, "", ButtonVariant::Ghost)
-                    .id(selector.clone())
-                    .aria_label(label)
-                    .debug_selector(move || selector.clone().into())
-                    .absolute()
-                    .top(px(6.0))
-                    .left(px(6.0))
-                    .size(px(28.0))
-                    .px_0()
-                    .gap(px(0.0))
-                    .rounded_full()
-                    .bg(tint(t.primary(), 0.12))
-                    .border_color(gpui::rgba(0x00000000))
-                    .text_color(t.primary())
-                    .child(
-                        div()
-                            .absolute()
-                            .top(px(-4.0))
-                            .left(px(-4.0))
-                            .size(px(36.0))
-                            .rounded_full()
-                            .bg(t.primary())
-                            .with_animation(
-                                format!("instance-progress-halo:{}", info.id),
-                                Animation::new(std::time::Duration::from_millis(1600)).repeat(),
-                                |halo, phase| {
-                                    let pulse = ((phase * std::f32::consts::TAU).sin() + 1.0) / 2.0;
-                                    halo.opacity(0.06 + 0.12 * pulse)
-                                },
-                            ),
-                    )
-                    .child(spinner(spinner_key, glyph, 16.0))
-                    .child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .child(progress_ring(
-                                ring_key,
-                                p.pct as f32,
-                                tint(t.primary(), 0.28),
-                                t.primary(),
-                            )),
-                    )
-                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                        cx.stop_propagation();
-                        v.select_process(process_key.clone(), cx);
-                    }))
-                    .into_any_element(),
-            )
-        } else if update_available {
-            let update_id = info.id.clone();
-            let update_selector = format!("instance-update:{}", info.id);
-            let label = update
-                .latest_version
-                .as_deref()
-                .map(|version| format!("Pack update available: {version}"))
-                .unwrap_or_else(|| "Pack update available".to_string());
-            Some(
-                icon_btn(t, "download", ButtonVariant::Ghost)
-                    .id(update_selector.clone())
-                    .aria_label(label)
-                    .debug_selector(move || update_selector.clone().into())
-                    .absolute()
-                    .top(px(6.0))
-                    .left(px(6.0))
-                    .size(px(28.0))
-                    .rounded_full()
-                    .bg(tint(t.primary(), 0.12))
-                    .text_color(t.primary())
-                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                        cx.stop_propagation();
-                        v.open_maintenance(update_id.clone(), MaintenanceKind::Update, cx);
-                    }))
-                    .into_any_element(),
-            )
-        } else {
-            None
-        };
-        if let Some(badge) = status_badge {
-            tile = tile.child(badge);
-        }
-        if running {
-            tile = tile.child(
-                div()
-                    .absolute()
-                    .right(px(40.0))
-                    .top(px(10.0))
-                    .size(px(8.0))
-                    .rounded_full()
-                    .bg(gpui::rgb(0x37d67a)),
-            );
-        }
-        tile.into_any_element()
     }
 
     /// Card order shared by the library grid and the nine launch slots.
@@ -813,11 +484,18 @@ impl LauncherRoot {
             .collect();
         let ordered = self.library_order();
         let slot_hints = self.launch_slot_hints();
-        let mut list = div().flex().flex_col().gap_2().p_2();
+        let mut list = div().flex().flex_col().gap_4().px_5().pt_5().pb_6();
         if let Some(error) = &self.catalog_ui.error {
             list = list.child(
                 div()
-                    .text_xs()
+                    .px_3()
+                    .py_2()
+                    .rounded(px(8.0))
+                    .border_1()
+                    .border_color(tint(t.destructive(), 0.4))
+                    .bg(tint(t.destructive(), 0.08))
+                    .text_size(px(12.0))
+                    .text_color(t.destructive())
                     .child(format!("Could not check pack updates: {error}")),
             );
         }
@@ -828,65 +506,80 @@ impl LauncherRoot {
                     .py_1()
                     .flex()
                     .items_center()
-                    .gap(px(6.0))
-                    .child(icon("loader-circle", 14.0))
+                    .gap_2()
+                    .text_color(t.primary())
+                    .child(spinner("library-creating-spinner", "loader-circle", 14.0))
                     .child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(px(13.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(t.muted_foreground())
+                            .text_color(t.foreground())
                             .child(
                                 if creating.iter().all(|(_, p)| p.operation == Operation::Copy) {
-                                    "COPIES IN PROGRESS"
+                                    "Copies in progress"
                                 } else {
-                                    "INSTANCES IN PROGRESS"
+                                    "Instances in progress"
                                 },
                             ),
                     )
                     .child(
-                        badge(&t, &creating.len().to_string(), BadgeKind::Normal)
-                            .h(px(20.0))
-                            .py_0(),
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(t.muted_foreground())
+                            .child(creating.len().to_string()),
                     ),
             );
-            list = list.child(div().flex().flex_wrap().gap_2().px_1().pb_1().children(
+            list = list.child(div().flex().flex_wrap().gap_3().px_1().pb_2().children(
                 creating.iter().map(|(key, p)| {
                     let key = (*key).to_string();
                     div()
-                        .w(px(144.0))
+                        .w(px(TILE_WIDTH))
+                        .h(px(TILE_HEIGHT))
                         .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-                        .p(px(10.0))
-                        .rounded(px(6.0))
-                        .bg(tint(t.primary(), 0.05))
+                        .px(px(14.0))
+                        .py(px(14.0))
+                        .rounded(px(10.0))
+                        .bg(tint(t.primary(), 0.07))
                         .border_1()
-                        .border_color(tint(t.primary(), 0.2))
+                        .border_color(tint(t.primary(), 0.3))
                         .flex()
                         .flex_col()
                         .items_center()
-                        .gap_2()
+                        .justify_between()
                         .child(
                             div()
                                 .size(px(56.0))
-                                .rounded(px(12.0))
+                                .rounded(px(14.0))
                                 .bg(t.secondary())
                                 .flex()
                                 .items_center()
                                 .justify_center()
+                                .text_color(t.primary())
                                 .child(icon("copy", 22.0)),
                         )
                         .child(
                             div()
                                 .w_full()
-                                .text_center()
-                                .text_xs()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(p.name.clone()),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(10.0))
-                                .text_color(t.muted_foreground())
-                                .child(p.progress_text()),
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap(px(4.0))
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .text_center()
+                                        .text_size(px(14.0))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_ellipsis()
+                                        .child(p.name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(t.muted_foreground())
+                                        .text_ellipsis()
+                                        .child(p.progress_text()),
+                                ),
                         )
                         .child(progress_bar(&t, p.pct).h(px(4.0)))
                         .cursor_pointer()
@@ -902,11 +595,11 @@ impl LauncherRoot {
         for (group, items) in ordered {
             let collapsed = self.workspace_ui.collapsed.contains(&group);
             let label = if group.is_empty() {
-                self.workspace_ui.ungrouped.to_uppercase()
+                self.workspace_ui.ungrouped.clone()
             } else {
-                group.to_uppercase()
+                group.clone()
             };
-            let mut section = div().flex().flex_col().gap_1().child(self.group_header(
+            let mut section = div().flex().flex_col().gap_2().child(self.group_header(
                 group.clone(),
                 label,
                 items.len(),
@@ -929,23 +622,51 @@ impl LauncherRoot {
         }
         if self.data.instances.is_empty() && creating.is_empty() {
             list = list.child(
-                div()
-                    .m_2()
-                    .p_4()
+                card(&t)
+                    .mt_2()
+                    .p_6()
                     .flex()
                     .flex_col()
-                    .gap_1()
+                    .items_start()
+                    .gap_3()
                     .child(
                         div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child("No instances installed"),
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_size(px(16.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(t.foreground())
+                                    .child("No instances installed"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(13.0))
+                                    .text_color(t.muted_foreground())
+                                    .child(
+                                        "Install a GT New Horizons release or import an existing Prism pack to begin.",
+                                    ),
+                            ),
                     )
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(t.muted_foreground())
-                            .child("Add a pack instance to start building your launcher library."),
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                btn(&t, "Install GTNH pack", ButtonVariant::Primary)
+                                    .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                                        v.open_new_instance(cx);
+                                    })),
+                            )
+                            .child(
+                                btn(&t, "Import from Prism…", ButtonVariant::Outline)
+                                    .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                                        v.open_prism_import(None, false, cx);
+                                    })),
+                            ),
                     ),
             );
         }
@@ -1002,9 +723,7 @@ impl LauncherRoot {
                     .on_key_down(
                         cx.listener(move |v, event: &gpui::KeyDownEvent, window, cx| {
                             if drag_focus.is_focused(window)
-                                && ((event.keystroke.key == "f10"
-                                    && event.keystroke.modifiers.shift)
-                                    || event.keystroke.key == "menu")
+                                && is_context_menu_key(&event.keystroke)
                             {
                                 v.open_library_menu(gpui::point(px(16.), px(52.)), cx);
                                 cx.stop_propagation();
@@ -1070,56 +789,84 @@ impl LauncherRoot {
             return div();
         };
         let close_id = info.id.clone();
+        let pack_update = (!imported_frozen(&info))
+            .then(|| self.pack_status(pack_version(&info)))
+            .filter(|status| {
+                status.status == industrialis_core::pack_version::PackUpdateStatus::UpdateAvailable
+            });
+        let update_id = info.id.clone();
         let header = div()
-            .px_4()
-            .py_3()
+            .pt_4()
             .flex_shrink_0()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap_3()
             .bg(t.window_surface(mix(t.card(), t.background(), 0.72)))
             .border_b_1()
-            .border_color(tint(t.border(), 0.82))
+            .border_color(tint(t.border(), 0.85))
             .child(
                 div()
+                    .px_5()
                     .flex()
                     .items_center()
                     .gap_3()
-                    .child(self.instance_avatar(&info, 40.0))
+                    .child(self.instance_avatar(&info, 48.0))
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
                             .flex()
                             .flex_col()
+                            .gap(px(3.0))
                             .child(
                                 div()
-                                    .text_base()
+                                    .text_size(px(18.0))
                                     .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(t.foreground())
+                                    .text_ellipsis()
                                     .child(display_name(&info)),
                             )
                             .child(
                                 div()
-                                    .mt(px(2.0))
-                                    .text_xs()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .font_family(crate::input::code_font_family())
+                                    .text_size(px(11.0))
                                     .text_color(t.muted_foreground())
-                                    .child(format!(
-                                        "{} / {}{}",
-                                        pack_version(&info),
-                                        format_bytes(info.size_bytes),
-                                        if info.group.is_empty() {
-                                            String::new()
-                                        } else {
-                                            format!(" / {}", info.group)
-                                        }
-                                    )),
+                                    .child(pack_version(&info).to_string())
+                                    .child(format_bytes(info.size_bytes))
+                                    .when(!info.group.is_empty(), |row| {
+                                        row.child(info.group.clone())
+                                    }),
                             ),
                     )
+                    .when_some(pack_update, |row, status| {
+                        let target = update_id.clone();
+                        let label = status
+                            .latest_version
+                            .map(|ver| format!("Update to {ver}"))
+                            .unwrap_or_else(|| "Update pack".into());
+                        row.child(
+                            btn(&t, "", ButtonVariant::Outline)
+                                .aria_label(label.clone())
+                                .h(px(30.0))
+                                .px(px(10.0))
+                                .text_size(px(12.0))
+                                .border_color(tint(t.primary(), 0.6))
+                                .text_color(t.primary())
+                                .child(icon("download", 13.0))
+                                .child(label)
+                                .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                                    v.open_maintenance(target.clone(), MaintenanceKind::Update, cx);
+                                })),
+                        )
+                    })
                     .child(
                         icon_btn(&t, "x", ButtonVariant::Ghost)
                             .debug_selector(|| "instance-details-close".into())
                             .aria_label("Close instance details")
-                            .size(px(28.0))
+                            .size(px(32.0))
                             .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
                                 if v.selected_id.as_ref() == Some(&close_id) {
                                     v.selected_id = None;
@@ -1130,25 +877,25 @@ impl LauncherRoot {
             )
             .child(
                 div()
+                    .id("instance-detail-tabs")
+                    .px_3()
                     .flex()
-                    .h(px(32.0))
-                    .border_b_1()
-                    .border_color(tint(t.border(), 0.76))
+                    .items_center()
+                    .gap(px(2.0))
+                    .overflow_x_scroll()
                     .children(
                         [
-                            (DetailTab::Info, "Info", "info"),
-                            (DetailTab::Settings, "Settings", "sliders-horizontal"),
-                            (DetailTab::Console, "Logs", "terminal"),
-                            (DetailTab::Files, "Files", "folder-open"),
-                            (DetailTab::Mods, "Add-ons", "boxes"),
-                            (DetailTab::Backups, "Backups", "copy"),
+                            (DetailTab::Info, "Info"),
+                            (DetailTab::Settings, "Settings"),
+                            (DetailTab::Console, "Logs"),
+                            (DetailTab::Files, "Files"),
+                            (DetailTab::Mods, "Add-ons"),
+                            (DetailTab::Backups, "Backups"),
                         ]
                         .into_iter()
-                        .map(|(tab, label, glyph)| {
+                        .map(|(tab, label)| {
                             tab_btn(&t, label, self.instance_ui.detail_tab == tab)
-                                .flex_1()
-                                .gap(px(6.0))
-                                .child(icon(glyph, 12.0))
+                                .flex_shrink_0()
                                 .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
                                     v.instance_ui.detail_tab = tab;
                                     cx.notify();
@@ -1170,11 +917,8 @@ impl LauncherRoot {
             .min_h_0()
             .flex()
             .flex_col()
+            .bg(t.window_surface(mix(t.card(), t.background(), 0.22)))
             .child(header)
-            .children(
-                (!imported_frozen(&info))
-                    .then(|| self.pack_status_view(&info.id, pack_version(&info), cx)),
-            )
             .child(content)
             .child(self.detail_actions(&info, cx))
     }
@@ -1204,7 +948,7 @@ impl LauncherRoot {
                 }
             )
         })
-        .unwrap_or_else(|| "No default account - set one in Accounts".into());
+        .unwrap_or_else(|| "No default account (set in Accounts)".into());
         let java = if info.settings.override_java_location {
             info.settings
                 .java_path
@@ -1218,10 +962,25 @@ impl LauncherRoot {
                 .clone()
                 .unwrap_or_else(|| "Auto-detect".into())
         };
+        let update_label = if imported_frozen(info) {
+            "Frozen import".to_string()
+        } else {
+            use industrialis_core::pack_version::PackUpdateStatus;
+            let status = self.pack_status(pack_version(info));
+            match status.status {
+                PackUpdateStatus::UpdateAvailable => status
+                    .latest_version
+                    .map(|ver| format!("Update available ({ver})"))
+                    .unwrap_or_else(|| "Update available".into()),
+                PackUpdateStatus::UpToDate => "Up to date".into(),
+                _ if self.catalog_ui.loading => "Checking…".into(),
+                _ => "Unavailable".into(),
+            }
+        };
         let mut rows = vec![
             ("Pack version", pack_version(info).into()),
-            ("Instance ID", info.id.clone()),
-            ("Size", format_bytes(info.size_bytes)),
+            ("Update status", update_label),
+            ("Disk size", format_bytes(info.size_bytes)),
             (
                 "Group",
                 if info.group.is_empty() {
@@ -1230,9 +989,9 @@ impl LauncherRoot {
                     info.group.clone()
                 },
             ),
-            ("Java", java),
+            ("Java runtime", java),
             (
-                "RAM",
+                "Memory",
                 if info.settings.override_memory {
                     format!(
                         "{}-{} MB",
@@ -1252,6 +1011,7 @@ impl LauncherRoot {
             ));
         }
         rows.push(("Account", account));
+        rows.push(("Instance ID", info.id.clone()));
         let imported = info.settings.imported;
         let frozen = imported_frozen(info);
         let gtnh_import = imported && info.settings.imported_gtnh;
@@ -1261,8 +1021,9 @@ impl LauncherRoot {
         let version_control = div()
             .flex()
             .items_center()
-            .gap_3()
-            .py_2()
+            .gap_4()
+            .px_4()
+            .py_3()
             .child(
                 div()
                     .flex_1()
@@ -1272,13 +1033,13 @@ impl LauncherRoot {
                     .gap_1()
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(px(14.0))
                             .font_weight(FontWeight::MEDIUM)
                             .child("GTNH version"),
                     )
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(px(12.0))
                             .text_color(t.muted_foreground())
                             .child(if frozen {
                                 "This copy was imported from Prism and stays frozen. Set an official GTNH version to enable update checks, updates, and reinstall."
@@ -1298,9 +1059,9 @@ impl LauncherRoot {
                     ButtonVariant::Outline,
                 )
                 .debug_selector(|| "import-set-version".into())
-                .h(px(28.0))
-                .px(px(10.0))
-                .text_xs()
+                .h(px(32.0))
+                .px(px(12.0))
+                .text_size(px(12.0))
                 .tab_stop(enabled)
                 .when(!enabled, |el| el.opacity(0.5).cursor_default())
                 .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
@@ -1312,8 +1073,12 @@ impl LauncherRoot {
         let reinstall = div()
             .flex()
             .items_center()
-            .gap_3()
-            .py_2()
+            .gap_4()
+            .px_4()
+            .py_3()
+            .when(gtnh_import, |el| {
+                el.border_t_1().border_color(tint(t.border(), 0.7))
+            })
             .child(
                 div()
                     .flex_1()
@@ -1323,13 +1088,13 @@ impl LauncherRoot {
                     .gap_1()
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(px(14.0))
                             .font_weight(FontWeight::MEDIUM)
                             .child("Clean reinstall"),
                     )
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(px(12.0))
                             .text_color(t.muted_foreground())
                             .child("Fresh pack install while keeping saves, JourneyMap, options, and launcher overlays."),
                     ),
@@ -1337,10 +1102,10 @@ impl LauncherRoot {
             .child(
                 btn(t, "", ButtonVariant::Outline)
                     .aria_label("Reinstall")
-                    .h(px(28.0))
-                    .px(px(10.0))
-                    .text_xs()
-                    .child(icon("refresh-cw", 14.0))
+                    .h(px(32.0))
+                    .px(px(12.0))
+                    .text_size(px(12.0))
+                    .child(icon("refresh-cw", 13.0))
                     .child("Reinstall")
                     .tab_stop(enabled)
                     .when(!enabled, |el| el.opacity(0.5).cursor_default())
@@ -1350,18 +1115,98 @@ impl LauncherRoot {
                         }
                     })),
             );
-        div().id("instance-info").flex_1().min_h_0().overflow_y_scroll().px_4().pt_3().pb_4().flex().flex_col().gap_3()
-            .when(gtnh_import, |el| el.child(version_control))
-            .when(imported && !gtnh_import, |el| el.child(
+        // Two-column spec sheet: label over value, hairline grid between cells.
+        let cell = |key: &'static str, value: String, left_rule: bool| {
+            let technical = matches!(
+                key,
+                "Pack version" | "Disk size" | "Memory" | "Play time" | "Instance ID"
+            );
+            div()
+                .flex_1()
+                .min_w_0()
+                .px_4()
+                .py(px(10.0))
+                .flex()
+                .flex_col()
+                .gap(px(3.0))
+                .when(left_rule, |el| {
+                    el.border_l_1().border_color(tint(t.border(), 0.8))
+                })
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(t.muted_foreground())
+                        .child(key.to_uppercase()),
+                )
+                .child(
+                    div()
+                        .text_ellipsis()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(t.foreground())
+                        .when(technical, |el| {
+                            el.font_family(crate::input::code_font_family())
+                        })
+                        .child(value),
+                )
+        };
+        let specs = card(t)
+            .overflow_hidden()
+            .child(
                 div()
-                    .py_2()
-                    .text_xs()
-                    .text_color(t.muted_foreground())
-                    .child("Imported from Prism as a non-GTNH instance. Update checks, updates, and reinstall stay unavailable."),
-            ))
-            .when(show_reinstall, |el| el.child(reinstall))
-            .child(div().flex().flex_wrap().children(rows.into_iter().map(|(key, value)| div().w(relative(0.5)).min_w_0().py(px(10.0)).pr_3().border_t_1().border_color(tint(t.border(), 0.66))
-                .flex().items_center().justify_between().gap_3().child(div().text_xs().flex_shrink_0().text_color(t.muted_foreground()).child(key)).child(div().flex_1().min_w_0().text_right().text_ellipsis().text_xs().font_weight(FontWeight::MEDIUM).child(value)))))
+                    .flex()
+                    .flex_col()
+                    .children(rows.chunks(2).enumerate().map(|(index, pair)| {
+                        let mut row = div()
+                            .w_full()
+                            .flex()
+                            .when(index > 0, |row| {
+                                row.border_t_1().border_color(tint(t.border(), 0.8))
+                            })
+                            .child(cell(pair[0].0, pair[0].1.clone(), false));
+                        row = match pair.get(1) {
+                            Some((key, value)) => row.child(cell(key, value.clone(), true)),
+                            None => row.child(
+                                div()
+                                    .flex_1()
+                                    .border_l_1()
+                                    .border_color(tint(t.border(), 0.8)),
+                            ),
+                        };
+                        row
+                    })),
+            );
+        let has_maintenance = gtnh_import || show_reinstall || (imported && !gtnh_import);
+        div()
+            .id("instance-info")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .p_5()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(specs)
+            .when(has_maintenance, |el| {
+                el.child(
+                    card(t)
+                        .overflow_hidden()
+                        .flex()
+                        .flex_col()
+                        .when(gtnh_import, |panel| panel.child(version_control))
+                        .when(imported && !gtnh_import, |panel| {
+                            panel.child(
+                                div()
+                                    .px_4()
+                                    .py_3()
+                                    .text_size(px(12.0))
+                                    .text_color(t.muted_foreground())
+                                    .child("Imported from Prism as a non-GTNH instance. Update checks, updates, and reinstall stay unavailable."),
+                            )
+                        })
+                        .when(show_reinstall, |panel| panel.child(reinstall)),
+                )
+            })
     }
 
     fn detail_actions(&self, info: &InstanceInfo, cx: &mut Context<Self>) -> Div {
@@ -1373,9 +1218,9 @@ impl LauncherRoot {
         let mut bar = div()
             .flex_shrink_0()
             .border_t_1()
-            .border_color(tint(t.border(), 0.8))
-            .bg(t.window_surface(mix(t.card(), t.background(), 0.54)))
-            .px_4()
+            .border_color(tint(t.border(), 0.85))
+            .bg(t.window_surface(mix(t.card(), t.background(), 0.72)))
+            .px_5()
             .py_3()
             .flex()
             .items_center()
@@ -1387,11 +1232,20 @@ impl LauncherRoot {
                     .flex()
                     .flex_col()
                     .gap(px(6.0))
-                    .child(div().text_sm().child(format!(
-                        "{} {}%",
-                        p.stage,
-                        (p.pct * 100.0) as u32
-                    )))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(p.stage.clone())
+                            .child(
+                                div()
+                                    .text_color(t.muted_foreground())
+                                    .child(format!("{}%", (p.pct * 100.0) as u32)),
+                            ),
+                    )
                     .child(progress_bar(t, p.pct).h(px(6.0))),
             );
         }
@@ -1413,19 +1267,17 @@ impl LauncherRoot {
             } else {
                 "Launch"
             })
+            .h(px(38.0))
             .flex_1()
-            .child(icon(
-                if starting {
-                    "loader-circle"
-                } else if running {
-                    "square"
-                } else {
-                    "play"
-                },
-                16.0,
-            ))
+            .text_size(px(14.0))
+            .font_weight(FontWeight::SEMIBOLD)
             .child(if starting {
-                "Launching..."
+                spinner(format!("launch-spinner:{id}"), "loader-circle", 16.0).into_any_element()
+            } else {
+                icon(if running { "square" } else { "play" }, 16.0).into_any_element()
+            })
+            .child(if starting {
+                "Launching…"
             } else if running {
                 "Stop"
             } else {
@@ -1456,6 +1308,7 @@ impl LauncherRoot {
             bar = bar.child(
                 icon_btn(t, glyph, ButtonVariant::Outline)
                     .aria_label(label)
+                    .size(px(38.0))
                     .tab_stop(!busy || action == 1)
                     .when(busy && action != 1, |el| el.opacity(0.5).cursor_default())
                     .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
@@ -1522,13 +1375,36 @@ mod tests {
     }
 
     #[gpui::test]
+    fn keyboard_opens_the_tile_context_menu_without_a_menu_button(cx: &mut TestAppContext) {
+        let fixture = Fixture::new(&["a"]);
+        let (window, root) = fixture.open(cx, |_| {});
+        Fixture::click(cx, window, "instance-tile:a");
+        let tile = {
+            let mut visual = VisualTestContext::from_window(window.into(), cx);
+            visual.simulate_keystrokes("shift-f10");
+            visual.debug_bounds("instance-tile:a").unwrap()
+        };
+        root.read_with(cx, |v, _| match &v.workspace_ui.menu {
+            Some((MenuTarget::Instance(id), at)) => {
+                assert_eq!(id, "a");
+                assert!(
+                    tile.contains(at),
+                    "menu opens at the tile, not the window corner"
+                );
+            }
+            _ => panic!("Shift+F10 on a focused tile must open its context menu"),
+        });
+        fixture.cleanup();
+    }
+
+    #[gpui::test]
     fn updating_instance_renders_a_progress_badge(cx: &mut TestAppContext) {
         let fixture = Fixture::new(&["pack"]);
         let (window, _root) = fixture.open(cx, |v| {
-            let token =
-                v.processes_ui
-                    .history
-                    .start(Operation::Update, "pack", "GTNH SSP");
+            let token = v
+                .processes_ui
+                .history
+                .start(Operation::Update, "pack", "GTNH SSP");
             v.processes_ui.history.progress(
                 &token,
                 "updating",
@@ -1545,7 +1421,7 @@ mod tests {
             .expect("active instance must show its progress badge");
         let tile = visual.debug_bounds("instance-tile:pack").unwrap();
         assert_eq!(badge.size.width, px(28.0));
-        assert_eq!(tile.size.height, px(117.0));
+        assert_eq!(tile.size.height, px(TILE_HEIGHT));
         fixture.cleanup();
     }
 

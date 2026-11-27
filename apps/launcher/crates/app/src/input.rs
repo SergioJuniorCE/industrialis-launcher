@@ -2,7 +2,7 @@
 use crate::theme::ActiveTheme;
 use gpui::{div, prelude::*, px, AccessibleAction, EntityInputHandler, Focusable, IntoElement};
 
-fn code_font_family() -> &'static str {
+pub(crate) fn code_font_family() -> &'static str {
     if cfg!(target_os = "windows") {
         "Consolas"
     } else if cfg!(target_os = "macos") {
@@ -137,7 +137,7 @@ impl NativeField {
             },
             enabled: true,
             multiline,
-            height: if multiline { 160. } else { 30. },
+            height: if multiline { 160. } else { 34. },
             code_editor: false,
             code_language: String::new(),
             fill_height: false,
@@ -436,14 +436,18 @@ impl gpui::Render for NativeField {
             .when(!self.fill_height, |frame| {
                 frame.h(px(self.height)).flex_shrink_0()
             })
-            .px_2()
-            .py_1()
-            .rounded(px(6.))
+            .px(px(10.0))
+            .py(px(5.0))
+            .rounded(px(7.0))
             .border_1()
             .border_color(if self.focused {
                 self.theme.ring()
             } else {
-                self.theme.border()
+                self.theme.control_border(if self.code_editor {
+                    self.theme.code_background()
+                } else {
+                    self.theme.secondary()
+                })
             })
             .bg(if self.code_editor {
                 self.theme.code_background()
@@ -454,7 +458,7 @@ impl gpui::Render for NativeField {
                 frame.font_family(code_font_family())
             })
             .text_color(self.theme.foreground())
-            .text_sm()
+            .text_size(px(13.0))
             .flex()
             .when(self.code_editor, |frame| frame.flex_col())
             .capture_key_down(

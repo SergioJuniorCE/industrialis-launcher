@@ -17,7 +17,7 @@ use industrialis_core::launcher_settings::resolve_default_account_id;
 use super::{LauncherRoot, Tab};
 use crate::input::FieldState;
 use crate::theme::ActiveTheme;
-use crate::ui::{badge, btn, card, BadgeKind, ButtonVariant};
+use crate::ui::{btn, card, tint, ButtonVariant};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AccountOperation {
@@ -163,8 +163,8 @@ fn panel(theme: &ActiveTheme) -> Div {
     card(theme)
         .flex()
         .flex_col()
-        .gap_2()
-        .p_3()
+        .gap_3()
+        .p_4()
 }
 
 #[track_caller]
@@ -175,7 +175,7 @@ fn action(
     enabled: bool,
 ) -> gpui::Stateful<Div> {
     btn(theme, label, variant)
-        .text_xs()
+        .text_size(px(13.0))
         .tab_stop(enabled)
         .when(!enabled, |el| el.opacity(0.5).cursor_default())
 }
@@ -375,36 +375,54 @@ impl LauncherRoot {
     pub(super) fn accounts_view(&mut self, cx: &mut Context<Self>) -> Div {
         let t = self.theme.clone();
         let enabled = !self.accounts_ui.is_busy();
-        let mut content = div().id("accounts-scroll").flex_1().min_h_0().overflow_y_scroll()
-            .flex().flex_col().gap_4().w_full().max_w(px(672.0)).px_4().pt(px(20.0)).pb_4()
-            .child(div().flex().flex_col().gap_1()
-                .child(div().text_sm().font_weight(gpui::FontWeight::SEMIBOLD).child("Accounts"))
-                .child(div().text_xs().text_color(t.muted_foreground())
-                    .child("Click the star on an account to use it for every launch. Override per instance in instance settings if needed.")));
+        let mut content = div()
+            .id("accounts-scroll")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .w_full()
+            .max_w(px(740.0))
+            .px_6()
+            .py_6()
+            .child(
+                div()
+                    .text_size(px(13.0))
+                    .text_color(t.muted_foreground())
+                    .child("Star an account to use it as the default for launches. You can override this per instance in Instance settings."),
+            );
         if let Some(instance) = &self.accounts_ui.redirect_instance {
             content = content.child(
                 panel(&t)
-                    .text_xs()
-                    .child(format!("Default account required to launch {instance}"))
-                    .child(div().text_color(t.muted_foreground()).child(
-                        "Add an account below and click its star, then return to Instances.",
-                    )),
+                    .border_color(tint(t.primary(), 0.55))
+                    .bg(tint(t.primary(), 0.08))
+                    .child(
+                        div()
+                            .text_size(px(14.0))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child(format!("Default account required to launch {instance}")),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.0))
+                            .text_color(t.muted_foreground())
+                            .child("Add an account below and star it, then return to Instances."),
+                    ),
             );
         }
         if self.data.accounts.is_empty() && self.accounts_ui.redirect_instance.is_none() {
             content = content.child(
                 div()
-                    .text_xs()
+                    .text_size(px(13.0))
                     .text_color(t.muted_foreground())
                     .child("No accounts yet."),
             );
         }
         if !self.data.accounts.is_empty() {
             content = content.child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(t.border())
+                card(&t)
                     .overflow_hidden()
                     .children(
                         self.data
@@ -421,32 +439,41 @@ impl LauncherRoot {
                                     .min_w_0()
                                     .flex()
                                     .flex_col()
+                                    .gap(px(2.0))
                                     .child(
                                         div()
                                             .flex()
                                             .items_center()
                                             .gap_2()
-                                            .text_xs()
-                                            .child(account_label(account).to_string())
                                             .child(
-                                                badge(
-                                                    &t,
-                                                    account_type_label(account),
-                                                    BadgeKind::Normal,
-                                                )
-                                                .text_size(px(10.0)),
+                                                div()
+                                                    .text_size(px(14.0))
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(t.foreground())
+                                                    .child(account_label(account).to_string()),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.0))
+                                                    .text_color(if selected {
+                                                        t.primary()
+                                                    } else {
+                                                        t.muted_foreground()
+                                                    })
+                                                    .child(account_type_label(account)),
                                             ),
                                     )
                                     .child(
                                         div()
-                                            .text_size(px(10.0))
+                                            .text_size(px(12.0))
                                             .text_color(t.muted_foreground())
+                                            .text_ellipsis()
                                             .child(account.uuid.clone()),
                                     );
                                 if let Some(status) = license_status(account) {
                                     identity = identity.child(
                                         div()
-                                            .text_size(px(10.0))
+                                            .text_size(px(12.0))
                                             .text_color(
                                                 if account.can_play_minecraft == Some(false) {
                                                     gpui::rgb(0xf59e0b).into()
@@ -459,99 +486,256 @@ impl LauncherRoot {
                                 }
                                 div()
                                     .id(format!("account-row:{}", account.id))
+                                    .relative()
                                     .flex()
                                     .items_center()
-                                    .gap_2()
-                                    .px(px(10.0))
-                                    .py(px(6.0))
-                                    .when(index > 0, |el| el.border_t_1().border_color(t.border()))
-                                    .bg(if selected { t.muted() } else { t.background() })
-                                    .child(avatar(&t, account, 24.0))
+                                    .gap_3()
+                                    .px_4()
+                                    .py_3()
+                                    .when(index > 0, |el| {
+                                        el.border_t_1().border_color(tint(t.border(), 0.7))
+                                    })
+                                    .bg(if selected {
+                                        tint(t.primary(), 0.08)
+                                    } else {
+                                        t.card()
+                                    })
+                                    .when(selected, |el| {
+                                        el.child(
+                                            div()
+                                                .absolute()
+                                                .left_0()
+                                                .top_0()
+                                                .bottom_0()
+                                                .w(px(3.0))
+                                                .bg(t.primary()),
+                                        )
+                                    })
+                                    .child(avatar(&t, account, 32.0))
                                     .child(identity)
                                     .child(
-                                        action(
-                                            &t,
-                                            "",
-                                            ButtonVariant::Ghost,
-                                            enabled,
-                                        )
-                                        .id(format!("account-default:{}", account.id))
-                                        .aria_label(format!("Set {} as default account", account_label(account)))
-                                        .aria_toggled(if selected { gpui::accesskit::Toggled::True } else { gpui::accesskit::Toggled::False })
-                                        .size(px(24.0)).px_0().child(crate::ui::icon(if selected { "star-filled" } else { "star" }, 14.0))
-                                        .text_color(if selected {
-                                            gpui::rgb(0xfbbf24).into()
-                                        } else {
-                                            t.muted_foreground()
-                                        })
-                                        .on_click(cx.listener(
+                                        action(&t, "", ButtonVariant::Ghost, enabled)
+                                            .id(format!("account-default:{}", account.id))
+                                            .aria_label(format!(
+                                                "Set {} as default account",
+                                                account_label(account)
+                                            ))
+                                            .aria_toggled(if selected {
+                                                gpui::accesskit::Toggled::True
+                                            } else {
+                                                gpui::accesskit::Toggled::False
+                                            })
+                                            .size(px(30.0))
+                                            .px_0()
+                                            .child(crate::ui::icon(
+                                                if selected { "star-filled" } else { "star" },
+                                                15.0,
+                                            ))
+                                            .text_color(if selected {
+                                                t.primary()
+                                            } else {
+                                                t.muted_foreground()
+                                            })
+                                            .on_click(cx.listener(
                                                 move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
                                                     v.set_default_account(select_id.clone(), cx);
                                                 },
-                                            ),
-                                        ),
+                                            )),
                                     )
                                     .child(
-                                        action(&t, "Remove", ButtonVariant::Danger, enabled).h(px(24.0)).px_2()
+                                        action(&t, "Remove", ButtonVariant::Outline, enabled)
+                                            .h(px(30.0))
+                                            .px(px(10.0))
+                                            .text_size(px(12.0))
                                             .id(format!("account-remove:{}", account.id))
-                                            .aria_label(format!("Remove account {}", account_label(account)))
+                                            .aria_label(format!(
+                                                "Remove account {}",
+                                                account_label(account)
+                                            ))
                                             .on_click(cx.listener(
                                                 move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
                                                     v.remove_account(remove_id.clone(), cx);
                                                 },
-                                            ),
-                                        ),
+                                            )),
                                     )
                             }),
                     ),
             );
         }
-        content = content.child(panel(&t)
-            .child(div().text_xs().child("Microsoft account"))
-            .child(div().text_size(px(11.0)).text_color(t.muted_foreground())
-                .child("Sign in with your Microsoft account to play online. Ownership is verified via the Mojang API after login."))
-            .child(action(&t, if self.accounts_ui.operation == Some(AccountOperation::MicrosoftLogin) { "Logging in…" } else { "Sign in with Microsoft" }, ButtonVariant::Primary, enabled)
-                .flex().justify_center().w_full()
-                .on_click(cx.listener(|v, _: &gpui::ClickEvent, _: &mut Window, cx| v.start_microsoft_login(cx)))));
+        content = content.child(
+            panel(&t)
+                .child(
+                    div()
+                        .text_size(px(14.0))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child("Microsoft account"),
+                )
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .text_color(t.muted_foreground())
+                        .child("Sign in with your Microsoft account to play online. Ownership is verified via the Mojang API after login."),
+                )
+                .child(
+                    div().flex().child(
+                        action(
+                            &t,
+                            if self.accounts_ui.operation == Some(AccountOperation::MicrosoftLogin) {
+                                "Logging in…"
+                            } else {
+                                "Sign in with Microsoft"
+                            },
+                            ButtonVariant::Primary,
+                            enabled,
+                        )
+                        .on_click(cx.listener(|v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                            v.start_microsoft_login(cx)
+                        })),
+                    ),
+                ),
+        );
         let create_enabled = enabled && !self.accounts_ui.offline_username.text.trim().is_empty();
         let input = self
             .field("account-name", "Steve", cx)
             .flex_1()
             .min_w_0()
             .when(!enabled, |el| el.opacity(0.5));
-        content = content.child(panel(&t)
-            .child(div().text_xs().child("Offline account"))
-            .child(div().text_size(px(11.0)).text_color(t.muted_foreground())
-                .child("Play without signing in. Letters, numbers, underscores (up to 16 characters)."))
-            .child(div().flex().gap_2().child(input)
-                .child(action(&t, if self.accounts_ui.operation == Some(AccountOperation::CreateOffline) { "Creating…" } else { "Create" }, ButtonVariant::Secondary, create_enabled)
-                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                        if create_enabled { v.submit_offline_account(cx); }
-                    })))));
+        content = content.child(
+            panel(&t)
+                .child(
+                    div()
+                        .text_size(px(14.0))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child("Offline account"),
+                )
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .text_color(t.muted_foreground())
+                        .child("Play without signing in. Letters, numbers, and underscores (up to 16 characters)."),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(input)
+                        .child(
+                            action(
+                                &t,
+                                if self.accounts_ui.operation
+                                    == Some(AccountOperation::CreateOffline)
+                                {
+                                    "Creating…"
+                                } else {
+                                    "Create"
+                                },
+                                ButtonVariant::Outline,
+                                create_enabled,
+                            )
+                            .on_click(cx.listener(
+                                move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                    if create_enabled {
+                                        v.submit_offline_account(cx);
+                                    }
+                                },
+                            )),
+                        ),
+                ),
+        );
         if let Some(info) = self.accounts_ui.device_code.clone() {
             let uri = info.verification_uri.clone();
             let code = info.user_code.clone();
-            content = content.child(panel(&t)
-                .child(div().text_xs().child("Complete Microsoft sign-in"))
-                .child(div().text_size(px(11.0)).text_color(t.muted_foreground()).child("Paste the code below at"))
-                .child(btn(&t,&info.verification_uri,ButtonVariant::Ghost).text_xs().underline()
-                    .on_click(cx.listener(move |_, _: &gpui::ClickEvent, _: &mut Window, cx| cx.open_url(&uri))))
-                .child(div().flex().items_center().gap_2()
-                    .child(div().flex_1().flex().justify_center().p_2().rounded_md().bg(t.muted()).text_xl().child(info.user_code))
-                    .child(action(&t, if self.accounts_ui.code_copied { "✓ Copied" } else { "Copy code" }, ButtonVariant::Secondary, true)
-                        .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(code.clone()));
-                            v.accounts_ui.code_copied = true;
-                            cx.notify();
-                        }))))
-                .child(div().text_size(px(10.0)).text_color(t.muted_foreground())
-                    .child(if self.accounts_ui.code_copied { "The code was copied automatically. Paste it into the Microsoft page." } else { "Use Copy code to copy the code." }))
-                .child(div().text_size(px(10.0)).text_color(t.muted_foreground()).child(info.message)));
+            content = content.child(
+                panel(&t)
+                    .child(
+                        div()
+                            .text_size(px(14.0))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("Complete Microsoft sign-in"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.0))
+                            .text_color(t.muted_foreground())
+                            .child("Paste the code below at"),
+                    )
+                    .child(
+                        div().flex().child(
+                            btn(&t, &info.verification_uri, ButtonVariant::Ghost)
+                                .text_size(px(13.0))
+                                .text_color(t.primary())
+                                .underline()
+                                .on_click(cx.listener(
+                                    move |_, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                        cx.open_url(&uri)
+                                    },
+                                )),
+                        ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .flex()
+                                    .justify_center()
+                                    .p_3()
+                                    .rounded(px(8.0))
+                                    .border_1()
+                                    .border_color(t.border())
+                                    .bg(t.muted())
+                                    .text_xl()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .child(info.user_code),
+                            )
+                            .child(
+                                action(
+                                    &t,
+                                    if self.accounts_ui.code_copied {
+                                        "Copied"
+                                    } else {
+                                        "Copy code"
+                                    },
+                                    ButtonVariant::Outline,
+                                    true,
+                                )
+                                .on_click(cx.listener(
+                                    move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(
+                                            code.clone(),
+                                        ));
+                                        v.accounts_ui.code_copied = true;
+                                        cx.notify();
+                                    },
+                                )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(t.muted_foreground())
+                            .child(if self.accounts_ui.code_copied {
+                                "The code was copied automatically. Paste it into the Microsoft page."
+                            } else {
+                                "Use Copy code to copy the code."
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(t.muted_foreground())
+                            .child(info.message),
+                    ),
+            );
         }
         if let Some(error) = &self.accounts_ui.error {
             content = content.child(
                 div()
-                    .text_xs()
+                    .text_size(px(13.0))
                     .text_color(t.destructive())
                     .child(error.clone()),
             );
@@ -576,15 +760,18 @@ impl LauncherRoot {
             .iter()
             .find(|a| Some(&a.id) == self.data.default_account_id.as_ref());
         let mut toggle = action(t, "", ButtonVariant::Ghost, true)
-            .aria_label(format!("Default account: {}", selected.map(account_label).unwrap_or("No default")))
+            .aria_label(format!(
+                "Default account: {}",
+                selected.map(account_label).unwrap_or("No default")
+            ))
             .id("toolbar-account")
             .debug_selector(|| "toolbar-account".into())
             .flex()
             .items_center()
-            .gap(px(6.0))
-            .h(px(28.0))
+            .gap(px(7.0))
+            .h(px(32.0))
             .px(px(10.0))
-            .max_w(px(180.0));
+            .max_w(px(184.0));
         if let Some(account) = selected {
             toggle = toggle.child(avatar(t, account, 20.0));
         } else {
@@ -592,12 +779,16 @@ impl LauncherRoot {
         }
         if !compact {
             toggle = toggle.child(
-                div().min_w_0().text_ellipsis().text_xs().child(
-                    selected
-                        .map(account_label)
-                        .unwrap_or("No default")
-                        .to_string(),
-                ),
+                div()
+                    .min_w_0()
+                    .text_ellipsis()
+                    .text_size(px(13.0))
+                    .child(
+                        selected
+                            .map(account_label)
+                            .unwrap_or("No account")
+                            .to_string(),
+                    ),
             );
         }
         toggle = toggle
@@ -611,10 +802,10 @@ impl LauncherRoot {
             let mut menu = div()
                 .absolute()
                 .right_0()
-                .top(px(32.0))
-                .w(px(256.0))
-                .p_1()
-                .rounded_md()
+                .top(px(38.0))
+                .w(px(264.0))
+                .p(px(6.0))
+                .rounded(px(10.0))
                 .bg(t.popover())
                 .border_1()
                 .border_color(t.border())
@@ -622,8 +813,8 @@ impl LauncherRoot {
             if self.data.accounts.is_empty() {
                 menu = menu.child(
                     div()
-                        .p_2()
-                        .text_xs()
+                        .p_3()
+                        .text_size(px(12.0))
                         .text_color(t.muted_foreground())
                         .child("No accounts yet. Add one to launch instances."),
                 );
@@ -644,6 +835,11 @@ impl LauncherRoot {
                             )
                             .id(format!("account-choice:{id}"))
                             .aria_label(account_label(account))
+                            .h_auto()
+                            .py_2()
+                            .px_2()
+                            .w_full()
+                            .justify_start()
                             .flex()
                             .items_center()
                             .gap_2()
@@ -651,20 +847,30 @@ impl LauncherRoot {
                             .child(
                                 div()
                                     .flex_1()
+                                    .min_w_0()
                                     .flex()
                                     .flex_col()
-                                    .child(account_label(account).to_string())
                                     .child(
                                         div()
-                                            .text_size(px(10.0))
+                                            .text_size(px(13.0))
+                                            .text_ellipsis()
+                                            .child(account_label(account).to_string()),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(12.0))
                                             .text_color(t.muted_foreground())
                                             .child(account_type_label(account)),
                                     ),
                             );
                             if is_default {
-                                row =
-                                    row.bg(t.muted())
-                                        .child(badge(t, "Default", BadgeKind::Normal));
+                                row = row.bg(tint(t.primary(), 0.1)).child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(t.primary())
+                                        .child("Default"),
+                                );
                             }
                             row.on_click(cx.listener(
                                 move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
@@ -683,8 +889,14 @@ impl LauncherRoot {
                     .border_t_1()
                     .border_color(t.border())
                     .child(
-                        action(t, "Manage accounts…", ButtonVariant::MenuItem, true)
+                        action(t, "", ButtonVariant::MenuItem, true)
+                            .aria_label("Manage accounts…")
                             .w_full()
+                            .justify_start()
+                            .px_2()
+                            .gap_2()
+                            .child(crate::ui::icon("users", 14.0))
+                            .child("Manage accounts…")
                             .on_click(cx.listener(
                                 |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
                                     v.accounts_ui.switcher_open = false;

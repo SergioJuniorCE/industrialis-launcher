@@ -27,6 +27,9 @@ impl LibraryDrag {
         self.source = None;
         self.target = None;
     }
+    pub fn tile_bounds(&self, id: &str) -> Option<Bounds<Pixels>> {
+        self.geometry.borrow().tiles.get(id).copied()
+    }
     pub fn measure_tile(&self, id: String) -> gpui::Canvas<()> {
         let geometry = self.geometry.clone();
         canvas(
@@ -49,14 +52,14 @@ impl LibraryDrag {
             .debug_selector(|| "instance-drop-placeholder".into())
             .aria_label("Instance drop position")
             .relative()
-            .w(px(144.))
-            .h(px(self.height.max(117.)))
+            .w(px(super::instance_tile::TILE_WIDTH))
+            .h(px(self.height.max(super::instance_tile::TILE_HEIGHT)))
             .flex_shrink_0()
-            .rounded(px(6.))
+            .rounded(px(8.))
             .border_2()
             .border_dashed()
             .border_color(theme.primary())
-            .bg(crate::ui::tint(theme.primary(), 0.06))
+            .bg(crate::ui::tint(theme.primary(), 0.08))
             .child(
                 canvas(
                     move |bounds, _, _| {
@@ -81,7 +84,7 @@ impl LauncherRoot {
             .tiles
             .get(&drag.id)
             .map(|b| f32::from(b.size.height))
-            .unwrap_or(117.);
+            .unwrap_or(super::instance_tile::TILE_HEIGHT);
         drop(geometry);
         self.workspace_ui.drag.height = height;
         self.workspace_ui.drag.source = Some(drag.id.clone());
@@ -255,10 +258,10 @@ impl LauncherRoot {
             .relative()
             .flex()
             .flex_wrap()
-            .gap_2()
+            .gap_3()
             .px_1()
-            .pb_1()
-            .min_h(px(32.))
+            .pb_2()
+            .min_h(px(36.))
             .on_drag_move(
                 cx.listener(move |v, event: &DragMoveEvent<DraggedInstance>, _, cx| {
                     v.track_library_drop(hover_group.clone(), &ids, event, cx);
@@ -301,7 +304,7 @@ mod tests {
                 .debug_bounds("instance-drop-placeholder")
                 .expect("Drag must show a landing slot");
             assert_eq!(ghost.origin.x, first.origin.x);
-            assert_eq!(ghost.size.width, px(144.));
+            assert_eq!(ghost.size.width, px(crate::views::instance_tile::TILE_WIDTH));
             assert!(
                 root.read_with(&visual, |v, _| !v.groups_ui.busy),
                 "Preview must not write order"
