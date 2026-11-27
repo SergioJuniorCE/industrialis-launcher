@@ -3,7 +3,7 @@ use super::appearance_settings::setting_row;
 use super::LauncherRoot;
 use crate::{
     input::FieldState,
-    ui::{action_button, btn, card, icon, icon_btn, tint, ButtonVariant},
+    ui::{action_button, btn, card, icon, icon_btn, segment, segmented_control, tint, ButtonVariant},
 };
 use gpui::{div, prelude::*, px, Context, Div, FontWeight, PathPromptOptions, Window};
 use industrialis_backend::java::JavaInfo;
@@ -286,30 +286,17 @@ impl LauncherRoot {
                 "The older preview channel used by maintainer builds.",
             ));
         }
-        let mut selector = div().flex().flex_wrap().gap_1();
+        let mut selector = segmented_control(&t);
         for (value, label, _) in &options {
             let value = *value;
             let selected = value == channel;
             selector = selector.child(
-                btn(
-                    &t,
-                    *label,
-                    if selected {
-                        ButtonVariant::Secondary
-                    } else {
-                        ButtonVariant::Outline
-                    },
-                )
-                .h(px(28.))
-                .text_xs()
-                .when(selected, |button| {
-                    button.border_1().border_color(t.primary())
-                })
-                .debug_selector({
-                    let selector = format!("update-channel:{}", value.name());
-                    move || selector.clone().into()
-                })
-                .on_click(cx.listener(move |v, _, _, cx| v.set_update_channel(value, cx))),
+                segment(&t, *label, selected)
+                    .debug_selector({
+                        let selector = format!("update-channel:{}", value.name());
+                        move || selector.clone().into()
+                    })
+                    .on_click(cx.listener(move |v, _, _, cx| v.set_update_channel(value, cx))),
             );
         }
         let described = options
@@ -392,30 +379,31 @@ impl LauncherRoot {
         let section = self.preferences_ui.section;
         let sidebar = div()
             .id("preferences-sidebar")
-            .w(px(192.0))
+            .w(px(216.0))
             .h_full()
             .min_h_0()
             .overflow_y_scroll()
             .flex_shrink_0()
-            .pt(px(20.0))
-            .pb_4()
+            .pt(px(24.0))
+            .pb_5()
             .pr_4()
             .border_r_1()
-            .border_color(tint(t.border(), 0.7))
+            .border_color(tint(t.border(), 0.75))
             .child(
                 div()
-                    .px_2()
+                    .px_3()
                     .mb_4()
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(px(18.0))
                             .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(t.foreground())
                             .child("Settings"),
                     )
                     .child(
                         div()
                             .mt_1()
-                            .text_xs()
+                            .text_size(px(12.0))
                             .text_color(t.muted_foreground())
                             .child("Launcher preferences"),
                     ),
@@ -433,6 +421,7 @@ impl LauncherRoot {
                     ]
                     .into_iter()
                     .map(|(value, label, glyph)| {
+                        let active = value == section;
                         btn(&t, "", ButtonVariant::Ghost)
                             .id(format!("launcher-preference:{label}"))
                             .aria_label(label)
@@ -440,28 +429,40 @@ impl LauncherRoot {
                                 let selector = format!("launcher-preference:{label}");
                                 move || selector.clone().into()
                             })
+                            .relative()
                             .h(px(36.0))
                             .w_full()
                             .justify_start()
                             .px_3()
-                            .rounded_none()
-                            .border_l_2()
-                            .border_color(if value == section {
-                                t.primary()
+                            .rounded(px(7.0))
+                            .bg(if active {
+                                tint(t.primary(), 0.12)
                             } else {
                                 gpui::rgba(0x00000000)
                             })
-                            .bg(if value == section {
-                                t.secondary()
-                            } else {
-                                gpui::rgba(0x00000000)
-                            })
-                            .text_color(if value == section {
+                            .text_color(if active {
                                 t.foreground()
                             } else {
                                 t.muted_foreground()
                             })
-                            .child(icon(glyph, 16.0))
+                            .font_weight(if active {
+                                FontWeight::SEMIBOLD
+                            } else {
+                                FontWeight::MEDIUM
+                            })
+                            .when(active, |el| {
+                                el.child(
+                                    div()
+                                        .absolute()
+                                        .left_0()
+                                        .top(px(7.0))
+                                        .bottom(px(7.0))
+                                        .w(px(3.0))
+                                        .rounded_full()
+                                        .bg(t.primary()),
+                                )
+                            })
+                            .child(icon(glyph, 15.0))
                             .child(label)
                             .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
                                 v.preferences_ui.section = value;
@@ -470,7 +471,7 @@ impl LauncherRoot {
                     }),
                 ),
             );
-        let mut content = div().flex_1().min_w_0().flex().flex_col().gap_3();
+        let mut content = div().flex_1().min_w_0().flex().flex_col().gap_4();
         match section {
             Section::Java => {
                 let actions = div()
@@ -479,7 +480,7 @@ impl LauncherRoot {
                     .gap_2()
                     .child(
                         btn(&t, "Auto-detect", ButtonVariant::Outline)
-                            .text_xs()
+                            .text_size(px(12.0))
                             .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
                                 v.settings_java = FieldState::empty();
                                 v.save_launcher_settings_form(cx);
@@ -487,27 +488,32 @@ impl LauncherRoot {
                     )
                     .child(
                         btn(&t, "Browse...", ButtonVariant::Outline)
-                            .text_xs()
+                            .text_size(px(12.0))
                             .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
                                 v.browse_launcher_java(cx)
                             })),
                     )
                     .child(div().flex_1())
                     .child(
-                        btn(&t, "Save", ButtonVariant::Outline)
-                            .h(px(28.0))
-                            .text_xs()
+                        btn(&t, "Save", ButtonVariant::Primary)
+                            .h(px(32.0))
+                            .text_size(px(13.0))
                             .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
                                 v.save_launcher_settings_form(cx)
                             })),
                     );
                 let default_java = card(&t)
-                    .p_3()
+                    .p_4()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Default Java executable"))
-                    .child(div().text_xs().text_color(t.muted_foreground()).child(
+                    .child(
+                        div()
+                            .text_size(px(14.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("Default Java executable"),
+                    )
+                    .child(div().text_size(px(12.0)).text_color(t.muted_foreground()).child(
                         "Used by instances without a Java override. Select an installed runtime below or choose an executable.",
                     ))
                     .child(self.field("settings-java", "Auto-detect (JAVA_HOME / PATH)", cx))
@@ -515,9 +521,10 @@ impl LauncherRoot {
                 content = content
                     .child(
                         div()
-                            .py(px(14.0))
+                            .pt_1()
+                            .text_size(px(18.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Java Detection"),
+                            .child("Java detection"),
                     )
                     .child(default_java)
                     .child(self.java_chooser(None, true, cx));
@@ -528,7 +535,8 @@ impl LauncherRoot {
             Section::Shortcuts => {
                 content = content.child(
                     div()
-                        .py(px(14.0))
+                        .pt_1()
+                        .text_size(px(18.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child("Shortcuts"),
                 );
@@ -538,24 +546,51 @@ impl LauncherRoot {
                 content = content
                     .child(
                         div()
-                            .py(px(14.0))
+                            .pt_1()
+                            .text_size(px(18.0))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child("Backups"),
                     )
                     .child(
-                        div()
-                            .text_xs()
-                            .text_color(t.muted_foreground())
-                            .child("Backup retention"),
-                    )
-                    .child(self.field("settings-retention", "10", cx).w(px(120.0)))
-                    .child(
-                        btn(&t, "Save retention", ButtonVariant::Outline)
-                            .h(px(28.0))
-                            .text_xs()
-                            .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                                v.save_launcher_settings_form(cx)
-                            })),
+                        card(&t)
+                            .p_4()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_4()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .text_size(px(14.0))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .child("Backup retention"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(12.0))
+                                            .text_color(t.muted_foreground())
+                                            .child("Maximum cloud snapshots kept per instance (1–1000)."),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(self.field("settings-retention", "10", cx).w(px(96.0)))
+                                    .child(
+                                        btn(&t, "Save retention", ButtonVariant::Outline)
+                                            .h(px(34.0))
+                                            .text_size(px(13.0))
+                                            .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                                                v.save_launcher_settings_form(cx)
+                                            })),
+                                    ),
+                            ),
                     )
                     .child(self.backup_preferences(cx));
             }
@@ -566,7 +601,8 @@ impl LauncherRoot {
                 content = content
                     .child(
                         div()
-                            .py(px(14.0))
+                            .pt_1()
+                            .text_size(px(18.0))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child("Updates"),
                     )
@@ -576,7 +612,8 @@ impl LauncherRoot {
                 content = content
                     .child(
                         div()
-                            .py(px(14.0))
+                            .pt_1()
+                            .text_size(px(18.0))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child("About"),
                     )

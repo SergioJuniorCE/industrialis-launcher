@@ -415,21 +415,21 @@ public static class LauncherGuestUi {
   Guest-Keys $Window 'KeyboardGroup'
   Wait-GuestCondition { (Guest-UiElement $Window 'Group name').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value -eq 'KeyboardGroup' } 'Native keyboard text did not update the group field'
   Guest-UiAction $Window 'Save' -Keyboard
-  Wait-GuestUiElement $Window 'Collapse group KEYBOARDGROUP' | Out-Null
-  Wait-GuestUiElement $Window 'Collapse group UNGROUPED' | Out-Null
-  Guest-UiAction $Window 'Collapse group UNGROUPED' -Space
-  Wait-GuestUiElement $Window 'Expand group UNGROUPED' | Out-Null
-  Guest-UiAction $Window 'Expand group UNGROUPED' -Keyboard
+  Wait-GuestUiElement $Window 'Collapse group KeyboardGroup' | Out-Null
+  Wait-GuestUiElement $Window 'Collapse group Ungrouped' | Out-Null
+  Guest-UiAction $Window 'Collapse group Ungrouped' -Space
+  Wait-GuestUiElement $Window 'Expand group Ungrouped' | Out-Null
+  Guest-UiAction $Window 'Expand group Ungrouped' -Keyboard
   # Rename is now a group context-menu action, reachable by Shift+F10.
-  $groupHeader = Wait-GuestUiElement $Window 'Collapse group KEYBOARDGROUP'
+  $groupHeader = Wait-GuestUiElement $Window 'Collapse group KeyboardGroup'
   $groupHeader.SetFocus()
   Guest-Keys $Window '+{F10}'
   Guest-UiAction $Window 'Rename group' -Keyboard
   Wait-GuestUiElement $Window 'Group name' | Out-Null
   Guest-Keys $Window '{ESC}'
-  Guest-UiAction $Window 'Delete group KEYBOARDGROUP' -Space
+  Guest-UiAction $Window 'Delete group KeyboardGroup' -Space
   Guest-UiAction $Window 'Save' -Keyboard
-  Wait-GuestCondition { $null -eq (Guest-UiElement $Window 'Collapse group KEYBOARDGROUP') } 'Keyboard group deletion did not remove the empty group'
+  Wait-GuestCondition { $null -eq (Guest-UiElement $Window 'Collapse group KeyboardGroup') } 'Keyboard group deletion did not remove the empty group'
   $Report.nativeKeyboardDistinctAccountAndGroupControls = $true
   $Report.nativeKeyboardTabShiftTabModalEscapeEnter = $true
   if (-not $Report.nativeAccountHasNamedInput) { throw 'Native account input is missing its accessible name/role' }

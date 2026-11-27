@@ -449,6 +449,7 @@ impl LauncherRoot {
             .flex()
             .items_center()
             .gap_1()
+            .rounded(px(7.0))
             .hover(move |style| style.bg(row_theme.secondary()))
             .on_mouse_down(
                 gpui::MouseButton::Right,
@@ -498,7 +499,11 @@ impl LauncherRoot {
                     ))
                     .flex_1()
                     .min_w_0()
+                    .h(px(32.0))
+                    .px_2()
                     .justify_start()
+                    .gap_2()
+                    .text_color(self.theme.muted_foreground())
                     .child(crate::ui::icon(
                         if collapsed {
                             "chevron-right"
@@ -507,12 +512,28 @@ impl LauncherRoot {
                         },
                         14.0,
                     ))
-                    .child(div().text_xs().text_ellipsis().child(label))
-                    .child(crate::ui::badge(
-                        &self.theme,
-                        &count.to_string(),
-                        crate::ui::BadgeKind::Normal,
-                    ))
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(self.theme.muted_foreground())
+                            .text_ellipsis()
+                            .child(label.to_uppercase()),
+                    )
+                    .child(
+                        div()
+                            .font_family(crate::input::code_font_family())
+                            .text_size(px(11.0))
+                            .text_color(crate::ui::tint(self.theme.muted_foreground(), 0.7))
+                            .child(format!("{count:02}")),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .h(px(1.0))
+                            .ml_2()
+                            .bg(crate::ui::tint(self.theme.border(), 0.55)),
+                    )
                     .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
                         v.edit_groups(
                             GroupChange::Collapse {
@@ -528,7 +549,10 @@ impl LauncherRoot {
                     btn(&self.theme, "Delete", ButtonVariant::Row)
                         .id(format!("group-delete:{group}"))
                         .aria_label(delete_label)
-                        .text_xs()
+                        .h(px(32.0))
+                        .px_2()
+                        .text_size(px(12.0))
+                        .text_color(self.theme.muted_foreground())
                         .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
                             v.open_group_dialog(GroupDialogKind::Delete(delete.clone()), cx)
                         })),

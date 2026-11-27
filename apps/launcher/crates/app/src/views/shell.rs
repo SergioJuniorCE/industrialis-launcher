@@ -1,6 +1,6 @@
 //! LauncherToolbar / LauncherFooter dimensions and responsive controls.
 use super::{LauncherRoot, Tab};
-use crate::ui::{badge, btn, icon, icon_btn, spinner, tint, BadgeKind, ButtonVariant};
+use crate::ui::{btn, icon, icon_btn, spinner, tint, ButtonVariant};
 use gpui::{
     div, img, prelude::*, px, Context, Div, FontWeight, MouseButton, Window,
     WindowControlArea,
@@ -17,30 +17,45 @@ impl LauncherRoot {
             Tab::Accounts => "users",
             Tab::Settings => "settings",
         };
+        let hover_bg = tint(t.accent(), 0.72);
+        let active_fg = t.foreground();
         // The framework keeps hover transition state only for elements with stable IDs.
         let mut button = div()
-            .id(("toolbar-nav", tab as usize)).role(gpui::accesskit::Role::Tab).aria_label(tab.label()).aria_selected(selected).focusable().tab_stop(true)
+            .id(("toolbar-nav", tab as usize))
+            .role(gpui::accesskit::Role::Tab)
+            .aria_label(tab.label())
+            .aria_selected(selected)
+            .focusable()
+            .tab_stop(true)
             .debug_selector(move || format!("toolbar-nav-{}", tab.label().to_ascii_lowercase()))
             .occlude()
             .relative()
-            .rounded(px(6.0))
-            .h(px(24.0))
-            .px_2()
+            .rounded(px(7.0))
+            .h(px(34.0))
+            .px(px(10.0))
             .flex()
             .items_center()
             .justify_center()
-            .gap_2()
-            .text_xs()
-            .line_height(px(16.0))
-            .font_weight(FontWeight::MEDIUM)
+            .gap(px(6.0))
+            .text_size(px(13.0))
+            .font_weight(if selected {
+                FontWeight::SEMIBOLD
+            } else {
+                FontWeight::MEDIUM
+            })
             .cursor_pointer()
+            .bg(if selected {
+                tint(t.secondary(), 0.85)
+            } else {
+                gpui::rgba(0x00000000)
+            })
             .text_color(if selected {
-                t.foreground()
+                active_fg
             } else {
                 t.muted_foreground()
             })
-            .hover(|s| s.bg(tint(t.primary(), 0.14)).text_color(t.foreground()))
-            .child(icon(glyph, 16.0));
+            .hover(move |s| s.bg(hover_bg).text_color(active_fg))
+            .child(icon(glyph, 15.0));
         if !compact {
             button = button.child(tab.label());
         }
@@ -48,30 +63,30 @@ impl LauncherRoot {
             button = button.child(
                 div()
                     .absolute()
-                    .left(px(8.0))
-                    .right(px(8.0))
-                    .bottom(px(-6.0))
+                    .left(px(10.0))
+                    .right(px(10.0))
+                    .bottom(px(-9.0))
                     .h(px(2.0))
+                    .rounded_full()
                     .bg(t.primary()),
             );
         }
         let count = self.processes_ui.history.running_count();
         if tab == Tab::Processes && count > 0 {
             button = button.child(
-                badge(t, &count.to_string(), BadgeKind::Normal)
-                    .h(px(16.0))
-                    .px_1()
-                    .py_0()
-                    .text_size(px(10.0)),
+                div()
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(t.primary())
+                    .child(count.to_string()),
             );
         }
         button.on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                cx.stop_propagation();
-                v.tab = tab;
-                v.processes_ui.dropdown = false;
-                cx.notify();
-            }),
-        )
+            cx.stop_propagation();
+            v.tab = tab;
+            v.processes_ui.dropdown = false;
+            cx.notify();
+        }))
     }
 
     pub(super) fn toolbar(&self, window: &Window, cx: &mut Context<Self>) -> Div {
@@ -82,14 +97,27 @@ impl LauncherRoot {
         let mut brand = div()
             .flex()
             .items_center()
-            .gap_2()
-            .pr(px(6.0))
-            .child(img("brand.png").size(px(20.0)).rounded_md());
+            .gap(px(8.0))
+            .pr(px(8.0))
+            .child(
+                div()
+                    .size(px(28.0))
+                    .rounded(px(7.0))
+                    .overflow_hidden()
+                    .border_1()
+                    .border_color(tint(t.border(), 0.9))
+                    .bg(t.secondary())
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(img("brand.png").size(px(26.0))),
+            );
         if width > 860.0 {
             brand = brand.child(
                 div()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_size(px(15.0))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(t.foreground())
                     .child("Industrialis"),
             );
         }
@@ -97,76 +125,74 @@ impl LauncherRoot {
             .aria_label("Add instance")
             .id("toolbar-add")
             .debug_selector(|| "toolbar-add".into())
-            .h(px(28.0))
-            .px(px(10.0))
-            .text_xs()
-            .gap_2()
-            .child(icon("plus", 14.0));
-        if !compact {
+            .h(px(32.0))
+            .px(px(12.0))
+            .text_size(px(13.0))
+            .font_weight(FontWeight::SEMIBOLD)
+            .gap(px(6.0))
+            .child(icon("plus", 15.0));
+        if width > 1180.0 {
+            add = add.child("New instance");
+        } else if !compact {
             add = add.child("Add");
         }
         let running = self.processes_ui.history.running_count();
         let process_icon = if running > 0 {
-            spinner("toolbar-process-spinner", "loader-circle", 16.0).into_any_element()
+            spinner("toolbar-process-spinner", "loader-circle", 15.0).into_any_element()
         } else {
-            icon("loader-circle", 16.0).into_any_element()
+            icon("activity", 15.0).into_any_element()
         };
         let mut process = btn(t, "", ButtonVariant::Ghost)
             .aria_label("Background processes")
             .id("toolbar-processes")
             .debug_selector(|| "toolbar-processes".into())
-            .h(px(28.0))
-            .px(px(10.0))
-            .text_xs()
+            .h(px(32.0))
+            .px(px(9.0))
+            .text_size(px(12.0))
             .gap(px(6.0))
+            .text_color(if running > 0 {
+                t.primary()
+            } else {
+                t.muted_foreground()
+            })
             .child(process_icon);
-        if !compact {
-            process = process.child("Processes");
-        }
         if running > 0 {
             process = process.child(
-                badge(t, &running.to_string(), BadgeKind::Normal)
-                    .h(px(20.0))
-                    .px(px(6.0))
-                    .py_0(),
+                div()
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(t.primary())
+                    .child(running.to_string()),
             );
         }
         div()
-            .h(px(44.0))
+            .h(px(52.0))
             .flex_shrink_0()
             .flex()
             .items_center()
-            .px_3()
+            .px_4()
             .gap(px(if compact { 4.0 } else { 6.0 }))
             .bg(t.chrome_background())
             .border_b_1()
-            .border_color(tint(t.border(), 0.82))
+            .border_color(tint(t.border(), 0.85))
             // Windows maps this to HTCAPTION. start_window_move() is a no-op
             // in the pinned Windows adapter; Linux still needs the mouse hook.
             .window_control_area(WindowControlArea::Drag)
             .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
             .child(brand)
-            .child(add.occlude().on_click(cx.listener(|v, e: &gpui::ClickEvent, _, cx| {
-                    cx.stop_propagation();
-                    v.tab = Tab::Instances;
-                    v.workspace_ui.menu = None;
-                    v.add_menu = Some(e.position());
-                    cx.notify();
-                }),
-            ))
             .child(
                 div()
                     .w(px(1.0))
                     .h(px(20.0))
-                    .bg(tint(t.border(), 0.8))
-                    .mx_1(),
+                    .bg(tint(t.border(), 0.75))
+                    .mr_1(),
             )
             .child(
                 div()
                     .flex()
-                    .h(px(32.0))
+                    .h(px(34.0))
                     .items_center()
-                    .gap(px(2.0))
+                    .gap(px(4.0))
                     // Exclude interactive controls from the native drag region.
                     .occlude()
                     .children(
@@ -185,33 +211,45 @@ impl LauncherRoot {
                     )
                     .id("toolbar-update")
                     .debug_selector(|| "toolbar-update".into())
-                    .h(px(28.0))
-                    .text_xs()
+                    .h(px(32.0))
+                    .text_size(px(12.0))
                     .occlude()
                     .on_click(cx.listener(|v, _: &gpui::ClickEvent, window, cx| {
-                            cx.stop_propagation();
-                            v.open_launcher_update(window, cx);
-                        }),
-                    ),
+                        cx.stop_propagation();
+                        v.open_launcher_update(window, cx);
+                    })),
                 )
             })
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(2.0))
+                    .gap(px(4.0))
                     .occlude()
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(add.on_click(cx.listener(|v, e: &gpui::ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        v.tab = Tab::Instances;
+                        v.workspace_ui.menu = None;
+                        v.add_menu = Some(e.position());
+                        cx.notify();
+                    })))
+                    .child(
+                        div()
+                            .w(px(1.0))
+                            .h(px(18.0))
+                            .bg(tint(t.border(), 0.65))
+                            .mx(px(2.0)),
+                    )
                     .child(self.account_switcher(width <= 860.0, cx))
                     .child(process.on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                            if v.processes_ui.history.is_empty() {
-                                v.tab = Tab::Processes;
-                            } else {
-                                v.processes_ui.dropdown = !v.processes_ui.dropdown;
-                            }
-                            cx.notify();
-                        }),
-                    ))
+                        if v.processes_ui.history.is_empty() {
+                            v.tab = Tab::Processes;
+                        } else {
+                            v.processes_ui.dropdown = !v.processes_ui.dropdown;
+                        }
+                        cx.notify();
+                    })))
                     .child(
                         icon_btn(
                             t,
@@ -225,30 +263,33 @@ impl LauncherRoot {
                         .id("toolbar-settings")
                         .aria_label("Launcher preferences")
                         .debug_selector(|| "toolbar-settings".into())
-                        .size(px(28.0))
+                        .size(px(32.0))
                         .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                                v.tab = Tab::Settings;
-                                cx.notify();
-                            }),
-                        ),
+                            v.tab = Tab::Settings;
+                            cx.notify();
+                        })),
                     )
                     .child(
                         icon_btn(t, if dark { "sun" } else { "moon" }, ButtonVariant::Ghost)
                             .id("toolbar-theme")
-                            .aria_label(if dark { "Switch to light theme" } else { "Switch to dark theme" })
+                            .aria_label(if dark {
+                                "Switch to light theme"
+                            } else {
+                                "Switch to dark theme"
+                            })
                             .debug_selector(|| "toolbar-theme".into())
+                            .size(px(32.0))
                             .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
-                                    v.set_theme(
-                                        if dark {
-                                            ThemeMode::Light
-                                        } else {
-                                            ThemeMode::Dark
-                                        },
-                                        v.data.settings.theme_preset.clone(),
-                                        cx,
-                                    );
-                                }),
-                            ),
+                                v.set_theme(
+                                    if dark {
+                                        ThemeMode::Light
+                                    } else {
+                                        ThemeMode::Dark
+                                    },
+                                    v.data.settings.theme_preset.clone(),
+                                    cx,
+                                );
+                            })),
                     ),
             )
             .when(cfg!(target_os = "windows"), |el| {
@@ -257,7 +298,7 @@ impl LauncherRoot {
                         .flex()
                         .h_full()
                         .ml_1()
-                        .mr(px(-12.0))
+                        .mr(px(-16.0))
                         .occlude()
                         .children(
                             [
@@ -274,7 +315,7 @@ impl LauncherRoot {
                             ]
                             .into_iter()
                             .map(|(glyph, action)| {
-                                crate::ui::button_base("")
+                                crate::ui::button_base(&self.theme, "")
                                     .id(("toolbar-window-control", action as usize))
                                     .aria_label(match action {
                                         0 => "Minimize window",
@@ -313,7 +354,8 @@ impl LauncherRoot {
                                         }
                                     })
                                     .child(icon(glyph, 14.0))
-                                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, window, cx| {
+                                    .on_click(cx.listener(
+                                        move |v, _: &gpui::ClickEvent, window, cx| {
                                             cx.stop_propagation();
                                             match action {
                                                 0 => window.minimize_window(),
@@ -322,8 +364,8 @@ impl LauncherRoot {
                                                     v.request_close(cx);
                                                 }
                                             }
-                                        }),
-                                    )
+                                        },
+                                    ))
                             }),
                         ),
                 )
@@ -384,7 +426,7 @@ impl LauncherRoot {
                 .max(0.)))
             .top(px((f32::from(position.y) + 20.0)
                 .min(f32::from(window.viewport_size().height) - 88.)
-                .max(44.)))
+                .max(52.)))
             .w(px(228.))
             .p_1()
             .rounded_md()
@@ -407,41 +449,36 @@ impl LauncherRoot {
 
     pub(super) fn footer(&self, cx: &mut Context<Self>) -> Div {
         let t = &self.theme;
-        let count = self.data.instances.len();
+        let update = self.footer_update(cx);
         let mut footer = div()
-            .h(px(24.0))
+            .h(px(28.0))
             .flex_shrink_0()
-            .px_3()
+            .px_4()
             .flex()
             .items_center()
-            .gap_3()
+            .gap_4()
             .border_t_1()
             .border_color(tint(t.border(), 0.8))
-            .bg(tint(t.chrome_background(), 0.8))
-            .text_size(px(11.0))
-            .text_color(t.muted_foreground())
-            .child(format!(
-                "{count} instance{}",
-                if count == 1 { "" } else { "s" }
-            ));
-        if let Some(info) = self.data.selected_instance(self.selected_id.as_deref()) {
+            .bg(tint(t.chrome_background(), 0.9))
+            .text_size(px(12.0))
+            .text_color(t.muted_foreground());
+        if !self.data.launching.is_empty() {
             footer = footer.child(
                 div()
-                    .min_w_0()
-                    .text_ellipsis()
-                    .child(super::workspace::display_name(info)),
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .text_color(t.primary())
+                    .child(format!(
+                        "Launching {}…",
+                        self.data
+                            .launching
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )),
             );
-        }
-        if !self.data.launching.is_empty() {
-            footer = footer.child(format!(
-                "Launching {}…",
-                self.data
-                    .launching
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ));
         }
         let running: Vec<_> = self
             .data
@@ -451,14 +488,30 @@ impl LauncherRoot {
             .map(|(id, _)| id.as_str())
             .collect();
         if !running.is_empty() {
-            footer = footer.child(format!("Running {}", running.join(", ")));
+            footer = footer.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .size(px(7.0))
+                            .rounded_full()
+                            .bg(gpui::rgb(0x37d67a)),
+                    )
+                    .child(format!("Running {}", running.join(", "))),
+            );
         }
         let background = self.processes_ui.history.running_count();
         if background > 0 {
-            footer = footer.child(format!(
-                "{background} background process{}",
-                if background == 1 { "" } else { "es" }
-            ));
+            footer = footer.child(
+                div()
+                    .text_color(t.primary())
+                    .child(format!(
+                        "{background} active process{}",
+                        if background == 1 { "" } else { "es" }
+                    )),
+            );
         }
         if self.data.status != "Ready" {
             footer = footer.child(
@@ -471,10 +524,7 @@ impl LauncherRoot {
         } else {
             footer = footer.child(div().flex_1());
         }
-        if let Some(update) = self.footer_update(cx) {
-            footer = footer.child(update);
-        }
-        footer
+        footer.children(update)
     }
 }
 

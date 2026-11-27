@@ -70,7 +70,7 @@ use serde_json::{json, Map, Value};
 
 use super::{LauncherRoot, Tab};
 use crate::input::{FieldState, NativeField, NativeFieldEvent};
-use crate::ui::{btn, tab_btn, ButtonVariant};
+use crate::ui::{btn, segment, segmented_control, ButtonVariant};
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum DetailTab {
@@ -493,7 +493,12 @@ impl LauncherRoot {
             .flex()
             .items_center()
             .justify_between()
-            .child(div().text_sm().child(title.to_string()));
+            .child(
+                div()
+                    .text_size(px(14.0))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(title.to_string()),
+            );
         if let Some((key, checked)) = override_key {
             heading = heading.child(self.setting_toggle(id, key, "Override", checked, enabled, cx));
         }
@@ -501,8 +506,8 @@ impl LauncherRoot {
             .flex_shrink_0()
             .flex()
             .flex_col()
-            .gap_2()
-            .p_3()
+            .gap_3()
+            .p_4()
             .child(heading)
             .child(body)
     }
@@ -691,17 +696,60 @@ impl LauncherRoot {
         let env_count = editor.environment.len();
         let enabled = !self.instance_is_busy(id);
         let t = self.theme.clone();
-        let mut panel = div().id("instance-settings-scroll").flex_1().min_h_0().overflow_y_scroll().px_4().pt_3().pb_4().flex().flex_col().gap_2()
-            .child(btn(&t, "Open launcher settings", ButtonVariant::Secondary).text_xs()
-                .on_click(cx.listener(|v, _: &gpui::ClickEvent, _: &mut Window, cx| { v.tab = Tab::Settings; cx.notify(); })))
-            .child(div().text_size(px(11.0)).text_color(t.muted_foreground()).child("Instance settings below override defaults only when each section's override box is checked."))
-            .child(div().flex().flex_wrap().justify_center().gap(px(2.0)).children([
-                (SettingsTab::General, "General"), (SettingsTab::Java, "Java"), (SettingsTab::Commands, "Custom Commands"), (SettingsTab::Environment, "Environment")
-            ].into_iter().map(|(value, label)| {
-                let id = id.to_string();
-                tab_btn(&t, label, value == tab).text_xs()
-                    .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _: &mut Window, cx| { v.instance_ui.editors.get_mut(&id).unwrap().tab = value; cx.notify(); }))
-            })));
+        let mut panel = div()
+            .id("instance-settings-scroll")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .p_5()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(12.0))
+                            .text_color(t.muted_foreground())
+                            .child("Settings below override launcher defaults only when a section's override box is checked."),
+                    )
+                    .child(
+                        btn(&t, "Launcher settings", ButtonVariant::Outline)
+                            .flex_shrink_0()
+                            .h(px(30.0))
+                            .text_size(px(12.0))
+                            .on_click(cx.listener(|v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                v.tab = Tab::Settings;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div().flex().child(segmented_control(&t).children(
+                    [
+                        (SettingsTab::General, "General"),
+                        (SettingsTab::Java, "Java"),
+                        (SettingsTab::Commands, "Custom commands"),
+                        (SettingsTab::Environment, "Environment"),
+                    ]
+                    .into_iter()
+                    .map(|(value, label)| {
+                        let id = id.to_string();
+                        segment(&t, label, value == tab).on_click(cx.listener(
+                            move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                                v.instance_ui.editors.get_mut(&id).unwrap().tab = value;
+                                cx.notify();
+                            },
+                        ))
+                    }),
+                )),
+            );
         match tab {
             SettingsTab::General => {
                 let name =

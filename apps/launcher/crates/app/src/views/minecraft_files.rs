@@ -2,7 +2,7 @@
 use super::{DetailTab, LauncherRoot};
 use crate::{
     input::{NativeField, NativeFieldEvent},
-    ui::{btn, ButtonVariant},
+    ui::{btn, segment, segmented_control, ButtonVariant},
 };
 use gpui::{div, prelude::*, px, Context, Div, KeyDownEvent};
 use industrialis_backend::minecraft_files::{self as files, MinecraftEntry};
@@ -403,42 +403,34 @@ impl LauncherRoot {
             } else {
                 let doc = self.files_ui.editors.get_mut(id).unwrap().forge_document();
                 let can_easy = doc.is_some();
-                let mut modes = div().flex().flex_shrink_0().gap_1();
+                let mut modes = segmented_control(&self.theme);
                 for (is_easy, label) in [(true, "Easy"), (false, "Advanced")] {
                     let mode_id = id.to_string();
                     let inactive = is_easy != easy;
                     modes = modes.child(
-                        btn(
-                            &self.theme,
-                            label,
-                            if !inactive {
-                                ButtonVariant::Primary
-                            } else {
-                                ButtonVariant::Outline
-                            },
-                        )
-                        .debug_selector(move || {
-                            if inactive && can_easy {
-                                "minecraft-mode".into()
-                            } else {
-                                format!("minecraft-mode:{label}").into()
-                            }
-                        })
-                        .when(is_easy && !can_easy, |button| {
-                            button.opacity(0.6).cursor_default()
-                        })
-                        .on_click(cx.listener(
-                            move |v, _: &gpui::ClickEvent, _, cx| {
-                                let d = v.files_ui.editors.get_mut(&mode_id).unwrap();
-                                if d.invalid.is_empty() && (!is_easy || can_easy) {
-                                    d.easy = is_easy;
+                        segment(&self.theme, label, !inactive)
+                            .debug_selector(move || {
+                                if inactive && can_easy {
+                                    "minecraft-mode".into()
+                                } else {
+                                    format!("minecraft-mode:{label}").into()
                                 }
-                                cx.notify();
-                            },
-                        )),
+                            })
+                            .when(is_easy && !can_easy, |button| {
+                                button.opacity(0.6).cursor_default()
+                            })
+                            .on_click(cx.listener(
+                                move |v, _: &gpui::ClickEvent, _, cx| {
+                                    let d = v.files_ui.editors.get_mut(&mode_id).unwrap();
+                                    if d.invalid.is_empty() && (!is_easy || can_easy) {
+                                        d.easy = is_easy;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     );
                 }
-                view = view.child(modes);
+                view = view.child(div().flex().flex_shrink_0().child(modes));
                 if !can_easy {
                     view = view.child(div().flex_shrink_0().text_xs().text_color(self.theme.muted_foreground())
                         .child("Easy mode supports Forge .cfg properties. This file uses Advanced mode."));

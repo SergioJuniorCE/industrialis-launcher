@@ -410,9 +410,10 @@ impl LauncherRoot {
             .child(
                 div()
                     .flex_1()
-                    .text_xs()
+                    .text_size(px(12.0))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(self.theme.muted_foreground())
-                    .child("EXPLORER"),
+                    .child("Explorer"),
             )
             .when(!detached, |header| {
                 header
@@ -683,7 +684,7 @@ impl LauncherRoot {
                             },
                             12.,
                         ))
-                        .child(".MINECRAFT")
+                        .child(".minecraft")
                         .on_click(cx.listener(move |v, _, _, cx| {
                             v.files_ui
                                 .editors

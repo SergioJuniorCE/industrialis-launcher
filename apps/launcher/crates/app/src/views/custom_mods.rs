@@ -253,26 +253,196 @@ impl LauncherRoot {
         let add = id.to_string();
         let folder = add.clone();
         let refresh = add.clone();
-        let mut body=div().flex_1().min_h_0().child(div().id("custom-mods").size_full().overflow_y_scroll().flex().flex_col().p_3().gap_3()
-            .child("Custom mods").child("These files are kept in persistent-minecraft/mods and restored after pack updates.")
-            .child(div().flex().flex_wrap().gap_2()
-                .child(btn(&self.theme,"Add mods",ButtonVariant::Primary).debug_selector(||"custom-mod-add".into()).tab_stop(!busy).when(busy,|b|b.opacity(0.5)).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|v.pick_mods(add.clone(),cx))))
-                .child(btn(&self.theme,"Open mods folder",ButtonVariant::Outline).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|v.open_mods_folder(folder.clone(),cx))))
-                .child(btn(&self.theme,"Refresh",ButtonVariant::Outline).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|v.reload_mods(refresh.clone(),cx)))))
-            .children(entries.into_iter().map(|entry| {let target=id.to_string();let identity=entry.identity.clone();card(&self.theme).id(format!("custom-mod:{}",entry.identity)).flex_shrink_0().flex().items_center().gap_2().p_3()
-                .child(div().flex_1().min_w_0().child(format!("{}\n{} / {}",entry.filename,entry.identity,format_bytes(entry.size_bytes))))
-                .child(btn(&self.theme,"Remove",ButtonVariant::Outline).tab_stop(!busy).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|{if !busy {v.mods_ui.states.entry(target.clone()).or_default().remove_custom=Some(identity.clone());cx.notify();}})))
-            }))
-            .child(section_title(&self.theme, "Pack mods"))
-            .child("Uncheck a mod to disable it for this instance. The file stays on disk and stays disabled after pack updates.")
-            .child(search_field)
-            .children(pack_entries.into_iter().map(|entry| {let target=id.to_string();let identity=entry.identity.clone();let selector_identity=identity.clone();let enabled=entry.enabled;let label=enabled_filename(&entry.filename).unwrap_or(&entry.filename);div().id(format!("pack-mod:{}",entry.identity)).flex_shrink_0().flex().items_center().gap_3().p_3().border_b_1().border_color(tint(self.theme.border(),0.28))
-                .child(checkbox(&self.theme,label,enabled).debug_selector(move||format!("pack-mod-toggle:{}",selector_identity)).when(busy,|c|c.opacity(0.5)).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|{if !busy {v.run_mod_op(target.clone(),ModOp::SetEnabled{identity:identity.clone(),enabled:!enabled},cx);}})))
-                .child(div().flex_1())
-                .child(div().text_right().text_xs().text_color(self.theme.muted_foreground()).child(format!("{} / {}",entry.identity,format_bytes(entry.size_bytes))))
-                .when(!enabled,|row|row.child(div().text_xs().text_color(self.theme.muted_foreground()).child("Disabled")))
-            }))
-            .when(pack_empty, |body| body.child(if search.is_empty() {"No pack mods installed."} else {"No pack mods match this search."})));
+        let mut body = div().flex_1().min_h_0().child(
+            div()
+                .id("custom-mods")
+                .size_full()
+                .overflow_y_scroll()
+                .flex()
+                .flex_col()
+                .px_5()
+                .py_3()
+                .gap_3()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(section_title(&self.theme, "Custom mods"))
+                        .child(
+                            div()
+                                .text_size(gpui::px(12.0))
+                                .text_color(self.theme.muted_foreground())
+                                .child("Kept in persistent-minecraft/mods and restored after pack updates."),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(
+                            btn(&self.theme, "Add mods", ButtonVariant::Primary)
+                                .debug_selector(|| "custom-mod-add".into())
+                                .tab_stop(!busy)
+                                .when(busy, |b| b.opacity(0.5))
+                                .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                                    v.pick_mods(add.clone(), cx)
+                                })),
+                        )
+                        .child(
+                            btn(&self.theme, "Open mods folder", ButtonVariant::Outline).on_click(
+                                cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                                    v.open_mods_folder(folder.clone(), cx)
+                                }),
+                            ),
+                        )
+                        .child(
+                            btn(&self.theme, "Refresh", ButtonVariant::Outline).on_click(
+                                cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                                    v.reload_mods(refresh.clone(), cx)
+                                }),
+                            ),
+                        ),
+                )
+                .children(entries.into_iter().map(|entry| {
+                    let target = id.to_string();
+                    let identity = entry.identity.clone();
+                    card(&self.theme)
+                        .id(format!("custom-mod:{}", entry.identity))
+                        .flex_shrink_0()
+                        .flex()
+                        .items_center()
+                        .gap_3()
+                        .px_4()
+                        .py_3()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .gap(gpui::px(2.0))
+                                .child(
+                                    div()
+                                        .text_size(gpui::px(13.0))
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_ellipsis()
+                                        .child(entry.filename.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(gpui::px(12.0))
+                                        .text_color(self.theme.muted_foreground())
+                                        .child(format!(
+                                            "{}  {}",
+                                            entry.identity,
+                                            format_bytes(entry.size_bytes)
+                                        )),
+                                ),
+                        )
+                        .child(
+                            btn(&self.theme, "Remove", ButtonVariant::Outline)
+                                .tab_stop(!busy)
+                                .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _, cx| {
+                                    if !busy {
+                                        v.mods_ui
+                                            .states
+                                            .entry(target.clone())
+                                            .or_default()
+                                            .remove_custom = Some(identity.clone());
+                                        cx.notify();
+                                    }
+                                })),
+                        )
+                }))
+                .child(
+                    div()
+                        .mt_2()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(section_title(&self.theme, "Pack mods"))
+                        .child(
+                            div()
+                                .text_size(gpui::px(12.0))
+                                .text_color(self.theme.muted_foreground())
+                                .child("Uncheck a mod to disable it for this instance. The file stays on disk and stays disabled after pack updates."),
+                        ),
+                )
+                .child(search_field)
+                .when(!pack_empty, |body| {
+                    body.child(card(&self.theme).overflow_hidden().children(
+                        pack_entries.into_iter().enumerate().map(|(index, entry)| {
+                            let target = id.to_string();
+                            let identity = entry.identity.clone();
+                            let selector_identity = identity.clone();
+                            let enabled = entry.enabled;
+                            let label = enabled_filename(&entry.filename).unwrap_or(&entry.filename);
+                            div()
+                                .id(format!("pack-mod:{}", entry.identity))
+                                .flex_shrink_0()
+                                .flex()
+                                .items_center()
+                                .gap_3()
+                                .px_4()
+                                .py(gpui::px(10.0))
+                                .when(index > 0, |row| {
+                                    row.border_t_1().border_color(tint(self.theme.border(), 0.55))
+                                })
+                                .child(
+                                    checkbox(&self.theme, label, enabled)
+                                        .debug_selector(move || {
+                                            format!("pack-mod-toggle:{selector_identity}")
+                                        })
+                                        .when(busy, |c| c.opacity(0.5))
+                                        .on_click(cx.listener(
+                                            move |v, _: &gpui::ClickEvent, _, cx| {
+                                                if !busy {
+                                                    v.run_mod_op(
+                                                        target.clone(),
+                                                        ModOp::SetEnabled {
+                                                            identity: identity.clone(),
+                                                            enabled: !enabled,
+                                                        },
+                                                        cx,
+                                                    );
+                                                }
+                                            },
+                                        )),
+                                )
+                                .child(div().flex_1())
+                                .child(
+                                    div()
+                                        .text_right()
+                                        .text_size(gpui::px(12.0))
+                                        .text_color(self.theme.muted_foreground())
+                                        .child(format_bytes(entry.size_bytes)),
+                                )
+                                .when(!enabled, |row| {
+                                    row.child(
+                                        div()
+                                            .text_size(gpui::px(12.0))
+                                            .text_color(self.theme.muted_foreground())
+                                            .child("Disabled"),
+                                    )
+                                })
+                        }),
+                    ))
+                })
+                .when(pack_empty, |body| {
+                    body.child(
+                        div()
+                            .text_size(gpui::px(13.0))
+                            .text_color(self.theme.muted_foreground())
+                            .child(if search.is_empty() {
+                                "No pack mods installed."
+                            } else {
+                                "No pack mods match this search."
+                            }),
+                    )
+                }),
+        );
         if let Some(identity) = pending {
             let target = id.to_string();
             let cancel = target.clone();

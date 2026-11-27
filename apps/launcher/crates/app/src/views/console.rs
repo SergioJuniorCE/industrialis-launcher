@@ -240,15 +240,19 @@ impl LauncherRoot {
         let copying = state.is_some_and(|s| s.copying);
         let clearing = state.is_some_and(|s| s.clearing);
         let blocked = copying || clearing || loading || lines.is_empty();
-        let mut controls =
-            div()
-                .flex()
-                .flex_wrap()
-                .gap(px(2.0))
-                .px_3()
-                .pb(px(2.0))
-                .children([("Copy", false), ("Copy crash", true)].into_iter().map(
-                    |(label, crash)| {
+        let mut controls = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .px_5()
+            .py_2()
+            .border_b_1()
+            .border_color(crate::ui::tint(t.border(), 0.7))
+            .children(
+                [("Copy", false), ("Copy crash", true)]
+                    .into_iter()
+                    .map(|(label, crash)| {
                         let id = id.to_string();
                         let feedback =
                             state
@@ -267,33 +271,35 @@ impl LauncherRoot {
                             } else {
                                 feedback.unwrap_or(label)
                             },
-                            ButtonVariant::Ghost,
+                            ButtonVariant::Outline,
                         )
                         .h(px(28.0))
                         .px(px(10.0))
-                        .text_xs()
+                        .text_size(px(12.0))
                         .when(blocked, |el| el.opacity(0.5).cursor_default())
-                        .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+                        .on_click(cx.listener(
+                            move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
                                 if !blocked {
                                     v.copy_console(id.clone(), crash, cx);
                                 }
-                            }),
-                        )
-                    },
-                ));
+                            },
+                        ))
+                    }),
+            );
         let id_click = id.to_string();
         let clear_blocked = blocked || self.instance_is_busy(id);
         controls = controls.child(
             btn(
                 t,
                 if clearing { "Clearing…" } else { "Clear" },
-                ButtonVariant::Ghost,
+                ButtonVariant::Outline,
             )
             .h(px(28.0))
             .px(px(10.0))
-            .text_xs()
+            .text_size(px(12.0))
             .when(clear_blocked, |el| el.opacity(0.5).cursor_default())
-            .on_click(cx.listener(move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
+            .on_click(cx.listener(
+                move |v, _: &gpui::ClickEvent, _: &mut Window, cx| {
                     if !clear_blocked {
                         let target = id_click.clone();
                         v.after_instance_settings_saved(
@@ -302,20 +308,36 @@ impl LauncherRoot {
                             cx,
                         );
                     }
-                }),
-            ),
+                },
+            )),
         );
         let mut panel = div().flex_1().min_h_0().flex().flex_col().child(controls);
         if loading {
-            panel = panel.child(div().text_xs().child("Loading saved console…"));
+            panel = panel.child(
+                div()
+                    .px_5()
+                    .py_2()
+                    .text_size(px(12.0))
+                    .text_color(t.muted_foreground())
+                    .child("Loading saved console…"),
+            );
         }
         if let Some(error) = state.and_then(|s| s.error.clone()) {
-            panel = panel.child(div().text_xs().text_color(t.destructive()).child(error));
+            panel = panel.child(
+                div()
+                    .px_5()
+                    .py_2()
+                    .text_size(px(12.0))
+                    .text_color(t.destructive())
+                    .child(error),
+            );
         }
         if lines.len() >= industrialis_core::log_buffer::MAX_RETAINED_LOG_LINES {
             panel = panel.child(
                 div()
-                    .text_xs()
+                    .px_5()
+                    .py_1()
+                    .text_size(px(12.0))
                     .text_color(t.muted_foreground())
                     .child("Latest 5,000 lines retained"),
             );
@@ -327,13 +349,13 @@ impl LauncherRoot {
                 .min_h_0()
                 .flex()
                 .flex_col()
-                .px_3()
-                .py_2()
-                .bg(gpui::rgba(0x00000099))
+                .px_4()
+                .py_3()
+                .bg(t.code_background())
                 .when(empty, |el| {
                     el.child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(px(12.0))
                             .font_family("Consolas")
                             .text_color(t.muted_foreground())
                             .child("No log output yet."),
@@ -350,7 +372,7 @@ impl LauncherRoot {
                     .track_scroll(&self.log_scroll)
                     .flex_1()
                     .min_h_0()
-                    .text_size(px(11.0)),
+                    .text_size(px(12.0)),
                 ),
         )
     }

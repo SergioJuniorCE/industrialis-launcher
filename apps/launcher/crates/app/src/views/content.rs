@@ -1,7 +1,7 @@
 use super::LauncherRoot;
 use crate::{
     state::format_bytes,
-    ui::{btn, card, section_title, tint, ButtonVariant},
+    ui::{btn, card, section_title, segment, segmented_control, tint, ButtonVariant},
 };
 use gpui::{div, prelude::*, px, Context, Div, PathPromptOptions};
 use industrialis_backend::{
@@ -63,75 +63,45 @@ impl LauncherRoot {
     }
     pub(super) fn add_ons_view(&mut self, id: &str, cx: &mut Context<Self>) -> Div {
         let tab = self.content_ui.tab;
-        let tabs = div()
-            .flex()
-            .gap_2()
-            .px_3()
-            .py_2()
-            .child(
-                btn(
-                    &self.theme,
-                    "Mods",
-                    if tab == AddOnTab::Mods {
-                        ButtonVariant::Primary
-                    } else {
-                        ButtonVariant::Ghost
-                    },
+        let tabs = div().flex().px_5().pt_4().pb_2().child(
+            segmented_control(&self.theme)
+                .child(
+                    segment(&self.theme, "Mods", tab == AddOnTab::Mods)
+                        .debug_selector(|| "content-mods-tab".into())
+                        .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                            v.content_ui.tab = AddOnTab::Mods;
+                            cx.notify();
+                        })),
                 )
-                .debug_selector(|| "content-mods-tab".into())
-                .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                    v.content_ui.tab = AddOnTab::Mods;
-                    cx.notify();
-                })),
-            )
-            .child(
-                btn(
-                    &self.theme,
-                    "Browse mods",
-                    if tab == AddOnTab::Browse {
-                        ButtonVariant::Primary
-                    } else {
-                        ButtonVariant::Ghost
-                    },
+                .child(
+                    segment(&self.theme, "Browse mods", tab == AddOnTab::Browse)
+                        .debug_selector(|| "content-browse-tab".into())
+                        .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                            v.content_ui.tab = AddOnTab::Browse;
+                            cx.notify();
+                        })),
                 )
-                .debug_selector(|| "content-browse-tab".into())
-                .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                    v.content_ui.tab = AddOnTab::Browse;
-                    cx.notify();
-                })),
-            )
-            .child(
-                btn(
-                    &self.theme,
-                    "Resource packs",
-                    if tab == AddOnTab::ResourcePacks {
-                        ButtonVariant::Primary
-                    } else {
-                        ButtonVariant::Ghost
-                    },
+                .child(
+                    segment(
+                        &self.theme,
+                        "Resource packs",
+                        tab == AddOnTab::ResourcePacks,
+                    )
+                    .debug_selector(|| "content-resources-tab".into())
+                    .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                        v.content_ui.tab = AddOnTab::ResourcePacks;
+                        cx.notify();
+                    })),
                 )
-                .debug_selector(|| "content-resources-tab".into())
-                .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                    v.content_ui.tab = AddOnTab::ResourcePacks;
-                    cx.notify();
-                })),
-            )
-            .child(
-                btn(
-                    &self.theme,
-                    "Recommended",
-                    if tab == AddOnTab::Recommended {
-                        ButtonVariant::Primary
-                    } else {
-                        ButtonVariant::Ghost
-                    },
-                )
-                .debug_selector(|| "content-recommended-tab".into())
-                .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
-                    v.content_ui.tab = AddOnTab::Recommended;
-                    cx.notify();
-                })),
-            );
+                .child(
+                    segment(&self.theme, "Recommended", tab == AddOnTab::Recommended)
+                        .debug_selector(|| "content-recommended-tab".into())
+                        .on_click(cx.listener(|v, _: &gpui::ClickEvent, _, cx| {
+                            v.content_ui.tab = AddOnTab::Recommended;
+                            cx.notify();
+                        })),
+                ),
+        );
         let body = match tab {
             AddOnTab::Mods => self.mods_view(id, cx),
             AddOnTab::Browse => self.mod_browser_view(id, cx),
@@ -780,23 +750,57 @@ impl LauncherRoot {
         let folder = add.clone();
         let refresh = add.clone();
         let browse = add.clone();
-        let mut body = div().id("resource-packs").flex_1().min_h_0().overflow_y_scroll().flex().flex_col().p_3().gap_3()
-            .child(div().child("Resource packs").child(div().text_color(self.theme.muted_foreground()).child("Installed packs survive GTNH updates. Enable and arrange them in Minecraft Options > Resource Packs.")))
+        let mut body = div().id("resource-packs").flex_1().min_h_0().overflow_y_scroll().flex().flex_col().px_5().py_3().gap_3()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(section_title(&self.theme, "Resource packs"))
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(self.theme.muted_foreground())
+                            .child("Installed packs survive GTNH updates. Enable and arrange them in Minecraft Options > Resource Packs."),
+                    ),
+            )
             .child(div().flex().flex_wrap().gap_2()
                 .child(btn(&self.theme,"Import ZIP",ButtonVariant::Primary).debug_selector(|| "resource-pack-add".into()).tab_stop(!busy).when(busy,|b|b.opacity(0.5)).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|v.pick_resources(add.clone(),cx))))
                 .child(btn(&self.theme,"Open folder",ButtonVariant::Outline).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|v.open_resources(folder.clone(),cx))))
                 .child(btn(&self.theme,"Refresh",ButtonVariant::Outline).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|v.reload_resources(refresh.clone(),cx)))))
             .children(entries.iter().map(|entry| {
                 let target = id.to_owned(); let name = entry.filename.clone();
-                let mut row = card(&self.theme).id(format!("resource-pack-row:{}",entry.filename)).flex_shrink_0().flex().items_center().gap_2().p_3()
-                    .child(div().flex_1().min_w_0().child(entry.filename.clone()).child(div().text_color(self.theme.muted_foreground()).child(format!("{}{}",format_bytes(entry.size_bytes),entry.source.as_ref().map(|s|format!(" / {}",s.release)).unwrap_or_default()))));
+                let mut row = card(&self.theme).id(format!("resource-pack-row:{}",entry.filename)).flex_shrink_0().flex().items_center().gap_3().px_4().py_3()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.0))
+                            .child(div().text_size(px(13.0)).font_weight(gpui::FontWeight::MEDIUM).child(entry.filename.clone()))
+                            .child(div().text_size(px(12.0)).text_color(self.theme.muted_foreground()).child(format!("{}{}",format_bytes(entry.size_bytes),entry.source.as_ref().map(|s|format!("  {}",s.release)).unwrap_or_default()))),
+                    );
                 if entry.managed { row = row.child(btn(&self.theme,"Remove",ButtonVariant::Outline).tab_stop(!busy).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|{if !busy {v.content_ui.states.entry(target.clone()).or_default().remove=Some(name.clone()); cx.notify();}}))); }
-                else { row = row.child(div().text_color(self.theme.muted_foreground()).child("Existing pack")); }
+                else { row = row.child(div().text_size(px(12.0)).text_color(self.theme.muted_foreground()).child("Existing pack")); }
                 row
             }))
-            .when(entries.is_empty(), |b| b.child(div().text_color(self.theme.muted_foreground()).child("No resource packs installed.")))
-            .child(div().mt_2().child("Modernity GTNH").child(div().text_color(self.theme.muted_foreground()).child("Weekly builds with optional UI packs, textures and MyCTMLib. Install the main pack first; put it at the bottom of the selected pack list, with add-ons above it. Choose one UI style and one MyCTMLib version.")))
-            .child(btn(&self.theme, if browsing {"Loading releases..."} else {"Browse Modernity releases"}, ButtonVariant::Secondary).flex_shrink_0()
+            .when(entries.is_empty(), |b| b.child(div().text_size(px(13.0)).text_color(self.theme.muted_foreground()).child("No resource packs installed.")))
+            .child(
+                div()
+                    .mt_2()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(section_title(&self.theme, "Modernity GTNH"))
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(self.theme.muted_foreground())
+                            .child("Weekly builds with optional UI packs, textures and MyCTMLib. Install the main pack first; put it at the bottom of the selected pack list, with add-ons above it. Choose one UI style and one MyCTMLib version."),
+                    ),
+            )
+            .child(btn(&self.theme, if browsing {"Loading releases..."} else {"Browse Modernity releases"}, ButtonVariant::Outline).flex_shrink_0()
                 .debug_selector(|| "modernity-browse".into()).tab_stop(!browsing).on_click(cx.listener(move|v,_:&gpui::ClickEvent,_,cx|v.browse_modernity(browse.clone(),cx))));
         if let Some(name) = pending {
             let target = id.to_owned();
